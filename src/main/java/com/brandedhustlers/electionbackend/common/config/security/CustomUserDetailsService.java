@@ -1,8 +1,9 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Role;
+import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
-import com.brandedhustlers.electionbackend.common.exceptions.UserNotFound;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -11,11 +12,12 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
+
     private final AppUserRepository appUserRepository;
 
     public CustomUserDetailsService(AppUserRepository appUserRepository) {
@@ -32,8 +34,15 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     private Collection<? extends GrantedAuthority> getAuthorities(AppUser user){
-        String userRole = "ROLE_" + user.getUserRole();
-        return List.of(new SimpleGrantedAuthority(userRole));
+        String prefix = "ROLE_";
+        return user.getRoles()
+                .stream()
+                .map(Role::getRoleName)
+                .map(String::toUpperCase)
+                .map(StringBuilder::new)//convert to stringbuilder so I can prepend
+                .map(authRole -> authRole.insert(0, prefix)) //prepend role prefix
+                .map(StringBuilder::toString)//converting stringbuilder to tring
+                .map(SimpleGrantedAuthority::new)
+                .collect(Collectors.toSet());
     }
-
 }

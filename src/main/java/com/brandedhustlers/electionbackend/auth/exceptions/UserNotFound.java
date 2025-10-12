@@ -1,4 +1,4 @@
-package com.brandedhustlers.electionbackend.common.exceptions;
+package com.brandedhustlers.electionbackend.auth.exceptions;
 
 public class UserNotFound extends RuntimeException {
     public UserNotFound(String message) {

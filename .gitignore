@@ -34,3 +34,5 @@ build/
 
 /.env
 /scaffold.txt
+
+!/README.md

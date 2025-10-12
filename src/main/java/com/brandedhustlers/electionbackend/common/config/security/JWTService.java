@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
+import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -7,12 +8,13 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
-import org.hibernate.usertype.UserType;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.util.Date;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Function;
 
@@ -21,22 +23,32 @@ public class JWTService {
     Dotenv dotenv = Dotenv.configure().load();
 
     private String secretKey = dotenv.get("JWT_SECRET");
+    private final AppUserRepository appUserRepository;
+
+    public JWTService(AppUserRepository appUserRepository) {
+        this.appUserRepository = appUserRepository;
+    }
 
 
-    public String generateRefreshToken(String username, UserType userType, UUID userID) {
+    public String generateRefreshToken(String username, UUID userID, String appUserEmail) {
         long refreshTokenExp = 15552000000L;
-        return generateToken(username, refreshTokenExp, userType, userID);
+        return generateToken(username, refreshTokenExp, userID, appUserEmail);
     }
 
-    public String generateAccessToken(String username, UserType userType, UUID userId) {
+    public String generateAccessToken(String username, UUID userId, String appUserEmail) {
         long accessTokenExpirationTime = 15552000000L;
-        return generateToken(username, accessTokenExpirationTime, userType, userId);
+        return generateToken(username, accessTokenExpirationTime, userId, appUserEmail );
     }
 
-    public String generateToken(String username, long expirationTime, UserType userType, UUID userId) {
+    public String generateToken(String username, long expirationTime, UUID userId, String appUserEmail) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userID",userId);
+        claims.put("username", username);
+        claims.put("userEmail", appUserEmail);
 
         return Jwts.builder()
                 .claims()
+                .add(claims)
                 .subject(username)
                 .issuedAt(new Date(System.currentTimeMillis()))
                 .expiration(new Date(System.currentTimeMillis() + expirationTime))
