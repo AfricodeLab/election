@@ -11,5 +11,11 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
     @Query("select a from AppUser a where a.username = :username")
     Optional<AppUser> findByAppUserName(String username);
+
+    @Query("select a from AppUser a where a.appUserEmail = :userEmail")
+    Optional<AppUser> findByAppUserEmail(String userEmail);
+
+    @Query("select a from AppUser a where a.appUserEmail = :query or a.username = :query")
+    Optional<AppUser> findByUsernameOrEmail(String query);
 }
 
