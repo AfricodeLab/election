@@ -52,22 +52,15 @@ public class OrganizationController {
     public ResponseEntity<?> addUserToOrganization(
             @RequestBody AddUserToOrg addUserToOrg
     ) {
-        try {
-            organizationService.addUserToOrganization(addUserToOrg);
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (RuntimeException e) {
-            throw new RuntimeException();
-        }
+        organizationService.addUserToOrganization(addUserToOrg);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 
+    @PutMapping("/deactivate/{orgId}")
     public ResponseEntity<?> deactivateOrg(
             @PathVariable UUID orgId
     ) {
-        try {
-            organizationService.deactivateOrganization(orgId);
-            return new ResponseEntity<>(HttpStatus.OK);
-        } catch (RuntimeException e) {
-            throw new RuntimeException();
-        }
+        organizationService.deactivateOrganization(orgId);
+        return new ResponseEntity<>(HttpStatus.OK);
     }
 }

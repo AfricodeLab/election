@@ -66,7 +66,7 @@ public class OrganizationService implements IOrganizationService {
         //only the org's name can be updated
         Optional<Organization> potentialConflict = organizationRepository.findByName(organizationDTO.organizationName());
         if (potentialConflict.isPresent()) {
-            throw new ConflictException("An organization with this name: " + organizationDTO.organizationName() + " already exisits.");
+            throw new ConflictException("An organization with this name: " + organizationDTO.organizationName() + " already exists.");
         }
         orgToUpdate.setOrganizationName(organizationDTO.organizationName());
 
@@ -102,7 +102,6 @@ public class OrganizationService implements IOrganizationService {
 
         user.setAppUserOrganization(organization);
         userRepository.save(user);
-        organizationRepository.save(organization);
     }
 
     @Override
