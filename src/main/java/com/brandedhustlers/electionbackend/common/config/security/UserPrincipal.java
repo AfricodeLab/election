@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -25,6 +26,10 @@ public class UserPrincipal implements UserDetails {
         return List.of(
                 new SimpleGrantedAuthority(appUser.getUserRole().name())
         );
+    }
+
+    public Organization getUserOrganization(){
+        return appUser.getAppUserOrganization();
     }
 
     @Override

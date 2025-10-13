@@ -8,17 +8,15 @@ import java.sql.Timestamp;
 
 @Getter
 @Setter
-public class  APIException {
-    private final String status;
+public class APIException {
     private final int statusCode;
     private final APIError error;
     private final String requestId;
 
-    public APIException(String status,
-                        int statusCode,
-                        APIError error,
-                        String requestId) {
-        this.status = status;
+    public APIException(
+            int statusCode,
+            APIError error,
+            String requestId) {
         this.statusCode = statusCode;
         this.error = error;
         this.requestId = requestId;
