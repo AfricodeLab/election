@@ -10,6 +10,8 @@ public record CreateElectionRequest(
         Timestamp startTime,
         Timestamp endtime,
         ElectionType electionType,
-        boolean isPubliclyVisible
+        Long expectedVoterCount,
+        boolean isPubliclyVisible,
+        boolean shouldEndAutomatically
 ) {
 }

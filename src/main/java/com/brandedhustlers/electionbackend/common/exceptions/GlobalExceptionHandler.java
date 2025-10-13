@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.ConflictException;
 import com.brandedhustlers.electionbackend.auth.exceptions.OrganizationNotFound;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserAlreadyExists;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
+import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -55,6 +56,49 @@ public class GlobalExceptionHandler {
                 request.getRequestId()
         );
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(ElectionNotFound.class)
+    public ResponseEntity<?> handleElectionNotFound(ElectionNotFound e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.NOT_FOUND.value(),
+                new APIException.APIError(
+                        HttpStatus.NOT_FOUND,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(InvalidUpdate.class)
+    public ResponseEntity<?> handleInvalidUpdate(InvalidUpdate e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.BAD_REQUEST.value(),
+                new APIException.APIError(
+                        HttpStatus.BAD_REQUEST,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
+    }
+
+
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<?> handleAccessDeniedException(AccessDeniedException e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.FORBIDDEN.value(),
+                new APIException.APIError(
+                        HttpStatus.FORBIDDEN,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.FORBIDDEN);
     }
 
     @ExceptionHandler(UserAlreadyExists.class)

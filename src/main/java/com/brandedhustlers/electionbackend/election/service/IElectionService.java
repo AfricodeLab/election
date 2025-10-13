@@ -9,7 +9,7 @@ import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import java.util.UUID;
 
 public interface IElectionService {
-    ElectionDTO creatElection(CreateElectionRequest request);
+    ElectionDTO createElection(CreateElectionRequest request);
 
     ElectionDTO updateElection(UUID electionID, UpdateElection request);
 

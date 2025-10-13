@@ -45,6 +45,8 @@ public class Election {
 
     private Long totalVoters;
 
+    private Long expectedVoterCount;
+
     private Long totalVotes;
 
     @OneToMany
@@ -68,5 +70,9 @@ public class Election {
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 
+    @Column(columnDefinition = "false")
     private boolean isPubliclyVisible;
+
+    @Column(columnDefinition = "false")
+    private boolean shouldEndAutomatically; //if true election will end automatically if the total expected votes is reached
 }
