@@ -52,6 +52,6 @@ public class AuthController {
             @Valid @RequestPart(name = "user") CreateUserRequest request,
             @RequestPart(name = "userImage", required = false)MultipartFile userImage
             ) throws IOException {
-        return new ResponseEntity<>(authService.createUser(request, userImage), HttpStatus.CREATED)
+        return new ResponseEntity<>(authService.createUser(request, userImage), HttpStatus.CREATED);
     }
 }

@@ -76,4 +76,8 @@ public class AppUser {
 
     private String userProfilePicture;
 
+    @ManyToOne
+    @JoinColumn(name = "organization_id")
+    private Organization appUserOrganization;
+
 }
