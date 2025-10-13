@@ -1,6 +1,6 @@
 package com.brandedhustlers.electionbackend.auth.domain;
 
-import com.brandedhustlers.electionbackend.auth.UserPreferencesConverter;
+import com.brandedhustlers.electionbackend.auth.util.UserPreferencesConverter;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import jakarta.persistence.*;

@@ -1,4 +1,4 @@
-package com.brandedhustlers.electionbackend.auth;
+package com.brandedhustlers.electionbackend.auth.util;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
