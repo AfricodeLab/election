@@ -42,6 +42,10 @@ public class Candidate {
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn = DeleteYn.N;
 
+    @ManyToOne
+    @JoinColumn(name = "election_id")
+    private Election election;
+
     @OneToOne
     @JoinColumn(name = "created_by")
     private AppUser createdBy;

@@ -12,6 +12,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.sql.Timestamp;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -49,9 +50,8 @@ public class Election {
 
     private Long totalVotes;
 
-    @OneToMany
-    @JoinColumn(name = "candidates")
-    private List<Candidate> candidates;
+    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<Candidate> candidates = new ArrayList<>();
 
     @CreationTimestamp
     private Timestamp createdAt;
@@ -70,9 +70,13 @@ public class Election {
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 
-    @Column(columnDefinition = "false")
-    private boolean isPubliclyVisible;
+    @OneToOne
+    @JoinColumn(name = "updated_by")
+    private AppUser updatedBy;
 
-    @Column(columnDefinition = "false")
-    private boolean shouldEndAutomatically; //if true election will end automatically if the total expected votes is reached
+
+    private boolean isPubliclyVisible = false;
+
+
+    private boolean shouldEndAutomatically = true; //if true election will end automatically if the total expected votes is reached
 }
