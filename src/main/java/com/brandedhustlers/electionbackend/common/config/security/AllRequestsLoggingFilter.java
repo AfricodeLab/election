@@ -7,6 +7,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -129,7 +130,7 @@ public class AllRequestsLoggingFilter implements Filter {
         loggingRepository.save(log);
     }
 
-    private void saveLogWithResponse( int status, String responseBody) {
+    private void saveLogWithResponse(int status, String responseBody) {
         // Get the latest log entry, update it with response data
         RequestLog log = loggingRepository.findTopByOrderByIdDesc();
         if (log != null) {
@@ -142,6 +143,11 @@ public class AllRequestsLoggingFilter implements Filter {
 
     private String getAuthenticatedUser() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return (String) authentication.getPrincipal();
+
+        if (authentication == null || !authentication.isAuthenticated() ||
+                authentication instanceof AnonymousAuthenticationToken) {
+            return "anonymousUser";
+        }
+        return authentication.getName();
     }
 }

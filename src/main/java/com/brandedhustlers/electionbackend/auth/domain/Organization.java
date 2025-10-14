@@ -40,5 +40,4 @@ public class Organization {
 
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn = DeleteYn.N;
-
 }

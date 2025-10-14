@@ -107,7 +107,7 @@ public class JWTService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload()
-                .get("appUserEmail", String.class);
+                .get("userEmail", String.class);
     }
 
     public String extractUserType(String token){
@@ -121,8 +121,8 @@ public class JWTService {
 
     public UUID extractAppUserId(String token) {
         Claims claims = extractAllClaim(token);
-        if (claims.containsKey("appUserId")) {
-            return UUID.fromString(claims.get("appUserId", String.class));
+        if (claims.containsKey("userID")) {
+            return UUID.fromString(claims.get("userID", String.class));
         }
         return null;
     }
