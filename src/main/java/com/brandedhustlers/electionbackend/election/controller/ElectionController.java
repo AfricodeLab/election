@@ -53,7 +53,7 @@ public class ElectionController {
         return new ResponseEntity<>(electionService.updateElection(electionId, election, getAppUserId(httpServletRequest)), HttpStatus.OK);
     }
 
-    @PutMapping("/update-status/{electionId")
+    @PutMapping("/update-status/{electionId}")
     public ResponseEntity<?> changeStatus(
             @PathVariable UUID electionId,
             @RequestParam ElectionStatus electionStatus

@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -31,6 +32,23 @@ public class SecurityConfig {
         this.userDetailsService = userDetailsService;
         this.loggingFilter = loggingFilter;
     }
+
+    // Disable automatic registration of JWTAuthFilter
+    @Bean
+    public FilterRegistrationBean<JWTAuthFilter> jwtFilterRegistration(JWTAuthFilter filter) {
+        FilterRegistrationBean<JWTAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    // Disable automatic registration of AllRequestsLoggingFilter
+    @Bean
+    public FilterRegistrationBean<AllRequestsLoggingFilter> loggingFilterRegistration(AllRequestsLoggingFilter filter) {
+        FilterRegistrationBean<AllRequestsLoggingFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
