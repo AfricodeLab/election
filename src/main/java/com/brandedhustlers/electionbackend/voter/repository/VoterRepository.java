@@ -1,0 +1,14 @@
+package com.brandedhustlers.electionbackend.voter.repository;
+
+import com.brandedhustlers.electionbackend.voter.domain.Voter;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+import java.util.List;
+import java.util.UUID;
+
+public interface VoterRepository extends JpaRepository<Voter, UUID> {
+
+    @Query("select v from Voter v where v.organization.organizationId = :orgId and v.name = :q")
+    List<Voter> findByOrgIDAndNameContainingIgnoreCase(UUID orgId, String q);
+}

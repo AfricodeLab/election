@@ -33,6 +33,6 @@ build/
 .vscode/
 
 /.env
-/scaffold.txt
+/scaffold.md
 
 !/README.md

@@ -55,7 +55,7 @@ public class AppUser {
 
     @ManyToMany
     @JoinTable(
-            name = "user_roles",
+            name = "app_user_roles",
             joinColumns = @JoinColumn(name = "user_id"),
             inverseJoinColumns = @JoinColumn(name = "role_id")
     )
