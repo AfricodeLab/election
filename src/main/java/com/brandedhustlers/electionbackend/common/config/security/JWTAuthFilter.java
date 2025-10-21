@@ -34,12 +34,12 @@ public class JWTAuthFilter extends OncePerRequestFilter {
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
 
-        // Try to get token from Authorization header first
+        // Try to getStation token from Authorization header first
         String token = getTokenFromAuthorizationHeader(request);
         System.out.println("token from auth header: " + token);
 
 
-        // If no token in header, try to get from cookie
+        // If no token in header, try to getStation from cookie
         if (token == null) {
             token = getTokenFromCookie(request.getCookies());
         }

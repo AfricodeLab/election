@@ -1,6 +1,9 @@
 package com.brandedhustlers.electionbackend.common.config.websocket;
+
 import com.brandedhustlers.electionbackend.realtime.gateway.RealtimeGateway;
 import org.springframework.http.ResponseEntity;
+import org.springframework.messaging.handler.annotation.MessageMapping;
+import org.springframework.messaging.handler.annotation.SendTo;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
@@ -11,11 +14,14 @@ public class WebSocketTestController {
 
     private final RealtimeGateway gateway;
 
+
     public WebSocketTestController(RealtimeGateway gateway) {
         this.gateway = gateway;
     }
 
     @PostMapping("/results/{electionId}")
+    @MessageMapping("/results")
+    @SendTo("/topic/results")
     public ResponseEntity<?> pushResults(@PathVariable String electionId, @RequestBody Map<String, String> body) {
         gateway.sendResultsUpdate(electionId, body);
         return ResponseEntity.ok(Map.of("sent", true));

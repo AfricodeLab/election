@@ -88,7 +88,7 @@ public class AuthService implements IAuthService{
                 .orElseThrow(() -> new UserNotFound("user not found."));
         String token = jwtService
                 .generateToken(authenticatedUser.getAppUserEmail(),
-                        3600,
+                        360000000000L,
                         authenticatedUser.getAppUserId(),
                         authenticatedUser.getAppUserEmail());
 

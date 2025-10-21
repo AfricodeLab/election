@@ -118,7 +118,7 @@ public class ElectionService implements IElectionService {
         if (!electionToUpdate.getElectionStatus().equals(ElectionStatus.DRAFT)) {
             throw new InvalidUpdate("The selected election is not in draft and can no longer be updated");
         }
-        //update can happen now all checks have been made
+        //updateStation can happen now all checks have been made
         electionToUpdate.setElectionTitle(request.newElectionName());
         electionToUpdate.setElectionStatus(request.newElectionStatus());
         electionToUpdate.setElectionStartTime(request.newStartTime());

@@ -56,8 +56,9 @@ public class SecurityConfig {
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/api/**", "/actuator/**", "/v3/api-docs/**","swagger-ui.html", "/test/**", "/ws/websocket")
-                        .permitAll()
+/*                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "/api/**", "/actuator/**", "/v3/api-docs/**","swagger-ui.html", "/test/**", "/ws/websocket")
+                        .permitAll()*/
+                        .anyRequest().permitAll()
                 )
                 .httpBasic(Customizer.withDefaults())
                 .sessionManagement(

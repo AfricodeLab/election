@@ -16,6 +16,8 @@ public class WebsocketConfig implements WebSocketMessageBrokerConfigurer {
         registry.addEndpoint("/ws-raw").setAllowedOrigins("*");
     }
 
+
+
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry){
         registry.enableSimpleBroker("/topic", "/queue");
