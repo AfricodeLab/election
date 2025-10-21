@@ -1,0 +1,15 @@
+package com.brandedhustlers.electionbackend.voter.repository;
+
+import com.brandedhustlers.electionbackend.voter.domain.VerificationToken;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface VerificationTokenRepository extends JpaRepository<VerificationToken, UUID> {
+    @Query("select vr from VerificationToken vr where vr.electionId = :electionId and vr.voter.voterId = :voterId")
+    Optional<VerificationToken> findTopByVoterIdAndElectionIdOrderByCreatedAtDesc(UUID voterId, UUID electionId);
+}

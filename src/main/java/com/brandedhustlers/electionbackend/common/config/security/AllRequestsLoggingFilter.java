@@ -131,7 +131,7 @@ public class AllRequestsLoggingFilter implements Filter {
     }
 
     private void saveLogWithResponse(int status, String responseBody) {
-        // Get the latest log entry, update it with response data
+        // Get the latest log entry, updateStation it with response data
         RequestLog log = loggingRepository.findTopByOrderByIdDesc();
         if (log != null) {
             log.setResponseStatus(status);

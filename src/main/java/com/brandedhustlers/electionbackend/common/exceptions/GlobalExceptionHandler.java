@@ -5,6 +5,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.OrganizationNotFound;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserAlreadyExists;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
+import com.brandedhustlers.electionbackend.ops.exception.*;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -30,6 +31,76 @@ public class GlobalExceptionHandler {
         );
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
+
+    @ExceptionHandler(DisallowedAction.class)
+    public ResponseEntity<?> handleDisallowedAction(DisallowedAction e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.BAD_REQUEST.value(),
+                new APIException.APIError(
+                        HttpStatus.BAD_REQUEST,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
+    }
+    @ExceptionHandler(RequiredNull.class)
+    public ResponseEntity<?> handleRequiredNull(RequiredNull e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.BAD_REQUEST.value(),
+                new APIException.APIError(
+                        HttpStatus.BAD_REQUEST,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DeviceNotFound.class)
+    public ResponseEntity<?> handleDeviceNotFound(DeviceNotFound e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.NOT_FOUND.value(),
+                new APIException.APIError(
+                        HttpStatus.NOT_FOUND,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(StationNotFound.class)
+    public ResponseEntity<?> handleStationNotFound(StationNotFound e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.NOT_FOUND.value(),
+                new APIException.APIError(
+                        HttpStatus.NOT_FOUND,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(OrgMismatch.class)
+    public ResponseEntity<?> handleOrgMismatch(OrgMismatch e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.NOT_FOUND.value(),
+                new APIException.APIError(
+                        HttpStatus.NOT_FOUND,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler(ConflictException.class)
     public ResponseEntity<?> handleConflictException(ConflictException e, HttpServletRequest request) {
         APIException apiException = new APIException(

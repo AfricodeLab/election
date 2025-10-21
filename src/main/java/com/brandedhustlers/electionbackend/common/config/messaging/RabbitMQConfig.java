@@ -11,10 +11,18 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     public static final String EXCHANGE = "app.exchange";
+
     public static final String AUTH_QUEUE = "auth.events";
     public static final String ELECTION_QUEUE = "election.events";
+    public static final String VOTER_IMPORT = "voter.import";
+    public static final String NOTIF_SMS = "notif.sms";
+    public static final String VOTING_VOTE_CAST = "voting.vote.cast";
+
     public static final String ROUTING_KEY_AUTH = "auth.#";
     public static final String ROUTING_KEY_ELECTION = "election.#";
+    public static final String ROUTING_KEY_VOTER_IMPORT = "voter.#";
+    public static final String ROUTING_KEY_NOTIF_SMS = "notif.#";
+    public static final String ROUTING_KEY_VOTING_VOTE_CAST = "voting.#";
 
     @Bean
     public TopicExchange exchange() {
@@ -30,6 +38,44 @@ public class RabbitMQConfig {
     public Queue electionQueue() {
         return QueueBuilder.durable(ELECTION_QUEUE).build();
     }
+
+    @Bean
+    public Queue voteQueue(){
+        return QueueBuilder.durable(VOTER_IMPORT).build();
+    }
+
+    @Bean
+    public Queue notifQueue(){
+        return QueueBuilder.durable(NOTIF_SMS).build();
+    }
+
+    @Bean
+    public Queue votingQueue(){
+        return QueueBuilder.durable(VOTING_VOTE_CAST).build();
+    }
+
+    @Bean
+    public Binding votingBinding() {
+        return BindingBuilder.bind(authQueue())
+                .to(exchange())
+                .with(ROUTING_KEY_VOTING_VOTE_CAST);
+    }
+
+    @Bean
+    public Binding notifBinding() {
+        return BindingBuilder.bind(authQueue())
+                .to(exchange())
+                .with(ROUTING_KEY_NOTIF_SMS);
+    }
+
+
+    @Bean
+    public Binding voteBinding() {
+        return BindingBuilder.bind(authQueue())
+                .to(exchange())
+                .with(ROUTING_KEY_VOTER_IMPORT);
+    }
+
 
     @Bean
     public Binding authBinding() {

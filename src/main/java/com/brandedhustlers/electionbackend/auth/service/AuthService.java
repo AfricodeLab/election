@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Role;
 import com.brandedhustlers.electionbackend.auth.dto.*;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
+import com.brandedhustlers.electionbackend.auth.exceptions.InvalidRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserAlreadyExists;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
@@ -87,7 +88,7 @@ public class AuthService implements IAuthService{
                 .orElseThrow(() -> new UserNotFound("user not found."));
         String token = jwtService
                 .generateToken(authenticatedUser.getAppUserEmail(),
-                        3600,
+                        360000000000L,
                         authenticatedUser.getAppUserId(),
                         authenticatedUser.getAppUserEmail());
 
@@ -112,7 +113,7 @@ public class AuthService implements IAuthService{
         AppUser creator = appUserRepository.findById(createdBy)
                 .orElseThrow(() -> new UserNotFound("creating user account does not exist"));
 
-        Role userRole = roleRepository.findByRoleName(createUserRequest.userRole().getName());
+        Role userRole = roleRepository.findByRoleName(createUserRequest.userRole().getName()).orElseThrow(() -> new InvalidRole("Role not found"));
 
         AppUser newUser = AppUser.builder()
                 .firstName(createUserRequest.firstName())

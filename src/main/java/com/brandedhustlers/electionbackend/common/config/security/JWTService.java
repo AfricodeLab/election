@@ -1,5 +1,7 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
+import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import io.github.cdimascio.dotenv.Dotenv;
 import io.jsonwebtoken.Claims;
@@ -41,10 +43,15 @@ public class JWTService {
     }
 
     public String generateToken(String username, long expirationTime, UUID userId, String appUserEmail) {
+
+        AppUser user = appUserRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
+
         Map<String, Object> claims = new HashMap<>();
         claims.put("userID",userId);
         claims.put("username", username);
         claims.put("userEmail", appUserEmail);
+        claims.put("userOrgId", user.getAppUserOrganization().getOrganizationId());
 
         return Jwts.builder()
                 .claims()
@@ -123,6 +130,14 @@ public class JWTService {
         Claims claims = extractAllClaim(token);
         if (claims.containsKey("userID")) {
             return UUID.fromString(claims.get("userID", String.class));
+        }
+        return null;
+    }
+
+    public UUID extractOrgId(String token) {
+        Claims claims = extractAllClaim(token);
+        if (claims.containsKey("userOrgId")) {
+            return UUID.fromString(claims.get("userOrgId", String.class));
         }
         return null;
     }

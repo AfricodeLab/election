@@ -16,4 +16,7 @@ public interface OrganizationRepository extends JpaRepository<Organization, UUID
 
     @Query("select o from Organization o where o.deleteYn = 'N'")
     List<Organization> listAllOrganizations();
+
+
+    Optional<Organization> findByOrganizationName(String organizationName);
 }
