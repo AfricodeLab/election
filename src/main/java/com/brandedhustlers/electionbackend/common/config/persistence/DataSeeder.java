@@ -200,8 +200,8 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
-                        .organizationName("Electoralz Commission")
-                        .appUserOrganization(orgs.get("Electoralz Commission"))
+                        .organizationName("Electoral Commission")
+                        .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
                         .firstName("Ekow").lastName("Davis")

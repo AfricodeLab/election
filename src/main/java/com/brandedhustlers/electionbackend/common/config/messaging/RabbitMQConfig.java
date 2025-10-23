@@ -17,11 +17,12 @@ public class RabbitMQConfig {
     public static final String VOTER_IMPORT = "voter.import";
     public static final String NOTIF_SMS = "notif.sms";
     public static final String VOTING_VOTE_CAST = "voting.vote.cast";
+    public static final String NOTIF_EMAIL = "notif.email";
 
     public static final String ROUTING_KEY_AUTH = "auth.#";
     public static final String ROUTING_KEY_ELECTION = "election.#";
     public static final String ROUTING_KEY_VOTER_IMPORT = "voter.#";
-    public static final String ROUTING_KEY_NOTIF_SMS = "notif.#";
+    public static final String ROUTING_KEY_NOTIF = "notif.#";
     public static final String ROUTING_KEY_VOTING_VOTE_CAST = "voting.#";
 
     @Bean
@@ -45,8 +46,13 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Queue notifQueue(){
+    public Queue notifSmsQueue(){
         return QueueBuilder.durable(NOTIF_SMS).build();
+    }
+
+    @Bean
+    public Queue notifEmailQueue(){
+        return QueueBuilder.durable(NOTIF_EMAIL).build();
     }
 
     @Bean
@@ -56,16 +62,23 @@ public class RabbitMQConfig {
 
     @Bean
     public Binding votingBinding() {
-        return BindingBuilder.bind(authQueue())
+        return BindingBuilder.bind(voteQueue())
                 .to(exchange())
                 .with(ROUTING_KEY_VOTING_VOTE_CAST);
     }
 
     @Bean
-    public Binding notifBinding() {
-        return BindingBuilder.bind(authQueue())
+    public Binding notifSmsBinding() {
+        return BindingBuilder.bind(notifSmsQueue())
                 .to(exchange())
-                .with(ROUTING_KEY_NOTIF_SMS);
+                .with(ROUTING_KEY_NOTIF);
+    }
+
+    @Bean
+    public Binding notifEmailBinding() {
+        return BindingBuilder.bind(notifEmailQueue())
+                .to(exchange())
+                .with(ROUTING_KEY_NOTIF);
     }
 
 

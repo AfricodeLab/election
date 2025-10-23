@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Election Is Live</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 500px;
+            margin: auto;
+            background: #ffffff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        .header {
+            font-size: 22px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .highlight {
+            color: #007bff;
+            font-weight: bold;
+        }
+        .message {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 20px;
+            line-height: 1.5;
+        }
+        .cta {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .footer {
+            font-size: 14px;
+            color: #888;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">Election Is Now Live!</div>
+    <p class="message">
+        Hello <span th:text="${voterName}"></span>,<br><br>
+        The <span class="highlight" th:text="${electionName}"></span> election is now open for voting.<br>
+        You can cast your vote any time between:<br>
+        <b>Start:</b> <span th:text="${startTime}"></span><br>
+        <b>End:</b> <span th:text="${endTime}"></span>
+    </p>
+    <a href="https://terminal-x-iota.vercel.app" class="cta">Cast Your Vote Now</a>
+    <p class="message">
+        Please make sure to submit your vote before the election closes.
+        Every vote counts!
+    </p>
+    <div class="footer">
+        &copy; 2025 Election Management System. All rights reserved.
+    </div>
+</div>
+</body>
+</html>
