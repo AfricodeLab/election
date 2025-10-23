@@ -11,6 +11,7 @@ import com.brandedhustlers.electionbackend.ops.exception.OrgMismatch;
 import com.brandedhustlers.electionbackend.ops.mappers.LaunchMapper;
 import com.brandedhustlers.electionbackend.ops.repository.LaunchElectionRepository;
 import com.brandedhustlers.electionbackend.ops.repository.LaunchRepository;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -32,14 +33,17 @@ public class LaunchService {
     private final LaunchRepository launchRepository;
     private final LaunchElectionRepository links;
     private final LaunchMapper launchMapper;
+    private final RabbitTemplate rabbitTemplate;
 
 
     public LaunchService(LaunchRepository launchRepository,
                          LaunchElectionRepository links,
-                         LaunchMapper launchMapper) {
+                         LaunchMapper launchMapper,
+                         RabbitTemplate rabbitTemplate) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
 
@@ -138,6 +142,12 @@ public class LaunchService {
 
         if (l.getStatus() == LaunchStatus.PLANNED && status == LaunchStatus.ACTIVE) {
             l.setStatus(LaunchStatus.ACTIVE);
+
+            Map<String, Object> launchLivePayload = Map.of(
+                    "launchId", l.getId(),
+                    "orgId", orgId
+            );
+            rabbitTemplate.convertAndSend("notif.email", launchLivePayload);
             if (l.getStartAt() == null) {
                 l.setStartAt(Instant.now());
             }

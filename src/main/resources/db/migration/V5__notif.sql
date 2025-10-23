@@ -1,0 +1,410 @@
+-- DROP TABLE public.app_user_roles CASCADE;
+--
+-- DROP TABLE public.auth_role_permissions CASCADE;
+--
+-- DROP TABLE public.user_roles CASCADE;
+--
+-- CREATE TABLE if not exists voter.election_voter
+-- (
+--     station_id  UUID,
+--     verified_at TIMESTAMP WITHOUT TIME ZONE,
+--     has_voted   BOOLEAN NOT NULL,
+--     election_id UUID    NOT NULL,
+--     voter_id    UUID    NOT NULL,
+--     CONSTRAINT pk_election_voter PRIMARY KEY (election_id, voter_id)
+-- );
+--
+-- CREATE TABLE if not exists voter.verification_token
+-- (
+--     id          UUID                        NOT NULL,
+--     election_id UUID                        NOT NULL,
+--     voter_id    UUID,
+--     token_hash  VARCHAR(255)                NOT NULL,
+--     type        VARCHAR(255)                NOT NULL,
+--     expires_at  TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     attempts    INTEGER                     NOT NULL,
+--     created_at  TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     CONSTRAINT pk_verification_token PRIMARY KEY (id)
+-- );
+--
+-- CREATE TABLE if not exists voter.voter_import_job
+-- (
+--     id          UUID         NOT NULL,
+--     org_id      UUID         NOT NULL,
+--     file_ref    VARCHAR(255) NOT NULL,
+--     total       INTEGER      NOT NULL,
+--     processed   INTEGER      NOT NULL,
+--     failed      INTEGER      NOT NULL,
+--     status      VARCHAR(255) NOT NULL,
+--     started_at  TIMESTAMP WITHOUT TIME ZONE,
+--     finished_at TIMESTAMP WITHOUT TIME ZONE,
+--     CONSTRAINT pk_voter_import_job PRIMARY KEY (id)
+-- );
+--
+-- CREATE TABLE if not exists voter.voters
+-- (
+--     voter_id      UUID         NOT NULL,
+--     org_id        UUID,
+--     name          VARCHAR(255) NOT NULL,
+--     phone         VARCHAR(255) NOT NULL,
+--     email         VARCHAR(255) NOT NULL,
+--     national_id   VARCHAR(255) NOT NULL,
+--     voter_status  VARCHAR(255),
+--     created_at    TIMESTAMP WITHOUT TIME ZONE,
+--     updated_at    TIMESTAMP WITHOUT TIME ZONE,
+--     created_by_id UUID,
+--     CONSTRAINT pk_voters PRIMARY KEY (voter_id)
+-- );
+--
+-- ALTER TABLE voter.verification_token
+--     ADD CONSTRAINT uc_verification_token_voter UNIQUE (voter_id);
+--
+-- ALTER TABLE voter.voters
+--     ADD CONSTRAINT uc_voters_created_by UNIQUE (created_by_id);
+--
+-- ALTER TABLE voter.voters
+--     ADD CONSTRAINT uc_voters_email UNIQUE (email);
+--
+-- ALTER TABLE voter.voters
+--     ADD CONSTRAINT uc_voters_nationalid UNIQUE (national_id);
+--
+-- ALTER TABLE voter.voters
+--     ADD CONSTRAINT uc_voters_phone UNIQUE (phone);
+--
+-- ALTER TABLE voter.verification_token
+--     ADD CONSTRAINT FK_VERIFICATION_TOKEN_ON_VOTER FOREIGN KEY (voter_id) REFERENCES voter.voters (voter_id);
+--
+-- ALTER TABLE voter.voters
+--     ADD CONSTRAINT FK_VOTERS_ON_CREATED_BY FOREIGN KEY (created_by_id) REFERENCES auth.app_user (app_user_id);
+--
+-- ALTER TABLE voter.voters
+--     ADD CONSTRAINT FK_VOTERS_ON_ORG FOREIGN KEY (org_id) REFERENCES auth.organization (organization_id);
+--
+-- CREATE TABLE if not exists election.candidate
+-- (
+--     candidate_id       UUID        NOT NULL,
+--     affiliation        VARCHAR(25) NOT NULL,
+--     manifesto          TEXT,
+--     candidate_photourl VARCHAR(255),
+--     date_of_birth      date,
+--     place_of_birth     VARCHAR(255),
+--     is_incumbent       BOOLEAN     NOT NULL,
+--     delete_yn          VARCHAR(255),
+--     election_id        UUID,
+--     created_by         UUID,
+--     created_at         TIMESTAMP WITHOUT TIME ZONE,
+--     updated_at         TIMESTAMP WITHOUT TIME ZONE,
+--     CONSTRAINT pk_candidate PRIMARY KEY (candidate_id)
+-- );
+--
+-- CREATE TABLE if not exists election.election
+-- (
+--     election_id              UUID    NOT NULL,
+--     election_title           TEXT    NOT NULL,
+--     election_description     TEXT    NOT NULL,
+--     election_type            VARCHAR(255),
+--     election_status          VARCHAR(255),
+--     election_start_time      TIMESTAMP WITHOUT TIME ZONE,
+--     election_end_time        TIMESTAMP WITHOUT TIME ZONE,
+--     total_voters             BIGINT,
+--     expected_voter_count     BIGINT,
+--     total_votes              BIGINT,
+--     created_at               TIMESTAMP WITHOUT TIME ZONE,
+--     updated_at               TIMESTAMP WITHOUT TIME ZONE,
+--     organization_id          UUID,
+--     delete_yn                VARCHAR(255),
+--     created_by               UUID,
+--     updated_by               UUID,
+--     is_publicly_visible      BOOLEAN NOT NULL,
+--     should_end_automatically BOOLEAN NOT NULL,
+--     CONSTRAINT pk_election PRIMARY KEY (election_id)
+-- );
+--
+-- ALTER TABLE election.candidate
+--     ADD CONSTRAINT uc_candidate_created_by UNIQUE (created_by);
+--
+-- ALTER TABLE election.election
+--     ADD CONSTRAINT uc_election_created_by UNIQUE (created_by);
+--
+-- ALTER TABLE election.election
+--     ADD CONSTRAINT uc_election_updated_by UNIQUE (updated_by);
+--
+-- ALTER TABLE election.candidate
+--     ADD CONSTRAINT FK_CANDIDATE_ON_CREATED_BY FOREIGN KEY (created_by) REFERENCES auth.app_user (app_user_id);
+--
+-- ALTER TABLE election.candidate
+--     ADD CONSTRAINT FK_CANDIDATE_ON_ELECTION FOREIGN KEY (election_id) REFERENCES election.election (election_id);
+--
+-- ALTER TABLE election.election
+--     ADD CONSTRAINT FK_ELECTION_ON_CREATED_BY FOREIGN KEY (created_by) REFERENCES auth.app_user (app_user_id);
+--
+-- ALTER TABLE election.election
+--     ADD CONSTRAINT FK_ELECTION_ON_ORGANIZATION FOREIGN KEY (organization_id) REFERENCES auth.organization (organization_id);
+--
+-- ALTER TABLE election.election
+--     ADD CONSTRAINT FK_ELECTION_ON_UPDATED_BY FOREIGN KEY (updated_by) REFERENCES auth.app_user (app_user_id);
+--
+-- CREATE TABLE if not exists results.tally
+-- (
+--     count        BIGINT                      NOT NULL,
+--     updated_at   TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     election_id  UUID                        NOT NULL,
+--     candidate_id UUID                        NOT NULL,
+--     CONSTRAINT pk_tally PRIMARY KEY (election_id, candidate_id)
+-- );
+--
+-- CREATE TABLE if not exists auth.app_user
+-- (
+--     app_user_id          UUID         NOT NULL,
+--     first_name           VARCHAR(255) NOT NULL,
+--     last_name            VARCHAR(255) NOT NULL,
+--     app_user_email       VARCHAR(255) NOT NULL,
+--     organization_name    VARCHAR(255) NOT NULL,
+--     username             VARCHAR(255),
+--     password             VARCHAR(255) NOT NULL,
+--     user_role            VARCHAR(255),
+--     user_preferences     JSONB,
+--     delete_yn            VARCHAR(255),
+--     created_at           TIMESTAMP WITHOUT TIME ZONE,
+--     updated_at           TIMESTAMP WITHOUT TIME ZONE,
+--     created_by           UUID,
+--     user_profile_picture VARCHAR(255),
+--     organization_id      UUID,
+--     CONSTRAINT pk_app_user PRIMARY KEY (app_user_id)
+-- );
+--
+-- CREATE TABLE if not exists auth.app_user_roles
+-- (
+--     role_id BIGINT NOT NULL,
+--     user_id UUID   NOT NULL,
+--     CONSTRAINT pk_app_user_roles PRIMARY KEY (role_id, user_id)
+-- );
+--
+-- CREATE TABLE if not exists auth.auth_role_permissions
+-- (
+--     permission_id BIGINT NOT NULL,
+--     role_id       BIGINT NOT NULL,
+--     CONSTRAINT pk_auth_role_permissions PRIMARY KEY (permission_id, role_id)
+-- );
+--
+-- CREATE TABLE if not exists auth.organization
+-- (
+--     organization_id          UUID         NOT NULL,
+--     organization_name        VARCHAR(255) NOT NULL,
+--     organization_description TEXT,
+--     is_enabled               BOOLEAN      NOT NULL,
+--     created_at               TIMESTAMP WITHOUT TIME ZONE,
+--     updated_at               TIMESTAMP WITHOUT TIME ZONE,
+--     created_by_app_user_id   UUID,
+--     delete_yn                VARCHAR(255),
+--     CONSTRAINT pk_organization PRIMARY KEY (organization_id)
+-- );
+--
+-- CREATE TABLE if not exists auth.permissions
+-- (
+--     permission_id   BIGINT NOT NULL,
+--     permission_type VARCHAR(255),
+--     CONSTRAINT pk_permissions PRIMARY KEY (permission_id)
+-- );
+--
+-- CREATE TABLE if not exists auth.request_logs
+-- (
+--     id                  BIGINT GENERATED BY DEFAULT AS IDENTITY NOT NULL,
+--     user_id             VARCHAR(255),
+--     menu_id             VARCHAR(255),
+--     request_url         VARCHAR(255),
+--     ip_addr             VARCHAR(255),
+--     access_dt           TIMESTAMP WITHOUT TIME ZONE,
+--     search_condition_cn VARCHAR(255),
+--     first_register_id   VARCHAR(255),
+--     last_update_id      VARCHAR(255),
+--     response_status     INTEGER                                 NOT NULL,
+--     response_body       VARCHAR(255),
+--     CONSTRAINT pk_request_logs PRIMARY KEY (id)
+-- );
+--
+-- CREATE TABLE if not exists auth.user_roles
+-- (
+--     role_id   BIGINT       NOT NULL,
+--     role_name VARCHAR(255) NOT NULL,
+--     CONSTRAINT pk_user_roles PRIMARY KEY (role_id)
+-- );
+--
+-- ALTER TABLE auth.app_user
+--     ADD CONSTRAINT uc_app_user_appuseremail UNIQUE (app_user_email);
+--
+-- ALTER TABLE auth.app_user
+--     ADD CONSTRAINT uc_app_user_created_by UNIQUE (created_by);
+--
+-- ALTER TABLE auth.app_user
+--     ADD CONSTRAINT uc_app_user_username UNIQUE (username);
+--
+-- ALTER TABLE auth.organization
+--     ADD CONSTRAINT uc_organization_organizationname UNIQUE (organization_name);
+--
+-- ALTER TABLE auth.user_roles
+--     ADD CONSTRAINT uc_user_roles_rolename UNIQUE (role_name);
+--
+-- ALTER TABLE auth.app_user
+--     ADD CONSTRAINT FK_APP_USER_ON_CREATED_BY FOREIGN KEY (created_by) REFERENCES auth.app_user (app_user_id);
+--
+-- ALTER TABLE auth.app_user
+--     ADD CONSTRAINT FK_APP_USER_ON_ORGANIZATION FOREIGN KEY (organization_id) REFERENCES auth.organization (organization_id);
+--
+-- ALTER TABLE auth.organization
+--     ADD CONSTRAINT FK_ORGANIZATION_ON_CREATEDBY_APPUSERID FOREIGN KEY (created_by_app_user_id) REFERENCES auth.app_user (app_user_id);
+--
+-- ALTER TABLE auth.app_user_roles
+--     ADD CONSTRAINT fk_appuserol_on_app_user FOREIGN KEY (user_id) REFERENCES auth.app_user (app_user_id);
+--
+-- ALTER TABLE auth.app_user_roles
+--     ADD CONSTRAINT fk_appuserol_on_role FOREIGN KEY (role_id) REFERENCES auth.user_roles (role_id);
+--
+-- ALTER TABLE auth.auth_role_permissions
+--     ADD CONSTRAINT fk_autrolper_on_permission FOREIGN KEY (permission_id) REFERENCES auth.permissions (permission_id);
+--
+-- ALTER TABLE auth.auth_role_permissions
+--     ADD CONSTRAINT fk_autrolper_on_role FOREIGN KEY (role_id) REFERENCES auth.user_roles (role_id);
+--
+-- CREATE TABLE if not exists voting.outbox
+-- (
+--     id             UUID                        NOT NULL,
+--     event_type     VARCHAR(255)                NOT NULL,
+--     aggregate_type VARCHAR(255)                NOT NULL,
+--     aggregate_id   UUID                        NOT NULL,
+--     payload        OID                         NOT NULL,
+--     created_at     TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     published_at   TIMESTAMP WITHOUT TIME ZONE,
+--     CONSTRAINT pk_outbox PRIMARY KEY (id)
+-- );
+--
+-- CREATE TABLE if not exists voting.vote
+-- (
+--     vote_id      UUID                        NOT NULL,
+--     org_id       UUID                        NOT NULL,
+--     election_id  UUID                        NOT NULL,
+--     candidate_id UUID                        NOT NULL,
+--     voter_id     UUID,
+--     device_id    UUID,
+--     dedupe_key   VARCHAR(255),
+--     proof_ref    VARCHAR(255),
+--     tx_id        VARCHAR(255),
+--     cast_at      TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     CONSTRAINT pk_vote PRIMARY KEY (vote_id)
+-- );
+--
+-- ALTER TABLE voting.vote
+--     ADD CONSTRAINT uc_vote_dedupe_key UNIQUE (dedupe_key);
+--
+-- CREATE INDEX IF NOT EXISTS idx_vote_candidate ON voting.vote (candidate_id);
+--
+-- CREATE INDEX IF NOT EXISTS idx_vote_election ON voting.vote (election_id);
+--
+-- CREATE TABLE if not exists ops.device
+-- (
+--     device_id       UUID                        NOT NULL,
+--     org_id          UUID                        NOT NULL,
+--     station_id      UUID                        NOT NULL,
+--     label           VARCHAR(255)                NOT NULL,
+--     status          VARCHAR(255)                NOT NULL,
+--     last_seen       TIMESTAMP WITHOUT TIME ZONE,
+--     last_latency_ms BIGINT,
+--     app_version     VARCHAR(255),
+--     created_at      TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     delete_yn       VARCHAR(255),
+--     CONSTRAINT pk_device PRIMARY KEY (device_id)
+-- );
+--
+-- CREATE TABLE if not exists ops.launch
+-- (
+--     launch_id   UUID                        NOT NULL,
+--     org_id      UUID                        NOT NULL,
+--     name        VARCHAR(255)                NOT NULL,
+--     description VARCHAR(255),
+--     status      VARCHAR(255)                NOT NULL,
+--     start_at    TIMESTAMP WITHOUT TIME ZONE,
+--     end_at      TIMESTAMP WITHOUT TIME ZONE,
+--     created_at  TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     delete_yn   VARCHAR(255),
+--     CONSTRAINT pk_launch PRIMARY KEY (launch_id)
+-- );
+--
+-- CREATE TABLE if not exists ops.launch_election
+-- (
+--     launch_id   UUID NOT NULL,
+--     election_id UUID NOT NULL,
+--     CONSTRAINT pk_launch_election PRIMARY KEY (launch_id, election_id)
+-- );
+--
+-- CREATE TABLE if not exists ops.station
+-- (
+--     station_id UUID                        NOT NULL,
+--     org_id     UUID                        NOT NULL,
+--     launch_id  UUID                        NOT NULL,
+--     name       VARCHAR(255)                NOT NULL,
+--     location   VARCHAR(255),
+--     capacity   INTEGER,
+--     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     delete_yn  VARCHAR(255),
+--     CONSTRAINT pk_station PRIMARY KEY (station_id)
+-- );
+--
+-- CREATE TABLE if not exists notif.message_log
+-- (
+--     message_id          UUID                        NOT NULL,
+--     org_id              UUID                        NOT NULL,
+--     channel             VARCHAR(255)                NOT NULL,
+--     to_address          VARCHAR(255)                NOT NULL,
+--     template_key        VARCHAR(255)                NOT NULL,
+--     template_version    INTEGER                     NOT NULL,
+--     template_id         UUID                        NOT NULL,
+--     status              VARCHAR(255)                NOT NULL,
+--     attempts            INTEGER                     NOT NULL,
+--     last_error          VARCHAR(255),
+--     render_hash         VARCHAR(255),
+--     provider_message_id VARCHAR(255),
+--     created_at          TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     updated_at          TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     CONSTRAINT pk_message_log PRIMARY KEY (message_id)
+-- );
+--
+-- CREATE TABLE if not exists notif.template
+-- (
+--     template_id  UUID                        NOT NULL,
+--     channel      VARCHAR(255)                NOT NULL,
+--     template_key VARCHAR(255)                NOT NULL,
+--     org_id       UUID,
+--     locale       VARCHAR(255),
+--     is_active    BOOLEAN                     NOT NULL,
+--     version      INTEGER                     NOT NULL,
+--     subject      VARCHAR(255),
+--     body         OID                         NOT NULL,
+--     created_at   TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     created_by   UUID,
+--     delete_yn    VARCHAR(255),
+--     CONSTRAINT pk_template PRIMARY KEY (template_id)
+-- );
+--
+-- CREATE TABLE if not exists notif.template_schema
+-- (
+--     id            BIGINT GENERATED BY DEFAULT AS IDENTITY NOT NULL,
+--     channel       VARCHAR(255)                            NOT NULL,
+--     template_key  VARCHAR(255)                            NOT NULL,
+--     allowed_vars  OID                                     NOT NULL,
+--     required_vars OID                                     NOT NULL,
+--     CONSTRAINT pk_template_schema PRIMARY KEY (id)
+-- );
+--
+-- ALTER TABLE notif.template
+--     ADD CONSTRAINT uc_template_created_by UNIQUE (created_by);
+--
+-- CREATE INDEX IF NOT EXISTS idx_msg_org_channel ON notif.message_log (org_id, channel);
+--
+-- CREATE INDEX IF NOT EXISTS idx_msg_status_time ON notif.message_log (status, created_at);
+--
+-- CREATE INDEX IF NOT EXISTS idx_msg_template_version ON notif.message_log (template_key, template_version);
+--
+-- CREATE INDEX IF NOT EXISTS idx_tmplt_key_org_loc ON notif.template (template_key, org_id, locale, is_active, version);
+--
+-- ALTER TABLE notif.template
+--     ADD CONSTRAINT FK_TEMPLATE_ON_CREATED_BY FOREIGN KEY (created_by) REFERENCES auth.app_user (app_user_id);

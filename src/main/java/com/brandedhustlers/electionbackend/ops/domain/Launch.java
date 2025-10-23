@@ -1,11 +1,13 @@
 package com.brandedhustlers.electionbackend.ops.domain;
 
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
+import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.ops.enums.LaunchStatus;
 import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -47,6 +49,10 @@ public class Launch {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
+
+    @OneToMany
+    @JoinColumn(name = "elections")
+    private List<Election> election;
 
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn;

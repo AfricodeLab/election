@@ -48,7 +48,7 @@ public class StationService {
             throw new OrgMismatch("Org mismatch");
         }
         if (createStation.launchName() == null || createStation.launchName().isBlank()) {
-            throw new IllegalArgumentException("Station is required");
+            throw new IllegalArgumentException("Station name is required");
         }
         Station station = Station.builder()
                 .orgId(orgId)
