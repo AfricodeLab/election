@@ -51,7 +51,7 @@ public class JWTService {
         claims.put("userID",userId);
         claims.put("username", username);
         claims.put("userEmail", appUserEmail);
-        claims.put("userOrgId", user.getAppUserOrganization().getOrganizationId());
+        claims.put("userOrgId", user.getAppUserOrganization() == null ? null : user.getAppUserOrganization().getOrganizationId());
 
         return Jwts.builder()
                 .claims()
@@ -154,7 +154,7 @@ public class JWTService {
     public UUID extractAppUserId(HttpServletRequest request){
         String token;
         token = getTokenFromCookie(request.getCookies());
-        if(token != null){
+        if(token == null){
             token = getTokenFromAuthorizationHeader(request);
         }
         return extractAppUserId(token);

@@ -57,7 +57,7 @@ public class LaunchController {
                 .orElseThrow(() -> new UserNotFound("User not found."));
         Organization creatorOrg = launchCreator.getAppUserOrganization();
 
-        return new ResponseEntity<>(svc.create(creatorOrg.getOrganizationId(), launchName, launchDescription, startAt, endAt), HttpStatus.CREATED);
+        return new ResponseEntity<>(svc.create(creatorOrg.getOrganizationId(), launchName, launchDescription, startAt, endAt, launchCreator), HttpStatus.CREATED);
     }
 
     @GetMapping("/get-launch/{launchId}")
@@ -82,26 +82,26 @@ public class LaunchController {
         return new ResponseEntity<>(svc.list(creatorOrg.getOrganizationId(), status, q, pageable), HttpStatus.OK);
     }
 
-    @PostMapping("/{launchId}/elections")
+    @PostMapping("/{launchId}/attach-elections")
     public ResponseEntity<?> attach(@PathVariable UUID launchId,
                                        @RequestBody List<UUID> electionIds) {
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
         Organization creatorOrg = launchCreator.getAppUserOrganization();
 
-        svc.attachElections(creatorOrg.getOrganizationId(), launchId, electionIds);
-        return new ResponseEntity<>(HttpStatus.ACCEPTED);
+        svc.attachElections(creatorOrg.getOrganizationId(), launchId, electionIds, launchCreator);
+        return new ResponseEntity<>("Elections attached successfully", HttpStatus.ACCEPTED);
     }
 
-    @DeleteMapping("/{launchId}/elections")
+    @DeleteMapping("/{launchId}/detach-elections")
     public ResponseEntity<?> detach(@PathVariable UUID launchId,
                                        @RequestBody List<UUID> electionIds) {
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
         Organization creatorOrg = launchCreator.getAppUserOrganization();
 
-        svc.detachElections(creatorOrg.getOrganizationId(), launchId, electionIds);
-        return new ResponseEntity<>(HttpStatus.ACCEPTED);
+        svc.detachElections(creatorOrg.getOrganizationId(), launchId, electionIds, launchCreator);
+        return new ResponseEntity<>("Election(s) detached successfully", HttpStatus.ACCEPTED);
     }
 
     @PutMapping("/{launchId}/status")

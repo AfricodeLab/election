@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.voting.service;
 
+import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoter;
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
 import com.brandedhustlers.electionbackend.voter.repository.ElectionVoterRepository;
@@ -26,26 +27,34 @@ public class VotingService implements IVotingService{
     private final VoterIdentityService identity;
     private final OutBoxRepository outbox;
     private final ObjectMapper om;
+    private final AuditEmitter emitter;
 
     public VotingService(VoteRepository votes,
                          ElectionVoterRepository evRepo,
                          VoterIdentityService identity,
                          OutBoxRepository outbox,
-                         ObjectMapper om) {
+                         ObjectMapper om,
+                         AuditEmitter emitter) {
         this.votes = votes;
         this.evRepo = evRepo;
         this.identity = identity;
         this.outbox = outbox;
         this.om = om;
+        this.emitter = emitter;
     }
 
     @Override
     @Transactional
     public VoteAckDTO cast(UUID orgId, UUID userId, CastVoteCmd cmd) {
-        String dedupeKey = Optional.ofNullable(cmd.idempotencyKey()).orElseGet(() -> UUID.randomUUID().toString());
+        String dedupeKey = Optional.ofNullable(cmd.idempotencyKey())
+                .orElseGet(() -> UUID.randomUUID().toString());
+
         if (votes.findByDedupeKey(dedupeKey).isPresent()) {
-            var existing = votes.findByDedupeKey(dedupeKey).get();
-            return new VoteAckDTO(existing.getId(), "ACCEPTED", "IDEMPOTENT");
+            Vote existing = votes.findByDedupeKey(dedupeKey).get();
+
+            return new VoteAckDTO(existing.getId(),
+                    "ACCEPTED",
+                    "IDEMPOTENT");
         }
 
         UUID voterId = identity.resolveVoterId(orgId, cmd.electionId(), cmd.voterToken());
@@ -89,6 +98,8 @@ public class VotingService implements IVotingService{
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
+
+
 
         return new VoteAckDTO(vote.getId(),
                 "ACCEPTED",

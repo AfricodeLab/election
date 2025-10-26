@@ -5,6 +5,7 @@ import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.dto.AddUserToOrg;
 import com.brandedhustlers.electionbackend.auth.dto.CreateOrganizationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.OrganizationDTO;
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.exceptions.ConflictException;
 import com.brandedhustlers.electionbackend.auth.exceptions.OrganizationNotFound;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
@@ -18,6 +19,8 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -29,21 +32,28 @@ public class OrganizationService implements IOrganizationService {
     private final HttpServletRequest servletRequest;
     private final OrganizationMapper organizationMapper;
     private final AppUserRepository userRepository;
+    private final HttpServletRequest httpServletRequest;
 
     public OrganizationService(JWTService jwtService,
                                OrganizationRepository organizationRepository,
                                HttpServletRequest servletRequest,
                                OrganizationMapper organizationMapper,
-                               AppUserRepository userRepository) {
+                               AppUserRepository userRepository, HttpServletRequest httpServletRequest) {
         this.jwtService = jwtService;
         this.organizationRepository = organizationRepository;
         this.servletRequest = servletRequest;
         this.organizationMapper = organizationMapper;
         this.userRepository = userRepository;
+        this.httpServletRequest = httpServletRequest;
     }
 
     @Override
     public OrganizationDTO createOrganization(CreateOrganizationRequest request) {
+        UUID createdById = jwtService.extractAppUserId(httpServletRequest);
+
+        AppUser createdBy = userRepository.findById(createdById)
+                .orElseThrow(() -> new UserNotFound("Creator account not found and hence new organization cannot be created."));
+
         Optional<Organization> potentialConflict =  organizationRepository.findByName(request.organizationName());
         if(potentialConflict.isPresent()){
             throw new ConflictException("An organization with this name: " + request.organizationName() + " already exists.");
@@ -51,6 +61,10 @@ public class OrganizationService implements IOrganizationService {
         Organization newOrg = Organization.builder()
                 .organizationName(request.organizationName())
                 .organizationDescription(request.organizationDescription())
+                .deleteYn(DeleteYn.N)
+                .isEnabled(true)
+                .createdBy(createdBy)
+                .createdAt(Timestamp.from(Instant.now()))
                 .build();
 
         return organizationMapper.entityToDTO(

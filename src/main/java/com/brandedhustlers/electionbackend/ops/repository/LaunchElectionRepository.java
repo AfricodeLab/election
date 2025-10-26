@@ -15,5 +15,5 @@ public interface LaunchElectionRepository extends JpaRepository<LaunchElection, 
     @Query("select l from LaunchElection l where l.id.launchId = :launchId")
     List<LaunchElection> findByIdLaunchId(UUID launchId);
 
-    Optional<Object> findById(LaunchElectionId id);
+    Optional<LaunchElection> findById(LaunchElectionId id);
 }

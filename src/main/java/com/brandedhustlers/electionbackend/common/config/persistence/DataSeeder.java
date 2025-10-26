@@ -133,16 +133,28 @@ public class DataSeeder implements CommandLineRunner {
         Set<Permission> superAll = new HashSet<>(perms.values());
 
         upsertRolePermissions(roles.get(UserRole.SUPER_ADMIN), superAll);
-        if (roles.containsKey(UserRole.ADMIN))       upsertRolePermissions(roles.get(UserRole.ADMIN), adminSet);
-        if (roles.containsKey(UserRole.AUDITOR))     upsertRolePermissions(roles.get(UserRole.AUDITOR), auditorSet);
-        if (roles.containsKey(UserRole.CONTRIBUTOR)) upsertRolePermissions(roles.get(UserRole.CONTRIBUTOR), contributorSet);
-        if (roles.containsKey(UserRole.OBSERVER))    upsertRolePermissions(roles.get(UserRole.OBSERVER), observerSet);
+        if (roles.containsKey(UserRole.ADMIN))  {
+            upsertRolePermissions(roles.get(UserRole.ADMIN), adminSet);
+        }
+        if (roles.containsKey(UserRole.AUDITOR)){
+            upsertRolePermissions(roles.get(UserRole.AUDITOR), auditorSet);
+        }
+        if (roles.containsKey(UserRole.CONTRIBUTOR)) {
+            upsertRolePermissions(roles.get(UserRole.CONTRIBUTOR), contributorSet);
+        }
+        if (roles.containsKey(UserRole.OBSERVER)){
+            upsertRolePermissions(roles.get(UserRole.OBSERVER), observerSet);
+        }
     }
 
     private void upsertRolePermissions(Role role, Set<Permission> desired) {
-        if (role == null) return;
+        if (role == null){
+            return;
+        }
         Set<Permission> current = role.getRolePermissions();
-        if (current == null) current = new HashSet<>();
+        if (current == null){
+            current = new HashSet<>();
+        }
         if (!current.equals(desired)) {
             role.setRolePermissions(new HashSet<>(desired));
             roleRepository.save(role);
@@ -210,8 +222,8 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.ADMIN)
                         .roles(roleSet(roles, UserRole.ADMIN))
-                        .organizationName("Electoralz Commission")
-                        .appUserOrganization(orgs.get("Electoralz Commission"))
+                        .organizationName("Electoral Commission")
+                        .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
                         .firstName("Nat").lastName("Auditor")

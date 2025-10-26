@@ -53,7 +53,7 @@ public class AppUser {
     @Convert(attributeName = "userPreferences", converter = UserPreferencesConverter.class)
     private Map<String, String> userPreferences;
 
-    @ManyToMany
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "app_user_roles",
             joinColumns = @JoinColumn(name = "user_id"),

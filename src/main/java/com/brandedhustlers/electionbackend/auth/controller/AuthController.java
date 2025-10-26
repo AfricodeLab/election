@@ -5,6 +5,7 @@ import com.brandedhustlers.electionbackend.auth.dto.LoginRequest;
 import com.brandedhustlers.electionbackend.auth.dto.RegistrationRequest;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -22,15 +23,17 @@ public class AuthController {
     private final HttpServletRequest servletRequest;
     private final HttpServletResponse servletResponse;
     private final JWTService jwtService;
+    private final ObjectMapper objectMapper;
 
     public AuthController(AuthService authService,
                           HttpServletRequest request,
                           HttpServletResponse response,
-                          JWTService jwtService) {
+                          JWTService jwtService, ObjectMapper objectMapper, ObjectMapper objectMapper1) {
         this.authService = authService;
         this.servletRequest = request;
         this.servletResponse = response;
         this.jwtService = jwtService;
+        this.objectMapper = objectMapper1;
     }
 
     @PostMapping("/register-user")
@@ -49,9 +52,10 @@ public class AuthController {
 
     @PostMapping("/create-user")
     public ResponseEntity<?> createUser(
-            @Valid @RequestPart(name = "user") CreateUserRequest request,
+            @Valid @RequestPart(name = "user") String request,
             @RequestPart(name = "userImage", required = false)MultipartFile userImage
             ) throws IOException {
-        return new ResponseEntity<>(authService.createUser(request, userImage), HttpStatus.CREATED);
+        CreateUserRequest request1 = objectMapper.readValue(request,CreateUserRequest.class);
+        return new ResponseEntity<>(authService.createUser(request1, userImage), HttpStatus.OK);
     }
 }

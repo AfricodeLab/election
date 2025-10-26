@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.auth.service;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Role;
 import com.brandedhustlers.electionbackend.auth.dto.*;
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.InvalidRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserAlreadyExists;
@@ -113,18 +114,22 @@ public class AuthService implements IAuthService{
         AppUser creator = appUserRepository.findById(createdBy)
                 .orElseThrow(() -> new UserNotFound("creating user account does not exist"));
 
-        Role userRole = roleRepository.findByRoleName(createUserRequest.userRole().getName()).orElseThrow(() -> new InvalidRole("Role not found"));
+        Role userRole = roleRepository.findByRoleName(createUserRequest.userRole())
+                .orElseThrow(() -> new InvalidRole("Role not found"));
 
         AppUser newUser = AppUser.builder()
                 .firstName(createUserRequest.firstName())
                 .lastName(createUserRequest.lastName())
                 .username(createUserRequest.username() == null ? null : createUserRequest.username())
                 .appUserEmail(createUserRequest.companyEmail())
-                .organizationName(creator.getOrganizationName())  //todo confirm if this is to be the organization of the person creating the user
-                .userRole(createUserRequest.userRole())
+                .organizationName(creator.getOrganizationName())
+                .appUserOrganization(creator.getAppUserOrganization())
+                .password(passwordEncoder.encode(createUserRequest.defaultPassword()))
+                .userRole(UserRole.valueOf(createUserRequest.userRole()))
                 .userPreferences(null)
                 .roles(userRole == null ? new HashSet<>() : Set.of(userRole))
                 .createdBy(creator)
+                .deleteYn(DeleteYn.N)
                 .userProfilePicture(userImage != null ? cloudinaryService.uploadFile(userImage) : null)
                 .build();
 

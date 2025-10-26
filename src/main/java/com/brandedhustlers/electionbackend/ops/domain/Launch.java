@@ -51,7 +51,6 @@ public class Launch {
     private Instant createdAt;
 
     @OneToMany
-    @JoinColumn(name = "elections")
     private List<Election> election;
 
     @Enumerated(EnumType.STRING)
