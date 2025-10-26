@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.election.service;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.domain.Permission;
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
@@ -24,6 +25,10 @@ import com.brandedhustlers.electionbackend.election.repository.CandidateReposito
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableArgumentResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -42,13 +47,14 @@ public class ElectionService implements IElectionService {
     private final ElectionMapper electionMapper;
     private final CloudinaryService cloudinaryService;
     private final CandidateRepository candidateRepository;
+    private final PageableArgumentResolver pageableArgumentResolver;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
                            AppUserRepository appUserRepository,
                            HttpServletRequest httpServletRequest,
                            ElectionMapper electionMapper,
-                           CloudinaryService cloudinaryService, CandidateRepository candidateRepository) {
+                           CloudinaryService cloudinaryService, CandidateRepository candidateRepository, PageableArgumentResolver pageableArgumentResolver) {
         this.electionRepository = electionRepository;
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
@@ -56,6 +62,7 @@ public class ElectionService implements IElectionService {
         this.electionMapper = electionMapper;
         this.cloudinaryService = cloudinaryService;
         this.candidateRepository = candidateRepository;
+        this.pageableArgumentResolver = pageableArgumentResolver;
     }
 
     @Override
@@ -85,6 +92,7 @@ public class ElectionService implements IElectionService {
                 .shouldEndAutomatically(request.shouldEndAutomatically())
                 .organization(electionOrg)
                 .createdBy(creator)
+                .deleteYn(DeleteYn.N)
                 .build();
 
         if (!request.startTime().toLocalDateTime().isBefore(request.endtime().toLocalDateTime())) {
@@ -192,6 +200,14 @@ public class ElectionService implements IElectionService {
         return electionMapper.entityToDto(
                 electionRepository.save(election)
         );
+    }
+
+    public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable){
+        List<ElectionDTO> elections = electionRepository.findByOrganizationId(organizationId)
+                .stream()
+                .map(electionMapper::entityToDto)
+                .toList();
+        return new PageImpl<>(elections, pageable, elections.size());
     }
 
     private boolean authorityCheck(UUID appUserId, PermissionType allowedPermission) {

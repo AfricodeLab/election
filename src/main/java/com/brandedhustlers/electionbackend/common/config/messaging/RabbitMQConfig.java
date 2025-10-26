@@ -18,8 +18,10 @@ public class RabbitMQConfig {
     public static final String NOTIF_SMS = "notif.sms";
     public static final String VOTING_VOTE_CAST = "voting.vote.cast";
     public static final String NOTIF_EMAIL = "notif.email";
+    public static final String AUDIT_EVENTS = "audit.events";
 
     public static final String ROUTING_KEY_AUTH = "auth.#";
+    public static final String ROUTING_KEY_AUDIT = "audit.#";
     public static final String ROUTING_KEY_ELECTION = "election.#";
     public static final String ROUTING_KEY_VOTER_IMPORT = "voter.#";
     public static final String ROUTING_KEY_NOTIF = "notif.#";
@@ -33,6 +35,11 @@ public class RabbitMQConfig {
     @Bean
     public Queue authQueue() {
         return QueueBuilder.durable(AUTH_QUEUE).build();
+    }
+
+    @Bean
+    public Queue auditQueue() {
+        return QueueBuilder.durable(AUDIT_EVENTS).build();
     }
 
     @Bean
@@ -65,6 +72,13 @@ public class RabbitMQConfig {
         return BindingBuilder.bind(voteQueue())
                 .to(exchange())
                 .with(ROUTING_KEY_VOTING_VOTE_CAST);
+    }
+
+    @Bean
+    public Binding auditQueueBinding() {
+        return BindingBuilder.bind(voteQueue())
+                .to(exchange())
+                .with(ROUTING_KEY_AUDIT);
     }
 
     @Bean

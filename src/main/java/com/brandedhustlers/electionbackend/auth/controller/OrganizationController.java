@@ -53,7 +53,7 @@ public class OrganizationController {
             @RequestBody AddUserToOrg addUserToOrg
     ) {
         organizationService.addUserToOrganization(addUserToOrg);
-        return new ResponseEntity<>(HttpStatus.OK);
+        return new ResponseEntity<>("User added to org successfully", HttpStatus.OK);
     }
 
     @PutMapping("/deactivate/{orgId}")
@@ -61,6 +61,6 @@ public class OrganizationController {
             @PathVariable UUID orgId
     ) {
         organizationService.deactivateOrganization(orgId);
-        return new ResponseEntity<>(HttpStatus.OK);
+        return new ResponseEntity<>("Deactivated.",HttpStatus.OK);
     }
 }

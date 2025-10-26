@@ -1,8 +1,15 @@
 package com.brandedhustlers.electionbackend.ops.service;
 
+import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
+import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
+import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
+import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
+import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.ops.domain.Launch;
 import com.brandedhustlers.electionbackend.ops.domain.LaunchElection;
 import com.brandedhustlers.electionbackend.ops.domain.LaunchElectionId;
+import com.brandedhustlers.electionbackend.ops.dto.GetLaunch;
 import com.brandedhustlers.electionbackend.ops.dto.LaunchDto;
 import com.brandedhustlers.electionbackend.ops.enums.LaunchStatus;
 import com.brandedhustlers.electionbackend.ops.exception.DisallowedAction;
@@ -34,21 +41,28 @@ public class LaunchService {
     private final LaunchElectionRepository links;
     private final LaunchMapper launchMapper;
     private final RabbitTemplate rabbitTemplate;
+    private final AuditEmitter auditEmitter;
+    private final ElectionRepository electionRepository;
+    private final ElectionMapper electionMapper;
 
 
     public LaunchService(LaunchRepository launchRepository,
                          LaunchElectionRepository links,
                          LaunchMapper launchMapper,
-                         RabbitTemplate rabbitTemplate) {
+                         RabbitTemplate rabbitTemplate,
+                         AuditEmitter auditEmitter, ElectionRepository electionRepository, ElectionMapper electionMapper) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
         this.rabbitTemplate = rabbitTemplate;
+        this.auditEmitter = auditEmitter;
+        this.electionRepository = electionRepository;
+        this.electionMapper = electionMapper;
     }
 
 
     @Transactional
-    public LaunchDto create(UUID orgId, String name, String description, Instant startAt, Instant endAt) {
+    public LaunchDto create(UUID orgId, String name, String description, Instant startAt, Instant endAt, AppUser actor) {
         // Guard: basic validation belongs here (service boundary is where business rules live)
 
         if (name == null || name.isBlank()) {
@@ -58,15 +72,55 @@ public class LaunchService {
             throw new IllegalStateException("OPS-4001 invalid time window");
         }
 
-        Launch newLaunch = Launch.builder().id(UUID.randomUUID()).orgId(orgId).name(name).description(description).status(LaunchStatus.PLANNED).startAt(startAt).endAt(endAt).createdAt(Instant.now()).build();
+        Launch newLaunch = Launch.builder()
+                .id(UUID.randomUUID())
+                .orgId(orgId)
+                .name(name)
+                .description(description)
+                .status(LaunchStatus.PLANNED)
+                .startAt(startAt)
+                .endAt(endAt)
+                .createdAt(Instant.now())
+                .deleteYn(DeleteYn.N)
+                .build();
 
-        // TODO: audit.emit("ops.launch.created", saved)
+        Launch saved = launchRepository.save(newLaunch);
 
-        return launchMapper.entityToDto(launchRepository.save(newLaunch));
+        UUID actorId = actor.getAppUserId();
+        String actorName = actor.getFirstName();
+        String actorRole = actor.getUserRole().name();
+        String actorType = "USER";
+
+        String source = "WEB";
+        String ip = null;
+        String ua = null;
+
+        auditEmitter.emit(
+                null,
+                "ops.launch.created",
+                null,
+                orgId,
+                "Launch created",
+                actorId,
+                actorName,
+                actorRole,
+                actorType,
+                "Launch",
+                saved.getId(),
+                saved.getName(),
+                source,
+                null,
+                ip,
+                ua,
+                "INFO",
+                1
+        );
+
+        return launchMapper.entityToDto(saved);
     }
 
 
-    public LaunchDto get(UUID orgId, UUID launchId) {
+    public GetLaunch get(UUID orgId, UUID launchId) {
         Optional<Launch> launch = launchRepository.findById(launchId).filter(l -> l.getOrgId().equals(orgId));
 
         if (launch.isEmpty()) {
@@ -74,8 +128,28 @@ public class LaunchService {
         }
 
         Launch validLaunch = launch.get();
+        List<ElectionDTO> electionsAssociatedWithLaunch = links.findByIdLaunchId(launchId)
+                .stream()
+                .map(LaunchElection::getId)
+                .map(LaunchElectionId ::getElectionId)
+                .map(electionRepository::findById)
+                .map(Optional::get)
+                .map(electionMapper::entityToDto)
+                .toList();
 
-        return launchMapper.entityToDto(validLaunch);
+
+
+        return new GetLaunch(
+                validLaunch.getId(),
+                validLaunch.getOrgId(),
+                validLaunch.getName(),
+                validLaunch.getDescription(),
+                validLaunch.getStatus(),
+                validLaunch.getStartAt(),
+                validLaunch.getEndAt(),
+                validLaunch.getCreatedAt(),
+                electionsAssociatedWithLaunch
+        );
     }
 
 
@@ -95,27 +169,57 @@ public class LaunchService {
     }
 
 
-    public void attachElections(UUID orgId, UUID launchId, List<UUID> electionIds) {
+    public void attachElections(UUID orgId, UUID launchId, List<UUID> electionIds, AppUser actor) {
         Launch l = launchRepository.findById(launchId).orElseThrow(() -> new NoSuchElementException("Launch not found"));
 
         if (!l.getOrgId().equals(orgId)) {
-            throw new SecurityException("OPS-4031 org mismatch");
+            throw new SecurityException("Org mismatch");
         }
 
         if (l.getStatus() == LaunchStatus.COMPLETED) {
-            throw new IllegalStateException("OPS-4001 cannot attach on COMPLETED");
+            throw new IllegalStateException("Cannot attach on COMPLETED");
         }
 
         for (UUID eid : electionIds) {
             LaunchElectionId id = new LaunchElectionId(launchId, eid);
-            links.findById(id.getLaunchId()).ifPresentOrElse(le -> { /* already attached → idempotent no-op */ }, () -> links.save(LaunchElection.builder().id(id).build()));
+            links.findById(id)
+                    .ifPresentOrElse(le -> { /* already attached → idempotent no-op */ }, () -> links.save(LaunchElection.builder().id(id).build()));
 
-            // TODO: audit.emit("ops.launch.election_attached", ...)
         }
+        // TODO: audit.emit("ops.launch.election_attached", ...)
+        UUID actorId = actor.getAppUserId();
+        String actorName = actor.getFirstName();
+        String actorRole = actor.getUserRole().name();
+        String actorType = "USER";
+
+        String source = "WEB";
+        String ip = null;
+        String ua = null;
+
+        auditEmitter.emit(
+                null,
+                "ops.launch.election_attached",
+                null,
+                orgId,
+                "Election attached to launch.",
+                actorId,
+                actorName,
+                actorRole,
+                actorType,
+                "Launch",
+                l.getId(),
+                l.getName(),
+                source,
+                null,
+                ip,
+                ua,
+                "INFO",
+                1
+        );
     }
 
 
-    public void detachElections(UUID orgId, UUID launchId, List<UUID> electionIds) {
+    public void detachElections(UUID orgId, UUID launchId, List<UUID> electionIds, AppUser actor) {
         Launch l = launchRepository.findById(launchId).orElseThrow(() -> new LaunchNotfound("Launch not found"));
         if (!l.getOrgId().equals(orgId)) {
             throw new OrgMismatch("OPS-4031 org mismatch");
@@ -127,10 +231,38 @@ public class LaunchService {
 
         for (UUID eid : electionIds) {
             LaunchElectionId id = new LaunchElectionId(launchId, eid);
-
-            links.findById(id.getLaunchId()).ifPresent(links::delete);
-            // TODO: audit.emit("ops.launch.election_detached", ...)
+            links.findById(id).ifPresent(links::delete);
         }
+
+        UUID actorId = actor.getAppUserId();
+        String actorName = actor.getFirstName();
+        String actorRole = actor.getUserRole().name();
+        String actorType = "USER";
+
+        String source = "WEB";
+        String ip = null;
+        String ua = null;
+
+        auditEmitter.emit(
+                null,
+                "ops.launch.election_detached",
+                null,
+                orgId,
+                "Election detached from launch.",
+                actorId,
+                actorName,
+                actorRole,
+                actorType,
+                "Launch",
+                l.getId(),
+                l.getName(),
+                source,
+                null,
+                ip,
+                ua,
+                "INFO",
+                1
+        );
     }
 
 
