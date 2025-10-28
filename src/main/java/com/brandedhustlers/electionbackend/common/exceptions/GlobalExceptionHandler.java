@@ -51,15 +51,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<?> handleDataIntegrityViolationException(DataIntegrityViolationException e, HttpServletRequest request) {
         APIException apiException = new APIException(
-                HttpStatus.NOT_FOUND.value(),
+                HttpStatus.CONFLICT.value(),
                 new APIException.APIError(
-                        HttpStatus.NOT_FOUND,
+                        HttpStatus.CONFLICT,
                         "User attempted to enter a value that already exists",
                         Timestamp.from(Instant.now())
                 ),
                 request.getRequestId()
         );
-        return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
+        return new ResponseEntity<>(apiException, HttpStatus.CONFLICT);
     }
 
 

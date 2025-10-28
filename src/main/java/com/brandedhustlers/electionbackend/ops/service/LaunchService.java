@@ -314,7 +314,7 @@ public class LaunchService {
                 "ops.launch.status_changed from " + currStatus.name() + " to " + l.getStatus(),
                 null,
                 orgId,
-                "Election detached from launch.",
+                "Launch status changed from " + currStatus.name() + " to " + l.getStatus() + ".",
                 actorId,
                 actorName,
                 actorRole,

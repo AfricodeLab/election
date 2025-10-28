@@ -71,7 +71,7 @@ public class VoterService implements IVoterService {
                 .email(cmd.email())
                 .organization(actor.getAppUserOrganization())
                 .nationalId(cmd.nationalId())
-                .voterStatus(VoterStatus.INACTIVE)
+                .voterStatus(VoterStatus.ACTIVE)
                 .createdBy(actor)
                 .build();
 
