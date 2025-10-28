@@ -7,6 +7,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import com.brandedhustlers.electionbackend.ops.exception.*;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ControllerAdvice;
@@ -31,6 +32,37 @@ public class GlobalExceptionHandler {
         );
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
+
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<?> handleIllegalArgumentException(IllegalArgumentException e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.BAD_REQUEST.value(),
+                new APIException.APIError(
+                        HttpStatus.BAD_REQUEST,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
+    }
+
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<?> handleDataIntegrityViolationException(DataIntegrityViolationException e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.CONFLICT.value(),
+                new APIException.APIError(
+                        HttpStatus.CONFLICT,
+                        "User attempted to enter a value that already exists",
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.CONFLICT);
+    }
+
+
 
     @ExceptionHandler(DisallowedAction.class)
     public ResponseEntity<?> handleDisallowedAction(DisallowedAction e, HttpServletRequest request) {

@@ -127,6 +127,8 @@ public class LaunchService {
             throw new LaunchNotfound("Launch with ID: " + launchId + " for org with ID: " + orgId + " not found.");
         }
 
+        //TODO: add pagination
+
         Launch validLaunch = launch.get();
         List<ElectionDTO> electionsAssociatedWithLaunch = links.findByIdLaunchId(launchId)
                 .stream()
@@ -266,8 +268,10 @@ public class LaunchService {
     }
 
 
-    public LaunchDto transitionStatus(UUID orgId, UUID launchId, LaunchStatus status) {
+    public LaunchDto transitionStatus(UUID orgId, UUID launchId, LaunchStatus status, AppUser actor) {
         Launch l = launchRepository.findById(launchId).orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found"));
+        LaunchStatus currStatus = l.getStatus();
+
         if (!l.getOrgId().equals(orgId)) {
             throw new SecurityException("OPS-4031 org mismatch");
         }
@@ -295,6 +299,36 @@ public class LaunchService {
         }
 
         // TODO: audit.emit("ops.launch.status_changed", {from,to})
+
+        UUID actorId = actor.getAppUserId();
+        String actorName = actor.getFirstName() + " " + actor.getLastName();
+        String actorRole = actor.getUserRole().name();
+        String actorType = "USER";
+
+        String source = "WEB";
+        String ip = null;
+        String ua = null;
+
+        auditEmitter.emit(
+                null,
+                "ops.launch.status_changed from " + currStatus.name() + " to " + l.getStatus(),
+                null,
+                orgId,
+                "Launch status changed from " + currStatus.name() + " to " + l.getStatus() + ".",
+                actorId,
+                actorName,
+                actorRole,
+                actorType,
+                "Launch",
+                l.getId(),
+                l.getName(),
+                source,
+                null,
+                ip,
+                ua,
+                "INFO",
+                1
+        );
 
         return launchMapper.entityToDto(launchRepository.save(l));
     }
