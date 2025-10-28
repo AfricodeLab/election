@@ -15,4 +15,15 @@ public interface VoterRepository extends JpaRepository<Voter, UUID> {
 
     @Query("select v from Voter v where v.organization = :organization")
     List<Voter> findByOrganization(Organization organization);
+
+
+    @Query("select v from Voter v where v.voterId = :voterId and v.organization.organizationId = :organizationId")
+    boolean existsByVoterId(UUID voterId, UUID organizationId);
+
+    @Query("select v.voterId from Voter v where v.organization.organizationId = :organizationId")
+    List<UUID> findAllByVoterIdIn(List<UUID> voterIds, UUID organizationId);
+
+    boolean existsByEmail(String email);
+    boolean existsByPhone(String phone);
+    boolean existsByNationalId(String nationalId);
 }

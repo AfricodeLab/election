@@ -160,6 +160,8 @@ public class ElectionService implements IElectionService {
         }
         statusChange.setElectionStatus(newStatus);
 
+
+
         return electionMapper.entityToDto(
                 electionRepository.save(statusChange)
         );

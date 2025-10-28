@@ -5,10 +5,7 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -24,6 +21,7 @@ import java.util.UUID;
         name = "voters",
         schema = "voter"
 )
+@Builder
 public class Voter {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

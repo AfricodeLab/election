@@ -111,6 +111,6 @@ public class LaunchController {
                 .orElseThrow(() -> new UserNotFound("User not found."));
         Organization creatorOrg = launchCreator.getAppUserOrganization();
 
-        return new ResponseEntity<>(svc.transitionStatus(creatorOrg.getOrganizationId(), launchId, status), HttpStatus.OK);
+        return new ResponseEntity<>(svc.transitionStatus(creatorOrg.getOrganizationId(), launchId, status, launchCreator), HttpStatus.OK);
     }
 }
