@@ -73,9 +73,12 @@ public class VotingService implements IVotingService{
         // TODO validate election LIVE + window (call election module read service)
 
         Vote vote = Vote.builder()
-                .id(UUID.randomUUID()).orgId(orgId)
-                .electionId(cmd.electionId()).candidateId(cmd.candidateId())
-                .voterId(voterId).deviceId(cmd.deviceId())
+                .id(UUID.randomUUID())
+                .orgId(orgId)
+                .electionId(cmd.electionId())
+                .candidateId(cmd.candidateId())
+                .voterId(voterId)
+                .deviceId(cmd.deviceId())
                 .dedupeKey(dedupeKey)
                 .castAt(Timestamp.from(Instant.now()))
                 .build();

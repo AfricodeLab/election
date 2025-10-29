@@ -6,6 +6,7 @@ import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.enums.ElectionType;
+import com.brandedhustlers.electionbackend.ops.domain.Launch;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -50,7 +51,7 @@ public class Election {
 
     private Long totalVotes;
 
-    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<Candidate> candidates = new ArrayList<>();
 
     @CreationTimestamp
@@ -77,6 +78,8 @@ public class Election {
 
     private boolean isPubliclyVisible = false;
 
+    @ManyToOne
+    private Launch launch;
 
     private boolean shouldEndAutomatically = true; //if true election will end automatically if the total expected votes is reached
 }

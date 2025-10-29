@@ -77,6 +77,23 @@ public class GlobalExceptionHandler {
         );
         return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
     }
+
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<?> handleIllegalStateException(IllegalStateException e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.BAD_REQUEST.value(),
+                new APIException.APIError(
+                        HttpStatus.BAD_REQUEST,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
+    }
+
+
     @ExceptionHandler(RequiredNull.class)
     public ResponseEntity<?> handleRequiredNull(RequiredNull e, HttpServletRequest request) {
         APIException apiException = new APIException(

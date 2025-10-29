@@ -10,6 +10,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
+import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
@@ -20,6 +21,7 @@ import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
 import com.brandedhustlers.electionbackend.election.dto.UpdateElection;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
+import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
@@ -28,7 +30,6 @@ import jakarta.transaction.Transactional;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.web.PageableArgumentResolver;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -47,14 +48,17 @@ public class ElectionService implements IElectionService {
     private final ElectionMapper electionMapper;
     private final CloudinaryService cloudinaryService;
     private final CandidateRepository candidateRepository;
-    private final PageableArgumentResolver pageableArgumentResolver;
+    private final AuditEmitter auditEmitter;
+    private final CandidateMapper candidateMapper;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
                            AppUserRepository appUserRepository,
                            HttpServletRequest httpServletRequest,
                            ElectionMapper electionMapper,
-                           CloudinaryService cloudinaryService, CandidateRepository candidateRepository, PageableArgumentResolver pageableArgumentResolver) {
+                           CloudinaryService cloudinaryService,
+                           CandidateRepository candidateRepository,
+                           AuditEmitter auditEmitter, CandidateMapper candidateMapper) {
         this.electionRepository = electionRepository;
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
@@ -62,7 +66,8 @@ public class ElectionService implements IElectionService {
         this.electionMapper = electionMapper;
         this.cloudinaryService = cloudinaryService;
         this.candidateRepository = candidateRepository;
-        this.pageableArgumentResolver = pageableArgumentResolver;
+        this.auditEmitter = auditEmitter;
+        this.candidateMapper = candidateMapper;
     }
 
     @Override
@@ -103,9 +108,40 @@ public class ElectionService implements IElectionService {
                 request.electionTitle(), creator.getAppUserOrganization())) {
             throw new InvalidUpdate("An election with this title already exists in your organization");
         }
+        Election election = electionRepository.save(newElection);
+
+        UUID actorId = creator.getAppUserId();
+        String actorName = creator.getFirstName() + " " + creator.getLastName();
+        String actorRole = creator.getUserRole().name();
+        String actorType = "USER";
+
+        String source = "WEB";
+        String ip = null;
+        String ua = null;
+
+        auditEmitter.emit(
+                null,
+                "election.new_election_created",
+                null,
+                creator.getAppUserOrganization().getOrganizationId(),
+                "New Election created",
+                actorId,
+                actorName,
+                actorRole,
+                actorType,
+                "Launch",
+                election.getElectionId(),
+                election.getElectionTitle(),
+                source,
+                null,
+                ip,
+                ua,
+                "INFO",
+                1
+        );
 
         return electionMapper.entityToDto(
-                electionRepository.save(newElection)
+                election
         );
     }
 
@@ -132,8 +168,41 @@ public class ElectionService implements IElectionService {
         electionToUpdate.setElectionStartTime(request.newStartTime());
         electionToUpdate.setElectionEndTime(request.newEndtime());
         electionToUpdate.setUpdatedBy(updater);
+
+        Election updated = electionRepository.save(electionToUpdate);
+
+        UUID actorId = updater.getAppUserId();
+        String actorName = updater.getFirstName() + " " + updater.getLastName();
+        String actorRole = updater.getUserRole().name();
+        String actorType = "USER";
+
+        String source = "WEB";
+        String ip = null;
+        String ua = null;
+
+        auditEmitter.emit(
+                null,
+                "election.election_updated",
+                null,
+                updater.getAppUserOrganization().getOrganizationId(),
+                "Election details updated",
+                actorId,
+                actorName,
+                actorRole,
+                actorType,
+                "Launch",
+                updated.getElectionId(),
+                updated.getElectionTitle(),
+                source,
+                null,
+                ip,
+                ua,
+                "INFO",
+                1
+        );
+
         return electionMapper.entityToDto(
-                electionRepository.save(electionToUpdate)
+                updated
         );
     }
 
@@ -144,6 +213,8 @@ public class ElectionService implements IElectionService {
 
         Election statusChange = electionRepository.findById(electionId)
                 .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionId + " does not exist."));
+
+        ElectionStatus currStatus = statusChange.getElectionStatus();
 
         if (!statusChange.getOrganization().getOrganizationId().equals(updater.getAppUserOrganization().getOrganizationId())) {
             throw new AccessDeniedException("You cannot manage elections outside your organization");
@@ -160,11 +231,40 @@ public class ElectionService implements IElectionService {
         }
         statusChange.setElectionStatus(newStatus);
 
+        Election statChange = electionRepository.save(statusChange);
+
+        UUID actorId = updater.getAppUserId();
+        String actorName = updater.getFirstName() + " " + updater.getLastName();
+        String actorRole = updater.getUserRole().name();
+        String actorType = "USER";
+
+        String source = "WEB";
+        String ip = null;
+        String ua = null;
 
 
-        return electionMapper.entityToDto(
-                electionRepository.save(statusChange)
+        auditEmitter.emit(
+                null,
+                "election.status_change",
+                null,
+                updater.getAppUserOrganization().getOrganizationId(),
+                "Election status updated from " + currStatus + " to: " + statChange.getElectionStatus(),
+                actorId,
+                actorName,
+                actorRole,
+                actorType,
+                "Launch",
+                statChange.getElectionId(),
+                statChange.getElectionTitle(),
+                source,
+                null,
+                ip,
+                ua,
+                "INFO",
+                1
         );
+
+        return electionMapper.entityToDto(statChange);
     }
 
     @Override
@@ -184,7 +284,7 @@ public class ElectionService implements IElectionService {
 
 
         Candidate candidate = Candidate.builder()
-                .affiliation(newCandidate.affiliation())
+                .affiliation(newCandidate.affiliation() == null ? "Independent Candidate" : newCandidate.affiliation())
                 .manifesto(newCandidate.manifesto())
                 .candidatePhotoURL(candidateImage != null ? cloudinaryService.uploadFile(candidateImage) : null)
                 .dateOfBirth(newCandidate.dateOfBirth())
@@ -199,15 +299,70 @@ public class ElectionService implements IElectionService {
         electionCandidates.add(candidate);
         election.setCandidates(electionCandidates);
 
+        candidateRepository.save(candidate);
+        Election addCandidate = electionRepository.save(election);
+
+        UUID actorId = creator.getAppUserId();
+        String actorName = creator.getFirstName() + " " + creator.getLastName();
+        String actorRole = creator.getUserRole().name();
+        String actorType = "USER";
+
+        String source = "WEB";
+        String ip = null;
+        String ua = null;
+
+        auditEmitter.emit(
+                null,
+                "election.election_updated",
+                null,
+                creator.getAppUserOrganization().getOrganizationId(),
+                "Election details updated",
+                actorId,
+                actorName,
+                actorRole,
+                actorType,
+                "Launch",
+                addCandidate.getElectionId(),
+                addCandidate.getElectionTitle(),
+                source,
+                null,
+                ip,
+                ua,
+                "INFO",
+                1
+        );
+
         return electionMapper.entityToDto(
-                electionRepository.save(election)
+                addCandidate
         );
     }
 
     public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable){
         List<ElectionDTO> elections = electionRepository.findByOrganizationId(organizationId)
                 .stream()
-                .map(electionMapper::entityToDto)
+                .map(election -> {
+                    List<CandidateDTO> candidates = election.getCandidates()
+                            .stream()
+                            .map(candidateMapper::entityToDTO)
+                            .toList();
+
+                    return new ElectionDTO(
+                            election.getElectionId(),
+                            election.getElectionTitle(),
+                            election.getElectionDescription(),
+                            election.getElectionType(),
+                            election.getElectionStatus(),
+                            election.getElectionStartTime(),
+                            election.getElectionEndTime(),
+                            election.getTotalVoters(),
+                            election.getTotalVotes(),
+                            election.getCreatedAt(),
+                            election.getOrganization(),
+                            election.getDeleteYn(),
+                            election.isPubliclyVisible(),
+                            candidates
+                    );
+                })
                 .toList();
         return new PageImpl<>(elections, pageable, elections.size());
     }

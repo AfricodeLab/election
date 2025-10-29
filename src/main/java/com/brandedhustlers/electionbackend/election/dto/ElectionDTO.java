@@ -6,6 +6,7 @@ import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.enums.ElectionType;
 
 import java.sql.Timestamp;
+import java.util.List;
 import java.util.UUID;
 
 public record ElectionDTO(
@@ -21,6 +22,7 @@ public record ElectionDTO(
         Timestamp createdAt,
         Organization organization,
         DeleteYn deleteYn,
-        boolean isPubliclyVisible
+        boolean isPubliclyVisible,
+        List<CandidateDTO> candidates
 ) {
 }
