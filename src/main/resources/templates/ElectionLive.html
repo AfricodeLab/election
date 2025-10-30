@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Election Is Live</title>
+    <title>Elections Are Live</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -36,14 +36,49 @@
             margin-bottom: 20px;
             line-height: 1.5;
         }
+        .election-list {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .election-list ul {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        .election-list li {
+            padding: 8px 0;
+            color: #333;
+            font-weight: 500;
+        }
+        .election-list li:before {
+            content: "🗳️ ";
+            margin-right: 8px;
+        }
+        .time-info {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .time-info p {
+            margin: 5px 0;
+            color: #333;
+        }
         .cta {
             display: inline-block;
             background-color: #007bff;
             color: white;
-            padding: 10px 20px;
+            padding: 12px 30px;
             border-radius: 6px;
             text-decoration: none;
             font-weight: bold;
+            margin-top: 10px;
+        }
+        .cta:hover {
+            background-color: #0056b3;
         }
         .footer {
             font-size: 14px;
@@ -54,21 +89,38 @@
 </head>
 <body>
 <div class="container">
-    <div class="header">Election Is Now Live!</div>
+    <div class="header" th:text="${electionTitles.size() == 1} ? 'Election Is Now Live!' : 'Elections Are Now Live!'">Elections Are Now Live!</div>
     <p class="message">
-        Hello <span th:text="${voterName}"></span>,<br><br>
-        The <span class="highlight" th:text="${electionName}"></span> election is now open for voting.<br>
-        You can cast your vote any time between:<br>
-        <b>Start:</b> <span th:text="${startTime}"></span><br>
-        <b>End:</b> <span th:text="${endTime}"></span>
+        Hello <span class="highlight" th:text="${voterName}"></span>,<br><br>
+        <span th:if="${electionTitles.size() == 1}">
+            The following election is now open for voting:
+        </span>
+        <span th:if="${electionTitles.size() > 1}">
+            The following elections are now open for voting:
+        </span>
     </p>
+
+    <div class="election-list">
+        <ul>
+            <li th:each="title : ${electionTitles}" th:text="${title}"></li>
+        </ul>
+    </div>
+
+    <div class="time-info">
+        <p><b>Voting Period:</b></p>
+        <p><b>Start:</b> <span th:text="${startTime}"></span></p>
+        <p><b>End:</b> <span th:text="${endTime}"></span></p>
+    </div>
+
     <a href="https://terminal-x-iota.vercel.app" class="cta">Cast Your Vote Now</a>
+
     <p class="message">
         Please make sure to submit your vote before the election closes.
         Every vote counts!
     </p>
+
     <div class="footer">
-        &copy; 2025 Election Management System. All rights reserved.
+        &copy; 2025 Branded Hustlers. All rights reserved.
     </div>
 </div>
 </body>

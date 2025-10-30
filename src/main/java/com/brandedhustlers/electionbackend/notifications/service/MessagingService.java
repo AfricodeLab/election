@@ -30,7 +30,6 @@ import java.util.UUID;
 @Service
 public class MessagingService {
     private static final Logger log = LoggerFactory.getLogger(MessagingService.class);
-    private static final String ELECTION_LIVE_TEMPLATE = "ElectionLive";
 
     private final JavaMailSender mailSender;
     private final OrganizationRepository organizationRepository;
@@ -96,19 +95,28 @@ public class MessagingService {
             int successCount = 0;
             int failureCount = 0;
 
-            for (Election election : elections) {
-                String electionTitle = election.getElectionTitle();
-                Timestamp startTime = election.getElectionStartTime();
-                Timestamp endTime = election.getElectionEndTime();
+            // Collect all live election titles
+            List<String> liveElectionTitles = elections.stream()
+                    .map(Election::getElectionTitle)
+                    .toList();
 
-                for (Voter voter : voters) {
-                    try {
-                        sendSingleEmail(voter, electionTitle, startTime, endTime);
-                        successCount++;
-                    } catch (Exception e) {
-                        failureCount++;
-                        log.error("Failed to send email to voter {} for election {}: {}", voter.getEmail(), electionTitle, e.getMessage(), e);
-                    }
+            Timestamp earliestStartTime = elections.stream()
+                    .map(Election::getElectionStartTime)
+                    .min(Timestamp::compareTo)
+                    .orElse(null);
+
+            Timestamp latestEndTime = elections.stream()
+                    .map(Election::getElectionEndTime)
+                    .max(Timestamp::compareTo)
+                    .orElse(null);
+
+            for (Voter voter : voters) {
+                try {
+                    sendSingleEmail(voter, liveElectionTitles, earliestStartTime, latestEndTime);
+                    successCount++;
+                } catch (Exception e) {
+                    failureCount++;
+                    log.error("Failed to send email to voter {}: {}", voter.getEmail(), e.getMessage(), e);
                 }
             }
 
@@ -116,21 +124,17 @@ public class MessagingService {
 
         } catch (OrganizationNotFound | LaunchNotfound e) {
             log.error("Entity not found: {}", e.getMessage());
-            // Don't rethrow - these are business logic errors, not transient failures
         } catch (ClassCastException e) {
             log.error("Invalid payload format: {}", e.getMessage());
-            // Payload structure error - no point in retrying
         } catch (Exception e) {
             log.error("Unexpected error processing election notification", e);
-            // Rethrow to trigger RabbitMQ retry mechanism for transient failures
             throw new RuntimeException("Failed to process election notification", e);
         }
     }
 
-
     @Async
-    public void sendSingleEmail(Voter voter, String electionTitle,
-                                 Timestamp startTime, Timestamp endTime)
+    public void sendSingleEmail(Voter voter, List<String> electionTitles,
+                                Timestamp startTime, Timestamp endTime)
             throws MessagingException {
 
         MimeMessage mime = mailSender.createMimeMessage();
@@ -138,18 +142,23 @@ public class MessagingService {
 
         Context context = new Context();
         context.setVariable("voterName", voter.getName());
-        context.setVariable("electionName", electionTitle);
+        context.setVariable("electionTitles", electionTitles);
         context.setVariable("startTime", startTime);
         context.setVariable("endTime", endTime);
 
-        String htmlContent = templateEngine.process(ELECTION_LIVE_TEMPLATE, context);
+        String htmlContent = templateEngine.process("ElectionLive", context);
 
         helper.setFrom(appEmail);
         helper.setTo(voter.getEmail());
-        helper.setSubject("Election Now Live: " + electionTitle);
+
+        String subject = electionTitles.size() == 1
+                ? "Election Now Live: " + electionTitles.getFirst()
+                : "Elections Now Live: " + electionTitles.size() + " Elections";
+
+        helper.setSubject(subject);
         helper.setText(htmlContent, true);
 
-        log.debug("Sending email to {} for election {}", voter.getEmail(), electionTitle);
+        log.debug("Sending email to {} for {} election(s)", voter.getEmail(), electionTitles.size());
         mailSender.send(mime);
     }
 }

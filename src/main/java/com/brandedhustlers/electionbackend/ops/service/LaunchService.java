@@ -273,7 +273,7 @@ public class LaunchService {
 
 
     @Transactional
-    public LaunchDto transitionStatus(UUID orgId, UUID launchId, LaunchStatus status, AppUser actor) {
+    public GetLaunch transitionStatus(UUID orgId, UUID launchId, LaunchStatus status, AppUser actor) {
         Launch l = launchRepository.findById(launchId).orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found"));
         LaunchStatus currStatus = l.getStatus();
 
@@ -343,7 +343,21 @@ public class LaunchService {
                 "INFO",
                 1
         );
+        List<ElectionDTO> liveElections = l.getElection()
+                .stream()
+                .map(electionMapper::entityToDto)
+                .toList();
 
-        return launchMapper.entityToDto(transition);
+        return new GetLaunch(
+                transition.getId(),
+                transition.getOrgId(),
+                transition.getName(),
+                transition.getDescription(),
+                transition.getStatus(),
+                transition.getStartAt(),
+                transition.getEndAt(),
+                transition.getCreatedAt(),
+                liveElections
+        );
     }
 }
