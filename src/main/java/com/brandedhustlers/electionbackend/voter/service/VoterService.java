@@ -77,6 +77,10 @@ public class VoterService implements IVoterService {
 
         voterRepository.save(newVoter);
 
+
+        //create voter verification token
+
+
         //Todo debug phantom logs
 
         UUID actorId = actor.getAppUserId();
