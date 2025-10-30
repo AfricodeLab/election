@@ -3,7 +3,9 @@ package com.brandedhustlers.electionbackend.ops.service;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
+import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
+import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.ops.domain.Launch;
@@ -50,7 +52,9 @@ public class LaunchService {
                          LaunchElectionRepository links,
                          LaunchMapper launchMapper,
                          RabbitTemplate rabbitTemplate,
-                         AuditEmitter auditEmitter, ElectionRepository electionRepository, ElectionMapper electionMapper) {
+                         AuditEmitter auditEmitter,
+                         ElectionRepository electionRepository,
+                         ElectionMapper electionMapper) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
@@ -268,7 +272,8 @@ public class LaunchService {
     }
 
 
-    public LaunchDto transitionStatus(UUID orgId, UUID launchId, LaunchStatus status, AppUser actor) {
+    @Transactional
+    public GetLaunch transitionStatus(UUID orgId, UUID launchId, LaunchStatus status, AppUser actor) {
         Launch l = launchRepository.findById(launchId).orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found"));
         LaunchStatus currStatus = l.getStatus();
 
@@ -283,10 +288,17 @@ public class LaunchService {
                     "launchId", l.getId(),
                     "orgId", orgId
             );
-            rabbitTemplate.convertAndSend("notif.email", launchLivePayload);
             if (l.getStartAt() == null) {
                 l.setStartAt(Instant.now());
             }
+
+            List<Election> launchElections = l.getElection();
+            for(Election election : launchElections){
+                election.setElectionStatus(ElectionStatus.LIVE);
+            }
+            electionRepository.saveAll(launchElections);
+
+            rabbitTemplate.convertAndSend("notif.email", launchLivePayload);
 
         } else if (l.getStatus() == LaunchStatus.ACTIVE && status == LaunchStatus.COMPLETED) {
             l.setStatus(LaunchStatus.COMPLETED);
@@ -295,8 +307,10 @@ public class LaunchService {
             }
 
         } else {
-            throw new IllegalStateException("OPS-4001 invalid transition from " + l.getStatus() + " to " + status);
+            throw new IllegalStateException("Invalid transition from " + l.getStatus() + " to " + status);
         }
+
+        Launch transition = launchRepository.save(l);
 
         // TODO: audit.emit("ops.launch.status_changed", {from,to})
 
@@ -329,7 +343,21 @@ public class LaunchService {
                 "INFO",
                 1
         );
+        List<ElectionDTO> liveElections = l.getElection()
+                .stream()
+                .map(electionMapper::entityToDto)
+                .toList();
 
-        return launchMapper.entityToDto(launchRepository.save(l));
+        return new GetLaunch(
+                transition.getId(),
+                transition.getOrgId(),
+                transition.getName(),
+                transition.getDescription(),
+                transition.getStatus(),
+                transition.getStartAt(),
+                transition.getEndAt(),
+                transition.getCreatedAt(),
+                liveElections
+        );
     }
 }

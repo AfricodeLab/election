@@ -49,9 +49,9 @@ public class LaunchController {
 
     @PostMapping
     public ResponseEntity<?> create(@RequestParam String launchName,
-                                         @RequestParam(required = false) String launchDescription,
-                                         @RequestParam(required = false) Instant startAt,
-                                         @RequestParam(required = false) Instant endAt) {
+                                    @RequestParam(required = false) String launchDescription,
+                                    @RequestParam(required = false) Instant startAt,
+                                    @RequestParam(required = false) Instant endAt) {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
@@ -84,7 +84,7 @@ public class LaunchController {
 
     @PostMapping("/{launchId}/attach-elections")
     public ResponseEntity<?> attach(@PathVariable UUID launchId,
-                                       @RequestBody List<UUID> electionIds) {
+                                    @RequestBody List<UUID> electionIds) {
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
         Organization creatorOrg = launchCreator.getAppUserOrganization();
@@ -95,7 +95,7 @@ public class LaunchController {
 
     @DeleteMapping("/{launchId}/detach-elections")
     public ResponseEntity<?> detach(@PathVariable UUID launchId,
-                                       @RequestBody List<UUID> electionIds) {
+                                    @RequestBody List<UUID> electionIds) {
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
         Organization creatorOrg = launchCreator.getAppUserOrganization();
@@ -106,7 +106,7 @@ public class LaunchController {
 
     @PutMapping("/{launchId}/status")
     public ResponseEntity<?> transition(@PathVariable UUID launchId,
-                                             @RequestParam LaunchStatus status) {
+                                        @RequestParam LaunchStatus status) {
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
         Organization creatorOrg = launchCreator.getAppUserOrganization();
