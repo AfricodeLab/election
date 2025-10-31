@@ -3,7 +3,6 @@ package com.brandedhustlers.electionbackend.common.config.security;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
-import io.github.cdimascio.dotenv.Dotenv;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -22,9 +21,8 @@ import java.util.function.Function;
 
 @Service
 public class JWTService {
-    Dotenv dotenv = Dotenv.configure().load();
 
-    private String secretKey = dotenv.get("JWT_SECRET");
+    private final String secretKey = System.getenv("JWT_SECRET");
     private final AppUserRepository appUserRepository;
 
     public JWTService(AppUserRepository appUserRepository) {

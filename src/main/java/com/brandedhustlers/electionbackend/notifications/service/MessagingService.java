@@ -9,7 +9,6 @@ import com.brandedhustlers.electionbackend.ops.exception.LaunchNotfound;
 import com.brandedhustlers.electionbackend.ops.repository.LaunchRepository;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
-import io.github.cdimascio.dotenv.Dotenv;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -37,8 +36,7 @@ public class MessagingService {
     private final TemplateEngine templateEngine;
     private final LaunchRepository launchRepository;
 
-    Dotenv dotenv = Dotenv.configure().load();
-    private final String appEmail = dotenv.get("SPRING_MAIL_USERNAME");
+    private final String appEmail = System.getenv("SPRING_MAIL_USERNAME");
 
     public MessagingService(JavaMailSender mailSender,
                             OrganizationRepository organizationRepository,
