@@ -28,6 +28,7 @@ public class ElectionbackendApplication {
         System.setProperty("RABBITMQ_PORT", System.getenv("RABBITMQ_PORT"));
         System.setProperty("RABBITMQ_USERNAME", System.getenv("RABBITMQ_USERNAME"));
         System.setProperty("RABBITMQ_PASSWORD", System.getenv("RABBITMQ_PASSWORD"));
+        System.setProperty("RABBITMQ_URL", System.getenv("RABBITMQ_URL"));
 		SpringApplication.run(ElectionbackendApplication.class, args);
 	}
 
