@@ -292,6 +292,7 @@ public class ElectionService implements IElectionService {
                 .dateOfBirth(newCandidate.dateOfBirth())
                 .isIncumbent(newCandidate.isIncumbent())
                 .createdBy(creator)
+                .deleteYn(DeleteYn.N)
                 .build();
         //add to election
         List<Candidate> electionCandidates = election.getCandidates();
