@@ -1,34 +1,41 @@
 package com.brandedhustlers.electionbackend.voter.web;
 
 import com.brandedhustlers.electionbackend.voter.dto.OtpConfirmRequest;
+import com.brandedhustlers.electionbackend.voter.dto.OtpConfirmResponse;
 import com.brandedhustlers.electionbackend.voter.dto.OtpSendRequest;
+import com.brandedhustlers.electionbackend.voter.dto.OtpSendResponse;
 import com.brandedhustlers.electionbackend.voter.service.VerificationService;
+import jakarta.mail.MessagingException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.util.Map;
-import java.util.UUID;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/v1/verify/sms")
+@RequestMapping("/api/v1/verification")
 public class VerificationController {
     private final VerificationService service;
+    private final HttpServletRequest servletRequest;
 
-    public VerificationController(VerificationService service) {
+    public VerificationController(VerificationService service,
+                                  HttpServletRequest servletRequest) {
         this.service = service;
+        this.servletRequest = servletRequest;
     }
 
     @PostMapping("/send")
-    public ResponseEntity<Void> send(@RequestHeader("X-Org-Id") UUID orgId,
-                                     @RequestBody OtpSendRequest req) {
-        service.sendOtp(orgId, req.electionId(), req.phoneOrVoterId());
-        return ResponseEntity.accepted().build();
+    public ResponseEntity<OtpSendResponse> send(@RequestBody OtpSendRequest req,
+                                                HttpSession session) throws MessagingException {
+        return ResponseEntity.accepted().body(service.sendOtp(req));
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<Map<String, Object>> confirm(@RequestHeader("X-Org-Id") UUID orgId,
-                                                       @RequestBody OtpConfirmRequest req) {
-        boolean ok = service.confirmOtp(orgId, req.electionId(), req.phoneOrVoterId(), req.token());
-        return ResponseEntity.ok(Map.of("verified", ok));
+    public ResponseEntity<OtpConfirmResponse> confirm(@RequestBody OtpConfirmRequest req) {
+
+        return ResponseEntity.ok(service.confirmOtp(req, servletRequest));
     }
+
 }

@@ -5,7 +5,8 @@ public enum UserRole {
     ADMIN("Admin"),
     AUDITOR("Auditor"),
     CONTRIBUTOR("Contributor"),
-    OBSERVER("Observer");
+    OBSERVER("Observer"),
+    VOTER("VOTER");
 
     private final String name;
 
