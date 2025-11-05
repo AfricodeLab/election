@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface VoterRepository extends JpaRepository<Voter, UUID> {
@@ -26,4 +27,8 @@ public interface VoterRepository extends JpaRepository<Voter, UUID> {
     boolean existsByEmail(String email);
     boolean existsByPhone(String phone);
     boolean existsByNationalId(String nationalId);
+
+    Optional<Voter> findByOrganization_OrganizationIdAndEmailIgnoreCase(UUID organizationId, String email);
+
+    Optional<Voter> findByEmailIgnoreCase(String email);
 }

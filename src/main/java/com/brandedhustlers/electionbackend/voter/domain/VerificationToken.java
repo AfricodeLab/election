@@ -1,12 +1,9 @@
 package com.brandedhustlers.electionbackend.voter.domain;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
 
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -18,31 +15,29 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class VerificationToken {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
-    private UUID electionId;
-
-    @OneToOne
-    @JoinColumn(name = "voter_id")
-    private Voter voter;
+    private UUID voterId;
 
     @Column(nullable = false)
     private String tokenHash;
 
     @Column(nullable = false)
-    private String type; //sms or otp
+    private String type; //magic URL or otp
 
     @Column(nullable = false)
-    private Timestamp expiresAt;
+    private Instant expiresAt;
 
     @Column(nullable = false)
     private int attempts;
 
     @Column(nullable = false)
-    private Timestamp createdAt;
+    private Instant createdAt;
+
+    private String channel;
 
 }
