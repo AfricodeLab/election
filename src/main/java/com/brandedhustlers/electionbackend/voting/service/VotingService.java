@@ -132,7 +132,6 @@ public class VotingService implements IVotingService {
                     .createdAt(java.sql.Timestamp.from(Instant.now()))
                     .build());
         } catch (Exception e) {
-            e.printStackTrace();
             log.error("failed to release vote update ", e);
         }
 

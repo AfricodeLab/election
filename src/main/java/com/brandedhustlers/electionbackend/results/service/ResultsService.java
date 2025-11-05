@@ -11,6 +11,7 @@ import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.results.domain.Tally;
 import com.brandedhustlers.electionbackend.results.dto.TallyDto;
 import com.brandedhustlers.electionbackend.results.repository.TallyRepository;
 import org.springframework.data.domain.Page;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -46,27 +48,31 @@ public class ResultsService {
         AppUser actor = appUserRepository.findById(actorId)
                 .orElseThrow(() -> new UserNotFound("User Not found"));
 
-        requireAdminOrPermission(actor, PermissionType.EDIT_ELECTIONS);
+        requireAdminOrPermission(actor, PermissionType.VIEW_RESULTS);
 
-        List<TallyDto> tallyDto = repo.findByIdElectionId(electionId)
-                .stream()
+        List<Tally> tallies = repo.findByIdElectionId(electionId);
+
+        Set<UUID> candidateIds = tallies.stream()
+                .map(t -> t.getId().getCandidateId())
+                .collect(Collectors.toSet());
+
+        List<Candidate> candidates = candidateRepository.findAllById(candidateIds);
+
+        Map<UUID, Candidate> candidateMap = candidates.stream()
+                .collect(Collectors.toMap(Candidate::getCandidateId, c -> c));
+
+        List<TallyDto> tallyDtos = tallies.stream()
                 .map(tally -> {
-                    Candidate candidate = candidateRepository.findById(tally.getId().getCandidateId())
-                            .orElseThrow(() -> new UserNotFound("Candidate not found"));
-
+                    Candidate candidate = candidateMap.get(tally.getId().getCandidateId());
                     return new TallyDto(
                             tally.getId().getElectionId(),
                             candidateMapper.entityToDTO(candidate),
-                            candidate.getAffiliation(),
-                            candidate.getCandidatePhotoURL(),
-                            candidate.getManifesto(),
-                            candidate.isIncumbent(),
                             tally.getCount(),
                             tally.getUpdatedAt()
                     );
                 })
                 .toList();
-        return new PageImpl<>(tallyDto, pageable, tallyDto.size());
+        return new PageImpl<>(tallyDtos, pageable, tallyDtos.size());
     }
 
     private boolean authorityCheck(UUID appUserId, PermissionType allowedPermission) {
