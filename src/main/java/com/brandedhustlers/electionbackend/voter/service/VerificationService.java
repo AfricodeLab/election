@@ -113,7 +113,7 @@ public class VerificationService {
 
 
     private String generateOtp6() {
-        int code = rnd.nextInt(999999);
+        int code = rnd.nextInt(900000) + 100000;
         return Integer.toString(code);
     }
 

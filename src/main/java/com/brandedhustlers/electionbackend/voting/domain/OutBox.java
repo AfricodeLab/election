@@ -2,6 +2,8 @@ package com.brandedhustlers.electionbackend.voting.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.sql.Timestamp;
 import java.util.UUID;
@@ -27,7 +29,7 @@ public class OutBox {
     @Column(nullable = false)
     private UUID aggregateId;
 
-    @Lob
+    @JdbcTypeCode(SqlTypes.JSON)
     @Column(nullable = false)
     private String payload;
 
