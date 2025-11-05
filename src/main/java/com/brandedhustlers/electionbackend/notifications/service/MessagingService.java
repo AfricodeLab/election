@@ -159,4 +159,32 @@ public class MessagingService {
         log.debug("Sending email to {} for {} election(s)", voter.getEmail(), electionTitles.size());
         mailSender.send(mime);
     }
+
+    @Async
+    public void sendOtpEmail(String recipientEmail, String recipientName, String otp) throws MessagingException {
+        jakarta.mail.internet.MimeMessage mime = mailSender.createMimeMessage();
+        org.springframework.mail.javamail.MimeMessageHelper helper =
+                new MimeMessageHelper(mime, true, "UTF-8");
+
+        org.thymeleaf.context.Context ctx = new org.thymeleaf.context.Context();
+        ctx.setVariable("recipient_name", recipientName);
+        ctx.setVariable("otp", otp);
+
+
+        String html = templateEngine.process("OtpEmail", ctx);
+
+        String text = html
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)</p>", "\n\n")
+                .replaceAll("<[^>]+>", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        helper.setFrom(appEmail);
+        helper.setTo(recipientEmail);
+        helper.setSubject("Your verification code");
+        helper.setText(text, html);
+
+        mailSender.send(mime);
+    }
 }

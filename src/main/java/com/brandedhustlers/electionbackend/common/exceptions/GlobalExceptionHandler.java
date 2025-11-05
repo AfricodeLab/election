@@ -15,12 +15,27 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.NoSuchElementException;
 
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(UserNotFound.class)
     public ResponseEntity<?> handleUserNotFound(UserNotFound e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.NOT_FOUND.value(),
+                new APIException.APIError(
+                        HttpStatus.NOT_FOUND,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(NoSuchElementException.class)
+    public ResponseEntity<?> handleNoSuchElementException(NoSuchElementException e, HttpServletRequest request) {
         APIException apiException = new APIException(
                 HttpStatus.NOT_FOUND.value(),
                 new APIException.APIError(

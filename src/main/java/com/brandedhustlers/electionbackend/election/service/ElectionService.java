@@ -34,6 +34,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -290,6 +292,7 @@ public class ElectionService implements IElectionService {
                 .dateOfBirth(newCandidate.dateOfBirth())
                 .isIncumbent(newCandidate.isIncumbent())
                 .createdBy(creator)
+                .deleteYn(DeleteYn.N)
                 .build();
         //add to election
         List<Candidate> electionCandidates = election.getCandidates();
@@ -365,6 +368,21 @@ public class ElectionService implements IElectionService {
                 })
                 .toList();
         return new PageImpl<>(elections, pageable, elections.size());
+    }
+
+    public Page<ElectionDTO> getLiveElectionForVoterOrg(HttpServletRequest httpServletRequest, Pageable pageable){
+        String token = httpServletRequest.getHeader("Authorization").substring(7);
+        //I need the voterId and the org Id
+        UUID voterId = UUID.fromString(jwtService.extractVoterId(token));
+        UUID voterOrgId = UUID.fromString(jwtService.extractVoterOrgId(token));
+
+        List<ElectionDTO> assignedElections = electionRepository.findLiveByOrgAndAssigned(
+                voterOrgId, voterId,ElectionStatus.LIVE, Timestamp.from(Instant.now())
+        ).stream()
+                .map(electionMapper::entityToDto)
+                .toList();
+
+        return new PageImpl<>(assignedElections, pageable, assignedElections.size());
     }
 
     private boolean authorityCheck(UUID appUserId, PermissionType allowedPermission) {

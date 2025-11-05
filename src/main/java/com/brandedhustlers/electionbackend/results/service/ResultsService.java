@@ -1,19 +1,96 @@
 package com.brandedhustlers.electionbackend.results.service;
 
-import com.brandedhustlers.electionbackend.results.domain.Tally;
+import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Permission;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
+import com.brandedhustlers.electionbackend.auth.enums.UserRole;
+import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
+import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
+import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
+import com.brandedhustlers.electionbackend.election.domain.Candidate;
+import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
+import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
+import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.results.dto.TallyDto;
 import com.brandedhustlers.electionbackend.results.repository.TallyRepository;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 public class ResultsService {
     private final TallyRepository repo;
-    public ResultsService(TallyRepository repo){ this.repo=repo; }
+    private final AppUserRepository appUserRepository;
+    private final ElectionRepository electionRepository;
+    private final CandidateRepository candidateRepository;
+    private final CandidateMapper candidateMapper;
 
-    public List<Tally> get(UUID orgId, UUID electionId){
-        // TODO enforce org scope by joining with election
-        return repo.findByIdElectionId(electionId);
+    public ResultsService(TallyRepository repo,
+                          AppUserRepository appUserRepository,
+                          ElectionRepository electionRepository,
+                          CandidateRepository candidateRepository, CandidateMapper candidateMapper) {
+        this.repo = repo;
+        this.appUserRepository = appUserRepository;
+        this.electionRepository = electionRepository;
+        this.candidateRepository = candidateRepository;
+        this.candidateMapper = candidateMapper;
+    }
+
+    public Page<TallyDto> get(UUID actorId, UUID electionId, Pageable pageable) {
+        AppUser actor = appUserRepository.findById(actorId)
+                .orElseThrow(() -> new UserNotFound("User Not found"));
+
+        requireAdminOrPermission(actor, PermissionType.EDIT_ELECTIONS);
+
+        List<TallyDto> tallyDto = repo.findByIdElectionId(electionId)
+                .stream()
+                .map(tally -> {
+                    Candidate candidate = candidateRepository.findById(tally.getId().getCandidateId())
+                            .orElseThrow(() -> new UserNotFound("Candidate not found"));
+
+                    return new TallyDto(
+                            tally.getId().getElectionId(),
+                            candidateMapper.entityToDTO(candidate),
+                            candidate.getAffiliation(),
+                            candidate.getCandidatePhotoURL(),
+                            candidate.getManifesto(),
+                            candidate.isIncumbent(),
+                            tally.getCount(),
+                            tally.getUpdatedAt()
+                    );
+                })
+                .toList();
+        return new PageImpl<>(tallyDto, pageable, tallyDto.size());
+    }
+
+    private boolean authorityCheck(UUID appUserId, PermissionType allowedPermission) {
+        AppUser updatingUser = appUserRepository.findById(appUserId)
+                .orElseThrow(() -> new UserNotFound("User not found"));
+
+        Set<PermissionType> userPermissions = updatingUser.getRoles()
+                .stream()
+                .flatMap(role -> role.getRolePermissions().stream())
+                .map(Permission::getPermissionType)
+                .collect(Collectors.toSet());
+
+        return userPermissions.contains(allowedPermission);
+    }
+
+    private boolean authorizeUser(AppUser user, UserRole userType) {
+        return user.getUserRole().equals(userType);
+    }
+
+    private void requireAdminOrPermission(AppUser user, PermissionType permission) {
+        boolean hasRole = authorizeUser(user, UserRole.ADMIN) || authorizeUser(user, UserRole.SUPER_ADMIN);
+        boolean hasPermission = authorityCheck(user.getAppUserId(), permission);
+
+        if (!hasRole && !hasPermission)
+            throw new AccessDeniedException("You lack sufficient privileges for this action");
     }
 }
