@@ -14,6 +14,9 @@ public interface VoterRepository extends JpaRepository<Voter, UUID> {
     @Query("select v from Voter v where v.organization.organizationId = :orgId and v.name = :q")
     List<Voter> findByOrgIDAndNameContainingIgnoreCase(UUID orgId, String q);
 
+    @Query("select v from Voter v where v.voterId = :voterId and v.deleteYn = 'N'")
+    Voter findVoterById(UUID voterId);
+
     @Query("select v from Voter v where v.organization = :organization")
     List<Voter> findByOrganization(Organization organization);
 

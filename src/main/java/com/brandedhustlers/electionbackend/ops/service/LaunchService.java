@@ -274,7 +274,7 @@ public class LaunchService {
 
     @Transactional
     public GetLaunch transitionStatus(UUID orgId, UUID launchId, LaunchStatus status, AppUser actor) {
-        Launch l = launchRepository.findById(launchId).orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found"));
+        Launch l = launchRepository.findById(launchId).orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found")); // todo filter by delete yn
         LaunchStatus currStatus = l.getStatus();
 
         if (!l.getOrgId().equals(orgId)) {

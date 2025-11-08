@@ -11,13 +11,13 @@ import java.io.IOException;
 import java.util.UUID;
 
 public interface IElectionService {
-    ElectionDTO createElection(CreateElectionRequest request, UUID userId);
+    ElectionDTO createElection(CreateElectionRequest request);
 
-    ElectionDTO updateElection(UUID electionID, UpdateElection request, UUID appUserId);
+    ElectionDTO updateElection(UUID electionID, UpdateElection request);
 
-    ElectionDTO changeElectionStatus(UUID electionId, ElectionStatus newStatus, UUID appUserId);
+    ElectionDTO changeElectionStatus(UUID electionId, ElectionStatus newStatus);
 
-    ElectionDTO addCandidate(UUID electionId, CandidateDTO newCandidate, MultipartFile candidateImage, UUID appUserId) throws IOException;
+    ElectionDTO addCandidate(UUID electionId, CandidateDTO newCandidate, MultipartFile candidateImage) throws IOException;
 
 
 }

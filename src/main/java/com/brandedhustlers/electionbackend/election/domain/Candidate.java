@@ -28,6 +28,9 @@ public class Candidate {
     @Size(max = 25)
     private String affiliation;
 
+    @Column(nullable = false, unique = true)
+    private String candidateName;
+
     @Column(columnDefinition = "TEXT")
     private String manifesto;
 
@@ -40,13 +43,13 @@ public class Candidate {
     private boolean isIncumbent;
 
     @Enumerated(EnumType.STRING)
-    private DeleteYn deleteYn = DeleteYn.N;
+    private DeleteYn deleteYn;
 
     @ManyToOne
     @JoinColumn(name = "election_id")
     private Election election;
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 
@@ -55,5 +58,10 @@ public class Candidate {
 
     @UpdateTimestamp
     private Timestamp updatedAt;
+
+    @PrePersist
+    protected void onCreate(){
+        this.deleteYn = DeleteYn.N;
+    }
 
 }

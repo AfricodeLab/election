@@ -5,11 +5,11 @@ import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
 import com.brandedhustlers.electionbackend.election.dto.UpdateElection;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
-import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -30,30 +30,27 @@ public class ElectionController {
     private final HttpServletRequest httpServletRequest;
     private final ObjectMapper objectMapper;
     private final AppUserRepository appUserRepository;
-    private final ElectionRepository electionRepository;
+    private final GetUser getUser;
 
     public ElectionController(ElectionService electionService,
                               JWTService jwtService,
                               HttpServletRequest httpServletRequest,
                               ObjectMapper objectMapper,
-                              AppUserRepository appUserRepository, ElectionRepository electionRepository) {
+                              AppUserRepository appUserRepository, GetUser getUser) {
         this.electionService = electionService;
         this.jwtService = jwtService;
         this.httpServletRequest = httpServletRequest;
         this.objectMapper = objectMapper;
         this.appUserRepository = appUserRepository;
-        this.electionRepository = electionRepository;
+        this.getUser = getUser;
     }
 
-    private UUID getAppUserId(HttpServletRequest request) {
-        return jwtService.extractAppUserId(request);
-    }
 
     @PostMapping("/create")
     public ResponseEntity<?> createElection(
             @RequestBody CreateElectionRequest request
     ) {
-        return new ResponseEntity<>(electionService.createElection(request, getAppUserId(httpServletRequest)), HttpStatus.CREATED);
+        return new ResponseEntity<>(electionService.createElection(request), HttpStatus.CREATED);
     }
 
     @PutMapping("/update/{electionId}")
@@ -62,7 +59,7 @@ public class ElectionController {
             @PathVariable UUID electionId
     ) {
 
-        return new ResponseEntity<>(electionService.updateElection(electionId, election, getAppUserId(httpServletRequest)), HttpStatus.OK);
+        return new ResponseEntity<>(electionService.updateElection(electionId, election), HttpStatus.OK);
     }
 
     @PutMapping("/update-status/{electionId}")
@@ -70,7 +67,7 @@ public class ElectionController {
             @PathVariable UUID electionId,
             @RequestParam ElectionStatus electionStatus
     ) {
-        return new ResponseEntity<>(electionService.changeElectionStatus(electionId, electionStatus, getAppUserId(httpServletRequest)), HttpStatus.OK);
+        return new ResponseEntity<>(electionService.changeElectionStatus(electionId, electionStatus), HttpStatus.OK);
     }
 
     @PostMapping("/candidate-add/{electionId}")
@@ -83,14 +80,13 @@ public class ElectionController {
         return new ResponseEntity<>(
                 electionService.addCandidate(electionId,
                         candidateDTO,
-                        candidateImage,
-                        getAppUserId(httpServletRequest)),
+                        candidateImage),
                 HttpStatus.CREATED);
     }
 
     @GetMapping("/get-all")
     public ResponseEntity<?> getOrgElection(Pageable pageable) {
-        AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
+        AppUser launchCreator = appUserRepository.findById(getUser.getCurrentAuthenticatedUserId())
                 .orElseThrow(() -> new UserNotFound("User not found."));
 
         Organization creatorOrg = launchCreator.getAppUserOrganization();
@@ -98,7 +94,7 @@ public class ElectionController {
     }
 
     @GetMapping("/live")
-    public ResponseEntity<?> live(HttpServletRequest httpServletRequest, Pageable pageable){
+    public ResponseEntity<?> live(HttpServletRequest httpServletRequest, Pageable pageable) {
         return new ResponseEntity<>(electionService.getLiveElectionForVoterOrg(httpServletRequest, pageable), HttpStatus.OK);
     }
 }

@@ -15,7 +15,6 @@ public class VoterAuthToken extends AbstractAuthenticationToken {
     private final UUID voterOrganization;
     private final long stepUpVerifiedAt;
 
-
     /**
      * Creates a token with the supplied array of authorities.
      *

@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.voter.domain;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import jakarta.persistence.*;
 import lombok.*;
@@ -56,6 +57,12 @@ public class Voter {
     @JoinColumn(name = "created_by_id")
     private AppUser createdBy;
 
+    @Enumerated(EnumType.STRING)
+    private DeleteYn deleteYn;
 
 
+    @PrePersist
+    protected void onCreate(){
+        this.deleteYn = DeleteYn.N;
+    }
 }

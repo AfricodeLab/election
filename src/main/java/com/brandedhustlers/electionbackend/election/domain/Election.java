@@ -51,7 +51,7 @@ public class Election {
 
     private Long totalVotes;
 
-    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
     private List<Candidate> candidates = new ArrayList<>();
 
     @CreationTimestamp
@@ -67,11 +67,11 @@ public class Election {
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn = DeleteYn.N;
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "updated_by")
     private AppUser updatedBy;
 

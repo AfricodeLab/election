@@ -8,6 +8,7 @@ import java.util.UUID;
 
 public record CandidateDTO(
         UUID candidateId,
+        String candidateName,
         String affiliation,
         String manifesto,
         String candidatePhotoURL,
