@@ -29,7 +29,6 @@ public class Launch {
     @Column(nullable = false)
     private String name;
 
-
     @Column
     private String description;
 
@@ -50,9 +49,15 @@ public class Launch {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @OneToMany(fetch = FetchType.LAZY, mappedBy = "launch")
+    @OneToMany(fetch = FetchType.EAGER, mappedBy = "launch")
     private List<Election> election;
 
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn;
+
+
+    @PrePersist
+    protected void onCreate(){
+        this.deleteYn = DeleteYn.N;
+    }
 }

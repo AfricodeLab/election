@@ -43,6 +43,7 @@ public class TallyProjector {
 
         t.setCount(t.getCount() + 1);
         t.setUpdatedAt(Timestamp.from(Instant.now()));
+
         repo.save(t);
 
         // TODO push websocket updateStation via RealtimeGateway

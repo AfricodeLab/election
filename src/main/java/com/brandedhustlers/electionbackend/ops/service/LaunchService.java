@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.ops.service;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
@@ -46,6 +47,7 @@ public class LaunchService {
     private final AuditEmitter auditEmitter;
     private final ElectionRepository electionRepository;
     private final ElectionMapper electionMapper;
+    private final GetUser getUser;
 
 
     public LaunchService(LaunchRepository launchRepository,
@@ -54,7 +56,7 @@ public class LaunchService {
                          RabbitTemplate rabbitTemplate,
                          AuditEmitter auditEmitter,
                          ElectionRepository electionRepository,
-                         ElectionMapper electionMapper) {
+                         ElectionMapper electionMapper, GetUser getUser) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
@@ -62,12 +64,14 @@ public class LaunchService {
         this.auditEmitter = auditEmitter;
         this.electionRepository = electionRepository;
         this.electionMapper = electionMapper;
+        this.getUser = getUser;
     }
 
 
     @Transactional
-    public LaunchDto create(UUID orgId, String name, String description, Instant startAt, Instant endAt, AppUser actor) {
+    public LaunchDto create(UUID orgId, String name, String description, Instant startAt, Instant endAt) {
         // Guard: basic validation belongs here (service boundary is where business rules live)
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
 
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("OPS-4000 name is required");
@@ -125,13 +129,11 @@ public class LaunchService {
 
 
     public GetLaunch get(UUID orgId, UUID launchId) {
-        Optional<Launch> launch = launchRepository.findById(launchId).filter(l -> l.getOrgId().equals(orgId));
-
+        Optional<Launch> launch = launchRepository.findByLaunchId(launchId)
+                .filter(l -> l.getOrgId().equals(orgId));
         if (launch.isEmpty()) {
             throw new LaunchNotfound("Launch with ID: " + launchId + " for org with ID: " + orgId + " not found.");
         }
-
-        //TODO: add pagination
 
         Launch validLaunch = launch.get();
         List<ElectionDTO> electionsAssociatedWithLaunch = links.findByIdLaunchId(launchId)
@@ -168,6 +170,7 @@ public class LaunchService {
                 .filter(launch -> q == null || q.isBlank() || (launch.getName() + " " + Objects.toString(launch.getDescription(), ""))
                         .toLowerCase()
                         .contains(q.toLowerCase()))
+                .filter(launch -> launch.getDeleteYn().equals(DeleteYn.N))
                 .map(launchMapper::entityToDto)
                 .toList();
 
@@ -175,8 +178,12 @@ public class LaunchService {
     }
 
 
-    public void attachElections(UUID orgId, UUID launchId, List<UUID> electionIds, AppUser actor) {
-        Launch l = launchRepository.findById(launchId).orElseThrow(() -> new NoSuchElementException("Launch not found"));
+    public void attachElections(UUID orgId, UUID launchId, List<UUID> electionIds) {
+
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+
+        Launch l = launchRepository.findByLaunchId(launchId)
+                .orElseThrow(() -> new NoSuchElementException("Launch not found"));
 
         if (!l.getOrgId().equals(orgId)) {
             throw new SecurityException("Org mismatch");
@@ -225,8 +232,11 @@ public class LaunchService {
     }
 
 
-    public void detachElections(UUID orgId, UUID launchId, List<UUID> electionIds, AppUser actor) {
-        Launch l = launchRepository.findById(launchId).orElseThrow(() -> new LaunchNotfound("Launch not found"));
+    public void detachElections(UUID orgId, UUID launchId, List<UUID> electionIds) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+
+        Launch l = launchRepository.findByLaunchId(launchId)
+                .orElseThrow(() -> new LaunchNotfound("Launch not found"));
         if (!l.getOrgId().equals(orgId)) {
             throw new OrgMismatch("OPS-4031 org mismatch");
         }
@@ -273,8 +283,11 @@ public class LaunchService {
 
 
     @Transactional
-    public GetLaunch transitionStatus(UUID orgId, UUID launchId, LaunchStatus status, AppUser actor) {
-        Launch l = launchRepository.findById(launchId).orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found"));
+    public GetLaunch transitionStatus(UUID orgId, UUID launchId, LaunchStatus status) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+
+        Launch l = launchRepository.findByLaunchId(launchId)
+                .orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found"));
         LaunchStatus currStatus = l.getStatus();
 
         if (!l.getOrgId().equals(orgId)) {

@@ -5,6 +5,6 @@ import com.brandedhustlers.electionbackend.voter.dto.ImportStatusDTO;
 import java.util.UUID;
 
 public interface IVoterImportService {
-    UUID startImport(UUID orgId, String fileRef);
-    ImportStatusDTO status(UUID orgId, UUID jobId);
+    UUID startImport(String fileRef);
+    ImportStatusDTO status(UUID jobId);
 }

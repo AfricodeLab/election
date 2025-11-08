@@ -13,6 +13,7 @@ import com.brandedhustlers.electionbackend.common.config.storage.service.Cloudin
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
@@ -36,6 +37,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -46,37 +48,37 @@ public class ElectionService implements IElectionService {
     private final ElectionRepository electionRepository;
     private final JWTService jwtService;
     private final AppUserRepository appUserRepository;
-    private final HttpServletRequest httpServletRequest;
     private final ElectionMapper electionMapper;
     private final CloudinaryService cloudinaryService;
     private final CandidateRepository candidateRepository;
     private final AuditEmitter auditEmitter;
     private final CandidateMapper candidateMapper;
+    private final GetUser getUser;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
                            AppUserRepository appUserRepository,
-                           HttpServletRequest httpServletRequest,
                            ElectionMapper electionMapper,
                            CloudinaryService cloudinaryService,
                            CandidateRepository candidateRepository,
-                           AuditEmitter auditEmitter, CandidateMapper candidateMapper) {
+                           AuditEmitter auditEmitter,
+                           CandidateMapper candidateMapper,
+                           GetUser getUser) {
         this.electionRepository = electionRepository;
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
-        this.httpServletRequest = httpServletRequest;
         this.electionMapper = electionMapper;
         this.cloudinaryService = cloudinaryService;
         this.candidateRepository = candidateRepository;
         this.auditEmitter = auditEmitter;
         this.candidateMapper = candidateMapper;
+        this.getUser = getUser;
     }
 
     @Override
     @Transactional
-    public ElectionDTO createElection(CreateElectionRequest request, UUID userId) {
-        AppUser creator = appUserRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFound("User account not found"));
+    public ElectionDTO createElection(CreateElectionRequest request) {
+        AppUser creator = getUser.getCurrentAuthenticatedUser();
 
         if (!(authorizeUser(creator, UserRole.ADMIN) || authorizeUser(creator, UserRole.SUPER_ADMIN))) {
             throw new AccessDeniedException("You do not have authority to create an election");
@@ -87,6 +89,9 @@ public class ElectionService implements IElectionService {
         }
 
         Organization electionOrg = creator.getAppUserOrganization();
+
+
+
         Election newElection = Election.builder()
                 .electionTitle(request.electionTitle())
                 .electionDescription(request.electionDescription())
@@ -111,6 +116,18 @@ public class ElectionService implements IElectionService {
             throw new InvalidUpdate("An election with this title already exists in your organization");
         }
         Election election = electionRepository.save(newElection);
+
+        List<Candidate> electionCandidates = new ArrayList<>();
+        if (!request.candidates().isEmpty()){
+            for(CandidateDTO dto : request.candidates()){
+                Candidate candidate = candidateMapper.dtoToEntity(dto);
+                candidate.setElection(election);
+                candidate.setCreatedBy(creator);
+                electionCandidates.add(candidate);
+            }
+        }
+        newElection.setCandidates(electionCandidates);
+
 
         UUID actorId = creator.getAppUserId();
         String actorName = creator.getFirstName() + " " + creator.getLastName();
@@ -148,9 +165,8 @@ public class ElectionService implements IElectionService {
     }
 
     @Override
-    public ElectionDTO updateElection(UUID electionID, UpdateElection request, UUID appUserId) {
-        AppUser updater = appUserRepository.findById(appUserId)
-                .orElseThrow(() -> new UserNotFound("User account not found"));
+    public ElectionDTO updateElection(UUID electionID, UpdateElection request) {
+        AppUser updater = getUser.getCurrentAuthenticatedUser();
 
         Election electionToUpdate = electionRepository.findById(electionID)
                 .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionID + " does not exist"));
@@ -209,9 +225,8 @@ public class ElectionService implements IElectionService {
     }
 
     @Override
-    public ElectionDTO changeElectionStatus(UUID electionId, ElectionStatus newStatus, UUID appUserId) {
-        AppUser updater = appUserRepository.findById(appUserId)
-                .orElseThrow(() -> new UserNotFound("User account not found"));
+    public ElectionDTO changeElectionStatus(UUID electionId, ElectionStatus newStatus) {
+        AppUser updater = getUser.getCurrentAuthenticatedUser();
 
         Election statusChange = electionRepository.findById(electionId)
                 .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionId + " does not exist."));
@@ -271,9 +286,8 @@ public class ElectionService implements IElectionService {
 
     @Override
     @Transactional
-    public ElectionDTO addCandidate(UUID electionId, CandidateDTO newCandidate, MultipartFile candidateImage, UUID appUserId) throws IOException {
-        AppUser creator = appUserRepository.findById(appUserId)
-                .orElseThrow(() -> new UserNotFound("User account not found"));
+    public ElectionDTO addCandidate(UUID electionId, CandidateDTO newCandidate, MultipartFile candidateImage) throws IOException {
+        AppUser creator = getUser.getCurrentAuthenticatedUser();
 
         Election election = electionRepository.findById(electionId)
                 .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionId + " does not exist."));

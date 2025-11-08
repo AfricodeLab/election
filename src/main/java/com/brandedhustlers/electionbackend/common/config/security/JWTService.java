@@ -27,7 +27,6 @@ import java.util.function.Function;
 @Service
 public class JWTService {
     Dotenv dotenv = Dotenv.configure().load();
-
     private final String secretKey = dotenv.get("JWT_SECRET");
     private final AppUserRepository appUserRepository;
     private final VoterRepository voterRepository;
@@ -240,7 +239,6 @@ public class JWTService {
     private String getTokenFromAuthorizationHeader(HttpServletRequest request) {
         final String authorizationHeader = request.getHeader("Authorization");
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            System.out.println("auth header: " + authorizationHeader);
             return authorizationHeader.substring(7); // Remove "Bearer " prefix
         }
         return null;

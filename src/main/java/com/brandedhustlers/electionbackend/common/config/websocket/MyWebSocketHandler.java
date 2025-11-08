@@ -11,9 +11,8 @@ import java.io.IOException;
 public class MyWebSocketHandler extends TextWebSocketHandler {
 
     @Override
-    public void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException, IOException {
+    public void handleTextMessage(WebSocketSession session, TextMessage message) throws IOException {
         String payload = message.getPayload();
-        System.out.println("Received: " + payload);
 
         session.sendMessage(new TextMessage("Echo: " + payload));
     }

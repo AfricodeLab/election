@@ -2,13 +2,14 @@ package com.brandedhustlers.electionbackend.common.config.storage.service;
 
 import com.cloudinary.Cloudinary;
 import com.cloudinary.utils.ObjectUtils;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.Map;
 
+@Slf4j
 @Service
 public class CloudinaryService {
     private final Cloudinary cloudinary;
@@ -25,12 +26,12 @@ public class CloudinaryService {
         ));
     }
 
-    public String uploadFile(MultipartFile file) throws IOException {
+    public String uploadFile(MultipartFile file) {
         try {
             Map<String, Object> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
             return (String) uploadResult.get("url");
         } catch (Exception e) {
-            e.printStackTrace();
+            log.error("failed to upload file", e);
         }
         return null;
     }

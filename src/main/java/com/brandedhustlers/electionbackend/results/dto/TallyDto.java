@@ -8,10 +8,6 @@ import java.util.UUID;
 public record TallyDto(
         UUID electionId,
         CandidateDTO candidate,
-        String affiliation,
-        String candidatePhotoURL,
-        String manifesto,
-        boolean isIncumbent,
         long voteCount,
         Timestamp lastUpdated
 ) {
