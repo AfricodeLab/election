@@ -39,7 +39,7 @@ public class VoterAuthToken extends AbstractAuthenticationToken {
 
     @Override
     public Object getPrincipal() {
-        return voter;
+        return this;
     }
 
     public UUID getVoterId() {

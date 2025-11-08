@@ -7,7 +7,6 @@ import com.brandedhustlers.electionbackend.voter.dto.OtpSendResponse;
 import com.brandedhustlers.electionbackend.voter.service.VerificationService;
 import jakarta.mail.MessagingException;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -27,14 +26,12 @@ public class VerificationController {
     }
 
     @PostMapping("/send")
-    public ResponseEntity<OtpSendResponse> send(@RequestBody OtpSendRequest req,
-                                                HttpSession session) throws MessagingException {
+    public ResponseEntity<OtpSendResponse> send(@RequestBody OtpSendRequest req) throws MessagingException {
         return ResponseEntity.accepted().body(service.sendOtp(req));
     }
 
     @PostMapping("/confirm")
     public ResponseEntity<OtpConfirmResponse> confirm(@RequestBody OtpConfirmRequest req) {
-
         return ResponseEntity.ok(service.confirmOtp(req, servletRequest));
     }
 

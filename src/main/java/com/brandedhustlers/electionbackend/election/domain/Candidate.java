@@ -28,7 +28,7 @@ public class Candidate {
     @Size(max = 25)
     private String affiliation;
 
-    @Column(nullable = false, unique = true)
+    @Column(nullable = false)
     private String candidateName;
 
     @Column(columnDefinition = "TEXT")

@@ -1,9 +1,9 @@
 package com.brandedhustlers.electionbackend.voter.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.domain.VoterImportJob;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
@@ -39,22 +39,27 @@ public class VoterImportService implements IVoterImportService {
     private final HttpServletRequest httpServletRequest;
     private final JWTService jwtService;
     private final AppUserRepository appUserRepository;
+    private final GetUser getUser;
 
     public VoterImportService(VoterImportJobRepository jobRepository,
                               VoterRepository voterRepository,
                               HttpServletRequest httpServletRequest,
-                              JWTService jwtService, AppUserRepository appUserRepository) {
+                              JWTService jwtService,
+                              AppUserRepository appUserRepository,
+                              GetUser getUser) {
         this.jobRepository = jobRepository;
         this.voterRepository = voterRepository;
         this.httpServletRequest = httpServletRequest;
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
+        this.getUser = getUser;
     }
 
     @Override
     @Transactional
-    public UUID startImport(UUID orgId, String fileRef) {
+    public UUID startImport(String fileRef) {
         UUID jobId = UUID.randomUUID();
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
 
         // Create import job
         VoterImportJob job = VoterImportJob.builder()
@@ -76,9 +81,11 @@ public class VoterImportService implements IVoterImportService {
     }
 
     @Override
-    public ImportStatusDTO status(UUID orgId, UUID jobId) {
+    public ImportStatusDTO status(UUID jobId) {
         VoterImportJob job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new RuntimeException("Job not found"));
+
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
 
         if (!job.getOrgId().equals(orgId)) {
             throw new RuntimeException("Unauthorized access to job");
@@ -311,7 +318,6 @@ public class VoterImportService implements IVoterImportService {
     }
 
     private AppUser getCurrentUser() {
-        return appUserRepository.findById(jwtService.extractAppUserId(httpServletRequest))
-                .orElseThrow(() -> new UserNotFound("User not found"));
+        return getUser.getCurrentAuthenticatedUser();
     }
 }

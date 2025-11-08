@@ -4,7 +4,6 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
-import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
@@ -26,20 +25,14 @@ import java.util.UUID;
 @RequestMapping("/api/v1/election")
 public class ElectionController {
     private final ElectionService electionService;
-    private final JWTService jwtService;
-    private final HttpServletRequest httpServletRequest;
     private final ObjectMapper objectMapper;
     private final AppUserRepository appUserRepository;
     private final GetUser getUser;
 
     public ElectionController(ElectionService electionService,
-                              JWTService jwtService,
-                              HttpServletRequest httpServletRequest,
                               ObjectMapper objectMapper,
                               AppUserRepository appUserRepository, GetUser getUser) {
         this.electionService = electionService;
-        this.jwtService = jwtService;
-        this.httpServletRequest = httpServletRequest;
         this.objectMapper = objectMapper;
         this.appUserRepository = appUserRepository;
         this.getUser = getUser;
@@ -58,7 +51,6 @@ public class ElectionController {
             @RequestBody UpdateElection election,
             @PathVariable UUID electionId
     ) {
-
         return new ResponseEntity<>(electionService.updateElection(electionId, election), HttpStatus.OK);
     }
 

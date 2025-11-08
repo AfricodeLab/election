@@ -29,7 +29,6 @@ public class Launch {
     @Column(nullable = false)
     private String name;
 
-
     @Column
     private String description;
 

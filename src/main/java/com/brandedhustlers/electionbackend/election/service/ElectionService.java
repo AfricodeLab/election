@@ -23,7 +23,6 @@ import com.brandedhustlers.electionbackend.election.dto.UpdateElection;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
-import com.brandedhustlers.electionbackend.election.mapper.CandidateMapperImpl;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
@@ -49,33 +48,30 @@ public class ElectionService implements IElectionService {
     private final ElectionRepository electionRepository;
     private final JWTService jwtService;
     private final AppUserRepository appUserRepository;
-    private final HttpServletRequest httpServletRequest;
     private final ElectionMapper electionMapper;
     private final CloudinaryService cloudinaryService;
     private final CandidateRepository candidateRepository;
     private final AuditEmitter auditEmitter;
     private final CandidateMapper candidateMapper;
-    private final CandidateMapperImpl candidateMapperImpl;
     private final GetUser getUser;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
                            AppUserRepository appUserRepository,
-                           HttpServletRequest httpServletRequest,
                            ElectionMapper electionMapper,
                            CloudinaryService cloudinaryService,
                            CandidateRepository candidateRepository,
-                           AuditEmitter auditEmitter, CandidateMapper candidateMapper, CandidateMapperImpl candidateMapperImpl, GetUser getUser) {
+                           AuditEmitter auditEmitter,
+                           CandidateMapper candidateMapper,
+                           GetUser getUser) {
         this.electionRepository = electionRepository;
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
-        this.httpServletRequest = httpServletRequest;
         this.electionMapper = electionMapper;
         this.cloudinaryService = cloudinaryService;
         this.candidateRepository = candidateRepository;
         this.auditEmitter = auditEmitter;
         this.candidateMapper = candidateMapper;
-        this.candidateMapperImpl = candidateMapperImpl;
         this.getUser = getUser;
     }
 

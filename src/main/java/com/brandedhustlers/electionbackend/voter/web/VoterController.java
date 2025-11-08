@@ -1,15 +1,14 @@
 package com.brandedhustlers.electionbackend.voter.web;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.voter.dto.AssignVotersCmd;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.ImportStatusDTO;
 import com.brandedhustlers.electionbackend.voter.service.VoterImportService;
 import com.brandedhustlers.electionbackend.voter.service.VoterService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,7 +22,6 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 
 @RestController
@@ -31,37 +29,34 @@ import java.util.UUID;
 public class VoterController {
     private final VoterService voterService;
     private final VoterImportService importService;
-    private final HttpServletRequest httpServletRequest;
     private final AppUserRepository appUserRepository;
     private final JWTService jwtService;
+    private final GetUser getUser;
 
     private static final String UPLOAD_DIR = "uploads/voter-imports/";
 
     public VoterController(VoterService voterService,
                            VoterImportService importService,
-                           HttpServletRequest httpServletRequest,
                            AppUserRepository appUserRepository,
-                           JWTService jwtService) {
+                           JWTService jwtService, GetUser getUser) {
         this.voterService = voterService;
         this.importService = importService;
-        this.httpServletRequest = httpServletRequest;
         this.appUserRepository = appUserRepository;
         this.jwtService = jwtService;
+        this.getUser = getUser;
     }
 
-    private Optional<AppUser> getAppUser(HttpServletRequest httpServletRequest) {
+/*    private Optional<AppUser> getAppUser(HttpServletRequest httpServletRequest) {
         return appUserRepository
                 .findById(jwtService.extractAppUserId(httpServletRequest));
-    }
+    }*/
 
     @PostMapping
     public ResponseEntity<?> create(
             @Valid @RequestBody CreateVoterCmd cmd) {
-        Optional<AppUser> creator = getAppUser(httpServletRequest);
-        if (creator.isPresent()) {
-            AppUser actor = creator.get();
-            Organization actorOrg = actor.getAppUserOrganization();
-            return ResponseEntity.ok(voterService.create(actorOrg.getOrganizationId(), cmd, actor));
+        UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (actorOrgId != null) {
+            return ResponseEntity.ok(voterService.create(actorOrgId, cmd));
         }
         return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
     }
@@ -69,24 +64,18 @@ public class VoterController {
     @GetMapping
     public ResponseEntity<?> search(@RequestParam String q,
                                     @RequestParam(defaultValue = "20") int limit) {
-        Optional<AppUser> creator = getAppUser(httpServletRequest);
-        if (creator.isPresent()) {
-            AppUser actor = creator.get();
-            Organization actorOrg = actor.getAppUserOrganization();
-
-            return ResponseEntity.ok(voterService.search(actorOrg.getOrganizationId(), q, limit));
+        UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (actorOrgId != null) {
+            return ResponseEntity.ok(voterService.search(actorOrgId, q, limit));
         }
         return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
     }
 
     @PostMapping("/assign")
     public ResponseEntity<?> assign(@Valid @RequestBody AssignVotersCmd cmd) {
-        Optional<AppUser> creator = getAppUser(httpServletRequest);
-        if (creator.isPresent()) {
-            AppUser actor = creator.get();
-            Organization actorOrg = actor.getAppUserOrganization();
-
-            voterService.assignToElection(actorOrg.getOrganizationId(), cmd, actor);
+        UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (actorOrgId != null) {
+            voterService.assignToElection(actorOrgId, cmd);
             return new ResponseEntity<>("Voter Assigned Successfully", HttpStatus.OK);
         }
         return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
@@ -96,10 +85,8 @@ public class VoterController {
     public ResponseEntity<Map<String, Object>> uploadFile(
             @RequestParam("file") MultipartFile file) {
 
-        Optional<AppUser> creator = getAppUser(httpServletRequest);
-        if (creator.isPresent()) {
-            AppUser actor = creator.get();
-            Organization actorOrg = actor.getAppUserOrganization();
+        AppUser creator = getUser.getCurrentAuthenticatedUser();
+        if (creator != null) {
             try {
                 if (file.isEmpty()) {
                     return ResponseEntity.badRequest()
@@ -124,7 +111,7 @@ public class VoterController {
                         filePath,
                         StandardCopyOption.REPLACE_EXISTING);
 
-                UUID jobId = importService.startImport(actorOrg.getOrganizationId(), filePath.toString());
+                UUID jobId = importService.startImport(filePath.toString());
 
                 Map<String, Object> response = new HashMap<>();
                 response.put("jobId", jobId);
@@ -144,14 +131,11 @@ public class VoterController {
     }
 
     @GetMapping("/status/{jobId}")
-    public ResponseEntity<?> getStatus(
-            @PathVariable UUID jobId) {
-        Optional<AppUser> creator = getAppUser(httpServletRequest);
-        if (creator.isPresent()) {
-            AppUser actor = creator.get();
-            Organization actorOrg = actor.getAppUserOrganization();
+    public ResponseEntity<?> getStatus(@PathVariable UUID jobId) {
+        UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (actorOrgId != null) {
             try {
-                ImportStatusDTO status = importService.status(actorOrg.getOrganizationId(), jobId);
+                ImportStatusDTO status = importService.status(jobId);
                 return ResponseEntity.ok(status);
             } catch (RuntimeException e) {
                 return new ResponseEntity<>(HttpStatus.NOT_FOUND);

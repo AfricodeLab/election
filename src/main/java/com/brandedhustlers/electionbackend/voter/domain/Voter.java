@@ -24,6 +24,7 @@ import java.util.UUID;
 )
 @Builder
 public class Voter {
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID voterId;

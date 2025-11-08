@@ -8,6 +8,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoter;
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
@@ -38,25 +39,31 @@ public class VoterService implements IVoterService {
     private final AuditEmitter auditEmitter;
     private final ElectionVoterRepository electionVoterRepository;
     private final ElectionRepository electionRepository;
+    private final GetUser getUser;
+
 
     public VoterService(AppUserRepository appUserRepository,
                         VoterMapper voterMapper,
                         VoterRepository voterRepository,
                         AuditEmitter auditEmitter,
                         ElectionVoterRepository electionVoterRepository,
-                        ElectionRepository electionRepository) {
+                        ElectionRepository electionRepository,
+                        GetUser getUser) {
         this.appUserRepository = appUserRepository;
         this.voterMapper = voterMapper;
         this.voterRepository = voterRepository;
         this.auditEmitter = auditEmitter;
         this.electionVoterRepository = electionVoterRepository;
         this.electionRepository = electionRepository;
+        this.getUser = getUser;
     }
 
 
     @Override
     @Transactional
-    public VoterDTO create(UUID orgId, CreateVoterCmd cmd, AppUser actor) {
+    public VoterDTO create(UUID orgId, CreateVoterCmd cmd) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+
         if (!(authorizeUser(actor, UserRole.ADMIN) || authorizeUser(actor, UserRole.SUPER_ADMIN))) {
             throw new AccessDeniedException("You do not have authority to create a voter");
         }
@@ -122,7 +129,9 @@ public class VoterService implements IVoterService {
 
     @Override
     @Transactional
-    public void assignToElection(UUID orgId, AssignVotersCmd cmd, AppUser actor) {
+    public void assignToElection(UUID orgId, AssignVotersCmd cmd) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+
         // Authorization
         if (!authorizeUser(actor, UserRole.ADMIN) && !authorizeUser(actor, UserRole.SUPER_ADMIN)) {
             throw new AccessDeniedException("You do not have authority to assign voters");

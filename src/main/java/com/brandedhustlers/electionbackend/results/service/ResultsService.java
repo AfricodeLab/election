@@ -7,10 +7,10 @@ import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
-import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.results.domain.Tally;
 import com.brandedhustlers.electionbackend.results.dto.TallyDto;
 import com.brandedhustlers.electionbackend.results.repository.TallyRepository;
@@ -29,24 +29,24 @@ import java.util.stream.Collectors;
 public class ResultsService {
     private final TallyRepository repo;
     private final AppUserRepository appUserRepository;
-    private final ElectionRepository electionRepository;
     private final CandidateRepository candidateRepository;
     private final CandidateMapper candidateMapper;
+    private final GetUser getUser;
 
     public ResultsService(TallyRepository repo,
                           AppUserRepository appUserRepository,
-                          ElectionRepository electionRepository,
-                          CandidateRepository candidateRepository, CandidateMapper candidateMapper) {
+                          CandidateRepository candidateRepository,
+                          CandidateMapper candidateMapper,
+                          GetUser getUser) {
         this.repo = repo;
         this.appUserRepository = appUserRepository;
-        this.electionRepository = electionRepository;
+        this.getUser = getUser;
         this.candidateRepository = candidateRepository;
         this.candidateMapper = candidateMapper;
     }
 
-    public Page<TallyDto> get(UUID actorId, UUID electionId, Pageable pageable) {
-        AppUser actor = appUserRepository.findById(actorId)
-                .orElseThrow(() -> new UserNotFound("User Not found"));
+    public Page<TallyDto> get(UUID electionId, Pageable pageable) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
 
         requireAdminOrPermission(actor, PermissionType.VIEW_RESULTS);
 

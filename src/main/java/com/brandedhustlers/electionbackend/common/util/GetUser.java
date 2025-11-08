@@ -43,7 +43,7 @@ public class GetUser {
         return getCurrentAuthenticatedUser().getAppUserOrganization();
     }
 
-    public UUID getCurrentAuthenticatedUserOrdId(){
+    public UUID getCurrentAuthenticatedUserOrgId(){
         return getCurrentAuthenticatedUserOrg().getOrganizationId();
     }
 
@@ -64,7 +64,7 @@ public class GetUser {
 
         VoterAuthToken token = (VoterAuthToken) authentication.getPrincipal();
 
-        return voterRepository.findVoterById(token.getVoterId());
+        return voterRepository.findVoterById(token.getVoterId(), token.getVoterOrganizationId());
     }
 
     /**
