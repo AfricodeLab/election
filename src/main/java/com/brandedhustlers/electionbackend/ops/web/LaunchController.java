@@ -62,17 +62,16 @@ public class LaunchController {
 
     @GetMapping
     public ResponseEntity<?> list(@RequestParam(required = false) LaunchStatus status,
-                                  @RequestParam(required = false) String q,
                                   Pageable pageable
     ) {
-       UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        return new ResponseEntity<>(svc.list(orgId, status, q, pageable), HttpStatus.OK);
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        return new ResponseEntity<>(svc.list(orgId, status, pageable), HttpStatus.OK);
     }
 
     @PostMapping("/{launchId}/attach-elections")
     public ResponseEntity<?> attach(@PathVariable UUID launchId,
                                     @RequestBody List<UUID> electionIds) {
-       UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
         svc.attachElections(orgId, launchId, electionIds);
         return new ResponseEntity<>("Elections attached successfully", HttpStatus.ACCEPTED);
     }
@@ -80,7 +79,7 @@ public class LaunchController {
     @DeleteMapping("/{launchId}/detach-elections")
     public ResponseEntity<?> detach(@PathVariable UUID launchId,
                                     @RequestBody List<UUID> electionIds) {
-       UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
         svc.detachElections(orgId, launchId, electionIds);
         return new ResponseEntity<>("Election(s) detached successfully", HttpStatus.ACCEPTED);
     }
@@ -88,7 +87,7 @@ public class LaunchController {
     @PutMapping("/{launchId}/status")
     public ResponseEntity<?> transition(@PathVariable UUID launchId,
                                         @RequestParam LaunchStatus status) {
-       UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
         return new ResponseEntity<>(svc.transitionStatus(orgId, launchId, status), HttpStatus.OK);
     }
 }
