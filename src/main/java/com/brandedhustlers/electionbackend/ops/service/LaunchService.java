@@ -141,7 +141,7 @@ public class LaunchService {
                 .map(LaunchElection::getId)
                 .map(LaunchElectionId ::getElectionId)
                 .map(electionRepository::findById)
-                .map(Optional::get)
+                .flatMap(Optional::stream)
                 .map(electionMapper::entityToDto)
                 .toList();
 
@@ -161,15 +161,12 @@ public class LaunchService {
     }
 
 
-    public Page<LaunchDto> list(UUID orgId, LaunchStatus status, String q, Pageable pageable) {
+    public Page<LaunchDto> list(UUID orgId, LaunchStatus status, Pageable pageable) {
 
         List<Launch> base = (status == null) ? launchRepository.findAll() : launchRepository.findByOrgIdAndStatus(orgId, status);
 
         List<LaunchDto> launchDtos = base.stream()
                 .filter(launch -> launch.getOrgId().equals(orgId))
-                .filter(launch -> q == null || q.isBlank() || (launch.getName() + " " + Objects.toString(launch.getDescription(), ""))
-                        .toLowerCase()
-                        .contains(q.toLowerCase()))
                 .filter(launch -> launch.getDeleteYn().equals(DeleteYn.N))
                 .map(launchMapper::entityToDto)
                 .toList();

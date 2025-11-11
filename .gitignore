@@ -38,3 +38,6 @@ build/
 !/README.md
 /work.txt
 /uploads/
+/socket.html
+
+/src/main/resources/fabric
