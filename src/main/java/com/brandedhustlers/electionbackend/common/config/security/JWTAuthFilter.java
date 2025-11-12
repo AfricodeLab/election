@@ -72,7 +72,7 @@ public class JWTAuthFilter extends OncePerRequestFilter {
                 UUID voterId = UUID.fromString(jwtService.extractVoterId(token));
                 log.info("voter ID {}", voterId);
 
-                UUID orgId   = UUID.fromString(jwtService.extractVoterOrgId(token));
+                UUID orgId = UUID.fromString(jwtService.extractVoterOrgId(token));
                 log.info("voter org ID {}", orgId);
 
                 Long stepUp = jwtService.extractStepUp(token);
@@ -131,7 +131,7 @@ public class JWTAuthFilter extends OncePerRequestFilter {
     }
 
     private String getTokenFromCookie(Cookie[] cookies) {
-        if (cookies == null){
+        if (cookies == null) {
             return null;
         }
         for (Cookie c : cookies) {
@@ -143,7 +143,10 @@ public class JWTAuthFilter extends OncePerRequestFilter {
     }
 
     private static UUID safeUuid(String s) {
-        try { return s == null ? null : UUID.fromString(s); }
-        catch (Exception e) { return null; }
+        try {
+            return s == null ? null : UUID.fromString(s);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }

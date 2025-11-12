@@ -10,7 +10,6 @@ import com.brandedhustlers.electionbackend.voter.dto.OtpSendResponse;
 import com.brandedhustlers.electionbackend.voter.repository.VerificationTokenRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import jakarta.mail.MessagingException;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -82,7 +81,7 @@ public class VerificationService {
     }
 
 
-    public OtpConfirmResponse confirmOtp(OtpConfirmRequest req, HttpServletRequest httpServletRequest) {
+    public OtpConfirmResponse confirmOtp(OtpConfirmRequest req) {
         var voter = voters.findByEmailIgnoreCase(req.email())
                 .orElseThrow(() -> new NoSuchElementException("Voter not found"));
 

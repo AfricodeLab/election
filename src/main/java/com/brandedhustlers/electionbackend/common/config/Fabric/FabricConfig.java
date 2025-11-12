@@ -41,7 +41,7 @@ public class FabricConfig {
 
     @Bean(destroyMethod = "close")
     public Gateway gateway() throws Exception {
-        logger.info("🔧 Initializing Fabric Gateway...");
+        logger.info("Initializing Fabric Gateway...");
 
         // Load certificate
         X509Certificate cert;
@@ -77,7 +77,7 @@ public class FabricConfig {
         }
 
         Gateway gw = builder.connect();
-        logger.info("Gateway connected successfully to Fabric network!");
+        logger.info("Gateway connected successfully to Fabric network...letssssssssssssssssssssss gooooooooooooooooooooooo");
 
         return gw;
     }

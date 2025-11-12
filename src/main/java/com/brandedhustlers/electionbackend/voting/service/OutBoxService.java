@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.voting.service;
 import com.brandedhustlers.electionbackend.common.config.messaging.RabbitMQConfig;
 import com.brandedhustlers.electionbackend.voting.repository.OutBoxRepository;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,7 +22,7 @@ public class OutBoxService implements OutBoxRelay {
 
     @Override
     @Transactional
-//    @Scheduled(fixedDelay = 10000)//every 10 seconds
+    @Scheduled(fixedDelay = 10000)//every 10 seconds
     public void publishPending() {
         outbox.findAll().stream().filter(o -> o.getPublishedAt() == null).limit(100).forEach(o -> {
             rabbit.convertAndSend(RabbitMQConfig.VOTING_VOTE_CAST, o.getPayload());

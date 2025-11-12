@@ -107,7 +107,7 @@ public class VotingService implements IVotingService {
                 .candidateId(cmd.candidateId())
                 .voterId(voterId)
                 .dedupeKey(dedupeKey)
-                .castAt(new Timestamp(System.currentTimeMillis()))
+                .castAt(Instant.now())
                 .build();
         votes.saveAndFlush(vote);
 

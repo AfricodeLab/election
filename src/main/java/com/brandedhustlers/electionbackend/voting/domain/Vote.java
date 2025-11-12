@@ -3,7 +3,7 @@ package com.brandedhustlers.electionbackend.voting.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -31,7 +31,7 @@ public class Vote {
     @Column(name = "candidate_id", nullable = false)
     private UUID candidateId;
 
-    @Column(name = "voter_id")
+    @Column(name = "voter_id", unique = true)
     private UUID voterId; // nullable for anon mode
 
     @Column(name = "device_id")
@@ -47,5 +47,5 @@ public class Vote {
     private String txId;
 
     @Column(name = "cast_at", nullable = false)
-    private Timestamp castAt;
+    private Instant castAt;
 }

@@ -20,7 +20,9 @@ import java.util.UUID;
 @Entity
 @Getter
 @Setter
-@Table(name = "election", schema = "election")
+@Table(name = "election", schema = "election", indexes = {
+        @Index(name = "idx_time", columnList = "election_start_time, election_end_time")
+})
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -41,8 +43,10 @@ public class Election {
     @Enumerated(EnumType.STRING)
     private ElectionStatus electionStatus;
 
+    @Column(updatable = false)
     private Timestamp electionStartTime;
 
+    @Column(updatable = false)
     private Timestamp electionEndTime;
 
     private Long totalVoters;
@@ -83,3 +87,5 @@ public class Election {
 
     private boolean shouldEndAutomatically = true; //if true election will end automatically if the total expected votes is reached
 }
+
+//todo: work on voter eligibility, based on age, position, etc, vote and voter is 1 : 1,
