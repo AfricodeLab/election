@@ -91,7 +91,6 @@ public class ElectionService implements IElectionService {
         Organization electionOrg = creator.getAppUserOrganization();
 
 
-
         Election newElection = Election.builder()
                 .electionTitle(request.electionTitle())
                 .electionDescription(request.electionDescription())
@@ -118,8 +117,8 @@ public class ElectionService implements IElectionService {
         Election election = electionRepository.save(newElection);
 
         List<Candidate> electionCandidates = new ArrayList<>();
-        if (!request.candidates().isEmpty()){
-            for(CandidateDTO dto : request.candidates()){
+        if (!request.candidates().isEmpty()) {
+            for (CandidateDTO dto : request.candidates()) {
                 Candidate candidate = candidateMapper.dtoToEntity(dto);
                 candidate.setElection(election);
                 candidate.setCreatedBy(creator);
@@ -354,7 +353,7 @@ public class ElectionService implements IElectionService {
         );
     }
 
-    public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable){
+    public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable) {
         List<ElectionDTO> elections = electionRepository.findByOrganizationId(organizationId)
                 .stream()
                 .map(election -> {
@@ -364,6 +363,7 @@ public class ElectionService implements IElectionService {
                             .toList();
 
                     return new ElectionDTO(
+                            //electionDTO, functional call ::
                             election.getElectionId(),
                             election.getElectionTitle(),
                             election.getElectionDescription(),
@@ -384,15 +384,15 @@ public class ElectionService implements IElectionService {
         return new PageImpl<>(elections, pageable, elections.size());
     }
 
-    public Page<ElectionDTO> getLiveElectionForVoterOrg(HttpServletRequest httpServletRequest, Pageable pageable){
+    public Page<ElectionDTO> getLiveElectionForVoterOrg(HttpServletRequest httpServletRequest, Pageable pageable) {
         String token = httpServletRequest.getHeader("Authorization").substring(7);
         //I need the voterId and the org Id
         UUID voterId = UUID.fromString(jwtService.extractVoterId(token));
         UUID voterOrgId = UUID.fromString(jwtService.extractVoterOrgId(token));
 
         List<ElectionDTO> assignedElections = electionRepository.findLiveByOrgAndAssigned(
-                voterOrgId, voterId,ElectionStatus.LIVE, Timestamp.from(Instant.now())
-        ).stream()
+                        voterOrgId, voterId, ElectionStatus.LIVE, Timestamp.from(Instant.now())
+                ).stream()
                 .map(electionMapper::entityToDto)
                 .toList();
 

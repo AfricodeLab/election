@@ -34,6 +34,15 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
                                  @Param("status") ElectionStatus status,
                                  @Param("now") Timestamp now);
 
+    @Query("select e.organization.organizationId from Election e where e.electionId = :electionId")
+    UUID findOrgId(UUID electionId);
+
+    @Query("""
+               select e from Election e
+               where e.electionStatus = 'LIVE'
+            """)
+    List<Election> findLive(Timestamp now);
+
 //    @Query("""
 //              select e from Election e
 //              join ElectionVoter ev on ev.id.electionId = e.electionId
@@ -62,7 +71,6 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
                                             @Param("status") ElectionStatus status,
                                             @Param("now") Timestamp now);
 
-/*
     @Query("""
               select e from Election e
               where e.electionId = :electionId
@@ -70,14 +78,14 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
                 and e.electionStatus = :status
                 and e.electionStartTime <= :now
                 and e.electionEndTime >= :now
+                and e.deleteYn = 'N'
             """)
     Optional<Election> verifyLiveInOrg(@Param("electionId") UUID electionId,
                                        @Param("orgId") UUID orgId,
                                        @Param("status") ElectionStatus status,
                                        @Param("now") Timestamp now);
-*/
 
-    @Query("""
+/*    @Query("""
               select e from Election e
               where e.electionId = :electionId
                 and e.organization.organizationId = :orgId
@@ -86,5 +94,5 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
     Optional<Election> verifyLiveInOrg(@Param("electionId") UUID electionId,
                                        @Param("orgId") UUID orgId,
                                        @Param("status") ElectionStatus status,
-                                       @Param("now") Timestamp now);
+                                       @Param("now") Timestamp now);*/
 }

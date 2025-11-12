@@ -196,7 +196,6 @@ public class LaunchService {
                     .ifPresentOrElse(le -> { /* already attached → idempotent no-op */ }, () -> links.save(LaunchElection.builder().id(id).build()));
 
         }
-        // TODO: audit.emit("ops.launch.election_attached", ...)
         UUID actorId = actor.getAppUserId();
         String actorName = actor.getFirstName();
         String actorRole = actor.getUserRole().name();
@@ -371,3 +370,5 @@ public class LaunchService {
         );
     }
 }
+
+//todo end election functionality
