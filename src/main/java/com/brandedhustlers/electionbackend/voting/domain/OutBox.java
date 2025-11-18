@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.voting.domain;
 
+import com.brandedhustlers.electionbackend.voting.enums.PublishStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -36,6 +37,13 @@ public class OutBox {
     @Column(nullable = false)
     private Timestamp createdAt;
 
+    private String voteHash;
+
+    @Enumerated(EnumType.STRING)
+    private PublishStatus publishStatus;
+
+    private Timestamp failedValidationAt;
+
     @Column
     private Timestamp publishedAt; // null until published
 }
@@ -46,3 +54,4 @@ public class OutBox {
 //beause of the validation of the voter side, the user belongs to the org,
 //todo check if I can detect which vote does not match
 //todo if the vote does not match what's on the chain,
+

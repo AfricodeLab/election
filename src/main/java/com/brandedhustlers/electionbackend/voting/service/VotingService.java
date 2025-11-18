@@ -17,6 +17,7 @@ import com.brandedhustlers.electionbackend.voting.dto.CastVoteCmd;
 import com.brandedhustlers.electionbackend.voting.dto.VoteAckDTO;
 import com.brandedhustlers.electionbackend.voting.repository.OutBoxRepository;
 import com.brandedhustlers.electionbackend.voting.repository.VoteRepository;
+import com.brandedhustlers.electionbackend.voting.util.Hash;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -44,6 +45,7 @@ public class VotingService implements IVotingService {
     private final ElectionRepository electionRepository;
     private final VoterRepository voterRepository;
     private final ElectionVoterRepository evRepository;
+    private final Hash getHash;
 
     private static final Duration STEP_UP_WINDOW = Duration.ofMinutes(15);
 
@@ -57,7 +59,7 @@ public class VotingService implements IVotingService {
                          CandidateRepository candidateRepository,
                          ElectionRepository electionRepository,
                          VoterRepository voterRepository,
-                         ElectionVoterRepository evRepository) {
+                         ElectionVoterRepository evRepository, Hash getHash) {
         this.votes = votes;
         this.evRepo = evRepo;
         this.identity = identity;
@@ -68,53 +70,67 @@ public class VotingService implements IVotingService {
         this.electionRepository = electionRepository;
         this.voterRepository = voterRepository;
         this.evRepository = evRepository;
+        this.getHash = getHash;
     }
 
     @Override
     @Transactional
-    public VoteAckDTO cast(UUID orgId, UUID voterId, CastVoteCmd cmd, HttpServletRequest request) {
+    public VoteAckDTO cast(UUID orgId, UUID voterId, CastVoteCmd cmd, HttpServletRequest httpServletRequest) {
+
         try {
             Voter actor = voterRepository.findById(voterId)
                     .orElseThrow(() -> new UserNotFound("Voter with ID: " + voterId + " not found."));
 
             String dedupeKey = Optional.ofNullable(cmd.idempotencyKey())
-                    .orElse(UUID.randomUUID().toString());
+                    .orElseGet(() -> UUID.randomUUID().toString());
 
-            ElectionVoter ev = evRepository.lockByIds(cmd.electionId(), voterId)
-                    .orElseGet(() -> {
-                        // create if missing
-                        Election election = electionRepository.findByElectionId(cmd.electionId())
-                                .orElseThrow(() -> new IllegalArgumentException(
-                                        "Election with id: " + cmd.electionId() + " not found"));
+            Election election = electionRepository.findByElectionId(cmd.electionId())
+                    .orElseThrow(() -> new IllegalArgumentException("Election with id: " + cmd.electionId() + " not found"));
 
-                        ElectionVoterId embeddedId = new ElectionVoterId(cmd.electionId(), voterId);
-                        ElectionVoter newEv = new ElectionVoter(
-                                embeddedId,
-                                actor,
-                                election,
-                                null,
-                                null,
-                                false
-                        );
-                        return evRepository.save(newEv);
-                    });
+            Optional<ElectionVoter> existingEv = evRepository.findByVoterIdAndElectionId(voterId, cmd.electionId());
+
+            if (existingEv.isPresent()) {
+                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED");
+            }
+
+            //create the election voter here instead removing load from org admins, tied to the voter entity
+            ElectionVoterId embeddedId = new ElectionVoterId(
+                    cmd.electionId(),
+                    actor.getVoterId()
+            );
+            ElectionVoter newVoter = new ElectionVoter(
+                    embeddedId,
+                    actor,
+                    election,
+                    null,
+                    null,
+                    false
+            );
+            evRepository.save(newVoter);
+
+            var existing = votes.findByDedupeKey(dedupeKey);
+            if (existing.isPresent()) {
+                return new VoteAckDTO(existing.get().getId(), "ACCEPTED", "IDEMPOTENT");
+            }
+
+            // Election is LIVE + in the same org
+            var nowTs = new Timestamp(System.currentTimeMillis());
+            electionRepository.verifyLiveInOrg(cmd.electionId(), orgId, ElectionStatus.LIVE, nowTs)
+                    .orElseThrow(() -> new IllegalStateException("Election not live / not in org / outside window"));
+
+            // Candidate belongs to this election
+            candidateRepository.findByCandidateIdAndElectionElectionId(cmd.candidateId(), cmd.electionId())
+                    .orElseThrow(() -> new IllegalArgumentException("Invalid candidate for election"));
+
+            // Pessimistic lock to prevent concurrent double-vote
+            ElectionVoter ev = evRepo.lockByIds(cmd.electionId(), voterId)
+                    .orElseThrow(() -> new IllegalStateException("Voter not assigned to this election"));
 
             if (ev.isHasVoted()) {
                 return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED");
             }
 
-            votes.findByDedupeKey(dedupeKey).ifPresent(existingVote -> {
-                        throw new IllegalArgumentException();
-                    }
-            );
-
-            var nowTs = new Timestamp(System.currentTimeMillis());
-            electionRepository.verifyLiveInOrg(cmd.electionId(), orgId, ElectionStatus.LIVE, nowTs)
-                    .orElseThrow(() -> new IllegalStateException("Election not live / not in org / outside window"));
-
-            candidateRepository.findByCandidateIdAndElectionElectionId(cmd.candidateId(), cmd.electionId())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid candidate for election"));
-
+            //save the vote and flip hasVoted=true
             Vote vote = Vote.builder()
                     .id(UUID.randomUUID())
                     .orgId(orgId)
@@ -136,12 +152,16 @@ public class VotingService implements IVotingService {
                     "orgId", orgId
             );
 
+            log.info("vote payload: {}", payload);
+
+
             outbox.save(OutBox.builder()
                     .eventType("voting.vote.cast")
                     .aggregateType("Vote")
                     .aggregateId(vote.getId())
                     .payload(om.writeValueAsString(payload))
                     .createdAt(Timestamp.from(Instant.now()))
+                    .voteHash(getHash.hashVote(vote))
                     .build());
 
             emitter.emit(
@@ -164,13 +184,9 @@ public class VotingService implements IVotingService {
                     "INFO",
                     1
             );
-
             return new VoteAckDTO(vote.getId(), "ACCEPTED", "NEW_VOTE");
-
-        } catch (IllegalArgumentException e) {
-            return new VoteAckDTO(null, "ACCEPTED", "IDEMPOTENT");
         } catch (Exception e) {
-            log.error("Failed to cast vote for voter {} in election {}", voterId, cmd.electionId(), e);
+            log.error("failed to cast vote for voter: {} in election: {}", voterId, cmd.electionId(), e);
             throw new RuntimeException(e);
         }
     }
@@ -183,4 +199,3 @@ public class VotingService implements IVotingService {
         }
     }
 }
-
