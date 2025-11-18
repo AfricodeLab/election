@@ -40,6 +40,9 @@ public interface ElectionVoterRepository extends JpaRepository<ElectionVoter, UU
     Optional<ElectionVoter> lockByIds(@Param("electionId") UUID electionId,
                                       @Param("voterId") UUID voterId);
 
+    @Query("select ev from ElectionVoter ev where ev.voter.voterId = :voterId and ev.election.electionId = :electionId")
+    Optional<ElectionVoter> findByVoterIdAndElectionId(UUID voterId, UUID electionId);
+
 
     // Optional: quick assignment check without loading the entity
 /*    default boolean isAssigned(UUID electionId, UUID voterId) {

@@ -387,11 +387,10 @@ public class ElectionService implements IElectionService {
     public Page<ElectionDTO> getLiveElectionForVoterOrg(HttpServletRequest httpServletRequest, Pageable pageable) {
         String token = httpServletRequest.getHeader("Authorization").substring(7);
         //I need the voterId and the org Id
-        UUID voterId = UUID.fromString(jwtService.extractVoterId(token));
         UUID voterOrgId = UUID.fromString(jwtService.extractVoterOrgId(token));
 
         List<ElectionDTO> assignedElections = electionRepository.findLiveByOrgAndAssigned(
-                        voterOrgId, voterId, ElectionStatus.LIVE, Timestamp.from(Instant.now())
+                        voterOrgId, ElectionStatus.LIVE, Timestamp.from(Instant.now())
                 ).stream()
                 .map(electionMapper::entityToDto)
                 .toList();

@@ -48,4 +48,13 @@ public class Vote {
 
     @Column(name = "cast_at", nullable = false)
     private Instant castAt;
+
+/*    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumns({
+            @JoinColumn(name = "election_id", referencedColumnName = "election_id", insertable = false, updatable = false),
+            @JoinColumn(name = "voter_id", referencedColumnName = "voter_id", insertable = false, updatable = false)
+    })
+    private ElectionVoter electionVoter;*/
 }
+//todo validate that every vote is from a valid voter
+//todo validate that every vote is a valid voter; tag the api or the outbox

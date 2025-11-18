@@ -2,7 +2,6 @@ package com.brandedhustlers.electionbackend.chain.service;
 
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
@@ -20,7 +19,7 @@ public class AnchorScheduler {
         this.anchorService = anchorService;
     }
 
-    @Scheduled(fixedDelay = 30000)
+//    @Scheduled(fixedDelay = 10000)
     public void tick() {
         Timestamp nowTs = Timestamp.from(Instant.now());
         elections.findLive(nowTs).forEach(e ->
@@ -28,5 +27,4 @@ public class AnchorScheduler {
         log.info("pushing anchor to chain....");
     }
 
-    //todo
 }

@@ -10,22 +10,17 @@ import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
-import com.brandedhustlers.electionbackend.voter.domain.ElectionVoter;
-import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
-import com.brandedhustlers.electionbackend.voter.dto.AssignVotersCmd;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.VoterDTO;
 import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import com.brandedhustlers.electionbackend.voter.mapper.VoterMapper;
 import com.brandedhustlers.electionbackend.voter.repository.ElectionVoterRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
-import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -127,7 +122,7 @@ public class VoterService implements IVoterService {
         return List.of();
     }
 
-    @Override
+   /* @Override
     @Transactional
     public void assignToElection(UUID orgId, AssignVotersCmd cmd) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
@@ -212,7 +207,7 @@ public class VoterService implements IVoterService {
                 1
         );
     }
-
+*/
 
     private boolean authorityCheck(UUID appUserId, PermissionType allowedPermission) {
         AppUser updatingUser = appUserRepository.findById(appUserId)
