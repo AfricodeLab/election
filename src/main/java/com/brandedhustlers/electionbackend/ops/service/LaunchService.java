@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 
 /**
@@ -190,12 +191,33 @@ public class LaunchService {
             throw new IllegalStateException("Cannot attach on COMPLETED");
         }
 
-        for (UUID eid : electionIds) {
-            LaunchElectionId id = new LaunchElectionId(launchId, eid);
-            links.findById(id)
-                    .ifPresentOrElse(le -> { /* already attached → idempotent no-op */ }, () -> links.save(LaunchElection.builder().id(id).build()));
+        //pre-build composite IDs
+        List<LaunchElectionId> linkIds = electionIds.stream()
+                .map(eid -> new LaunchElectionId(launchId, eid))
+                .toList();
 
-        }
+        //fetch all existing links in a single query
+        Set<LaunchElectionId> existingLinks = links.findAllById(linkIds).stream()
+                .map(LaunchElection::getId)
+                .collect(Collectors.toSet());
+
+        //save missing links in batch
+        List<LaunchElection> toSave = linkIds.stream()
+                .filter(id -> !existingLinks.contains(id))
+                .map(id -> LaunchElection.builder().id(id).build())
+                .toList();
+        links.saveAll(toSave); // batch insert
+
+        //fetch all elections in a single query
+        List<Election> elections = electionRepository.findAllById(electionIds);
+
+        //set the launch on all elections
+        elections.forEach(e -> e.setLaunch(l));
+
+        //save all elections in batch
+        electionRepository.saveAll(elections);
+
+
         UUID actorId = actor.getAppUserId();
         String actorName = actor.getFirstName();
         String actorRole = actor.getUserRole().name();

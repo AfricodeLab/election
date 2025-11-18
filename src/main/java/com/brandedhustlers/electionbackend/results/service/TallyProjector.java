@@ -49,3 +49,5 @@ public class TallyProjector {
         // TODO push websocket updateStation via RealtimeGateway
     }
 }
+
+//todo how can I let the voter vote again if the vote transaction rolls back
