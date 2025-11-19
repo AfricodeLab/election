@@ -17,7 +17,9 @@ public class ElectionbackendApplication {
         System.setProperty("CLOUDINARY_NAME", dotenv.get("CLOUDINARY_NAME"));
         System.setProperty("CLOUDINARY_API_SECRET", dotenv.get("CLOUDINARY_API_SECRET"));
         System.setProperty("CLOUDINARY_API_KEY", dotenv.get("CLOUDINARY_API_KEY"));
+
         System.setProperty("JWT_SECRET", dotenv.get("JWT_SECRET"));
+        System.setProperty("VOTE_SALT", dotenv.get("VOTE_SALT"));
 
         System.setProperty("SPRING_MAIL_USERNAME", dotenv.get("SPRING_MAIL_USERNAME"));
         System.setProperty("SPRING_MAIL_PASSWORD", dotenv.get("SPRING_MAIL_PASSWORD"));
@@ -30,6 +32,7 @@ public class ElectionbackendApplication {
         System.setProperty("RABBITMQ_PORT", dotenv.get("RABBITMQ_PORT"));
         System.setProperty("RABBITMQ_USERNAME", dotenv.get("RABBITMQ_USERNAME"));
         System.setProperty("RABBITMQ_PASSWORD", dotenv.get("RABBITMQ_PASSWORD"));
+
 		SpringApplication.run(ElectionbackendApplication.class, args);
 	}
 

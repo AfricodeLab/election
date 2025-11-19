@@ -104,6 +104,7 @@ public class VotingService implements IVotingService {
                     election,
                     null,
                     null,
+                    Timestamp.from(Instant.now()),
                     false
             );
             evRepository.save(newVoter);
@@ -137,6 +138,9 @@ public class VotingService implements IVotingService {
                     .electionId(cmd.electionId())
                     .candidateId(cmd.candidateId())
                     .voterId(voterId)
+                    .deviceId(null)
+                    .proofRef(null)
+                    .txId(null)
                     .dedupeKey(dedupeKey)
                     .castAt(Instant.now())
                     .build();
@@ -146,7 +150,7 @@ public class VotingService implements IVotingService {
             evRepo.save(ev);
 
             Map<String, UUID> payload = Map.of(
-                    "voteId", vote.getId(),
+                    "id", vote.getId(),
                     "electionId", vote.getElectionId(),
                     "candidateId", vote.getCandidateId(),
                     "orgId", orgId
