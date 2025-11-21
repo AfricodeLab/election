@@ -1,0 +1,1 @@
+web: -Xms256m -Xmx256m -Xss512k -Dserver.port=$PORT -jar target/*.jar
