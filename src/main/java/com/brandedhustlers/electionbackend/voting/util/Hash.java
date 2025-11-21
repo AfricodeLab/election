@@ -3,7 +3,6 @@ package com.brandedhustlers.electionbackend.voting.util;
 import com.brandedhustlers.electionbackend.voting.domain.Vote;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -14,11 +13,10 @@ import java.security.MessageDigest;
 public class Hash {
 
     private final ObjectMapper objectMapper;
-    private final String salt;
+    private final String salt = System.getenv("VOTE_SALT");
 
-    public Hash(ObjectMapper objectMapper, @Value("${vote.hash.salt}") String salt) {
+    public Hash(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-        this.salt = salt;
     }
 
     public String hashVote(Vote vote) {
