@@ -34,6 +34,15 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
                                  @Param("status") ElectionStatus status,
                                  @Param("now") Timestamp now);
 
+    @Query("select e.organization.organizationId from Election e where e.electionId = :electionId")
+    UUID findOrgId(UUID electionId);
+
+    @Query("""
+               select e from Election e
+               where e.electionStatus = 'LIVE'
+            """)
+    List<Election> findLive(Timestamp now);
+
 //    @Query("""
 //              select e from Election e
 //              join ElectionVoter ev on ev.id.electionId = e.electionId
@@ -52,30 +61,26 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
     //remove timestamp checks for now
     @Query("""
               select e from Election e
-              join ElectionVoter ev on ev.id.electionId = e.electionId
               where e.organization.organizationId = :orgId
                 and e.electionStatus = :status
-                and ev.id.voterId = :voterId
             """)
     List<Election> findLiveByOrgAndAssigned(@Param("orgId") UUID orgId,
-                                            @Param("voterId") UUID voterId,
                                             @Param("status") ElectionStatus status,
                                             @Param("now") Timestamp now);
 
-/*
-    @Query("""
+/*    @Query("""
               select e from Election e
               where e.electionId = :electionId
                 and e.organization.organizationId = :orgId
                 and e.electionStatus = :status
                 and e.electionStartTime <= :now
                 and e.electionEndTime >= :now
+                and e.deleteYn = 'N'
             """)
     Optional<Election> verifyLiveInOrg(@Param("electionId") UUID electionId,
                                        @Param("orgId") UUID orgId,
                                        @Param("status") ElectionStatus status,
-                                       @Param("now") Timestamp now);
-*/
+                                       @Param("now") Timestamp now);*/
 
     @Query("""
               select e from Election e
@@ -87,4 +92,7 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
                                        @Param("orgId") UUID orgId,
                                        @Param("status") ElectionStatus status,
                                        @Param("now") Timestamp now);
+
+    @Query("select e from Election e where e.electionId = :electionId and e.deleteYn = 'N'")
+    Optional<Election> findByElectionId(UUID electionId);
 }

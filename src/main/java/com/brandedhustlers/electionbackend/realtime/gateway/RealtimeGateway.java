@@ -12,7 +12,7 @@ public class RealtimeGateway {
     }
 
     public void sendResultsUpdate(String electionId, Object payload) {
-        ws.convertAndSend("/topic" + electionId, payload);
+        ws.convertAndSend("/election/results" + electionId, payload);
     }
 
     public void sendDeviceStatus(String stationId, Object payload) {

@@ -6,8 +6,6 @@ import com.brandedhustlers.electionbackend.voter.dto.OtpSendRequest;
 import com.brandedhustlers.electionbackend.voter.dto.OtpSendResponse;
 import com.brandedhustlers.electionbackend.voter.service.VerificationService;
 import jakarta.mail.MessagingException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -18,24 +16,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/verification")
 public class VerificationController {
     private final VerificationService service;
-    private final HttpServletRequest servletRequest;
 
-    public VerificationController(VerificationService service,
-                                  HttpServletRequest servletRequest) {
+    public VerificationController(VerificationService service) {
         this.service = service;
-        this.servletRequest = servletRequest;
     }
 
     @PostMapping("/send")
-    public ResponseEntity<OtpSendResponse> send(@RequestBody OtpSendRequest req,
-                                                HttpSession session) throws MessagingException {
+    public ResponseEntity<OtpSendResponse> send(@RequestBody OtpSendRequest req) throws MessagingException {
         return ResponseEntity.accepted().body(service.sendOtp(req));
     }
 
     @PostMapping("/confirm")
     public ResponseEntity<OtpConfirmResponse> confirm(@RequestBody OtpConfirmRequest req) {
-
-        return ResponseEntity.ok(service.confirmOtp(req, servletRequest));
+        return ResponseEntity.ok(service.confirmOtp(req));
     }
 
 }

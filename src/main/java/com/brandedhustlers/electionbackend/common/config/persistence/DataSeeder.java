@@ -110,7 +110,7 @@ public class DataSeeder implements CommandLineRunner {
                 PermissionType.ADD_TAX, PermissionType.EDIT_TAX, PermissionType.DELETE_TAX, PermissionType.VIEW_TAX,
                 PermissionType.ADD_REPORTS, PermissionType.EDIT_REPORTS, PermissionType.DELETE_REPORTS, PermissionType.VIEW_REPORTS,
                 PermissionType.ADD_SETTINGS, PermissionType.EDIT_SETTINGS, PermissionType.DELETE_SETTINGS, PermissionType.VIEW_SETTINGS,
-                PermissionType.EDIT_ELECTIONS
+                PermissionType.EDIT_ELECTIONS, PermissionType.VIEW_RESULTS
         );
 
         Set<Permission> auditorSet = permSet(perms,

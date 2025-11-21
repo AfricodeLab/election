@@ -1,12 +1,8 @@
 package com.brandedhustlers.electionbackend.voter.domain;
 
-import jakarta.persistence.EmbeddedId;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import com.brandedhustlers.electionbackend.election.domain.Election;
+import jakarta.persistence.*;
+import lombok.*;
 
 import java.sql.Timestamp;
 import java.util.UUID;
@@ -20,13 +16,26 @@ import java.util.UUID;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class ElectionVoter {
     @EmbeddedId
     private ElectionVoterId id;
 
+    @MapsId("voterId")
+    @JoinColumn(name = "voter_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Voter voter;
+
+    @MapsId("electionId")
+    @JoinColumn(name = "election_id")
+    @ManyToOne(fetch = FetchType.LAZY)
+    private Election election;
+
     private UUID stationId;
 
     private Timestamp verifiedAt;
+
+    private Timestamp votedAt;
 
     private boolean hasVoted;
 }

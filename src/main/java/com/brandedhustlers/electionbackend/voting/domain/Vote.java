@@ -3,7 +3,7 @@ package com.brandedhustlers.electionbackend.voting.domain;
 import jakarta.persistence.*;
 import lombok.*;
 
-import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.UUID;
 
 @Entity
@@ -31,7 +31,7 @@ public class Vote {
     @Column(name = "candidate_id", nullable = false)
     private UUID candidateId;
 
-    @Column(name = "voter_id")
+    @Column(name = "voter_id", unique = true)
     private UUID voterId; // nullable for anon mode
 
     @Column(name = "device_id")
@@ -47,5 +47,14 @@ public class Vote {
     private String txId;
 
     @Column(name = "cast_at", nullable = false)
-    private Timestamp castAt;
+    private Instant castAt;
+
+/*    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumns({
+            @JoinColumn(name = "election_id", referencedColumnName = "election_id", insertable = false, updatable = false),
+            @JoinColumn(name = "voter_id", referencedColumnName = "voter_id", insertable = false, updatable = false)
+    })
+    private ElectionVoter electionVoter;*/
 }
+//todo validate that every vote is from a valid voter
+//todo validate that every vote is a valid voter; tag the api or the outbox

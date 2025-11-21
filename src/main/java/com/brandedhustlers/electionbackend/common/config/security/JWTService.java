@@ -6,7 +6,6 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
-import io.github.cdimascio.dotenv.Dotenv;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -26,9 +25,7 @@ import java.util.function.Function;
 
 @Service
 public class JWTService {
-    Dotenv dotenv = Dotenv.configure().load();
-
-    private final String secretKey = dotenv.get("JWT_SECRET");
+    private final String secretKey = System.getenv("JWT_SECRET");
     private final AppUserRepository appUserRepository;
     private final VoterRepository voterRepository;
 
@@ -240,7 +237,6 @@ public class JWTService {
     private String getTokenFromAuthorizationHeader(HttpServletRequest request) {
         final String authorizationHeader = request.getHeader("Authorization");
         if (authorizationHeader != null && authorizationHeader.startsWith("Bearer ")) {
-            System.out.println("auth header: " + authorizationHeader);
             return authorizationHeader.substring(7); // Remove "Bearer " prefix
         }
         return null;

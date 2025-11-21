@@ -22,16 +22,15 @@ public class S3FileUploadService {
 
     public UploadFileResponse uploadFile(String key, MultipartFile file) throws IOException {
         ObjectMetadata metadata = new ObjectMetadata();
-        metadata.setContentType(key.toString());
+        metadata.setContentType(key);
         metadata.setContentLength(file.getSize());
 
-        System.out.println("file metadata: " + metadata);
 
         PutObjectRequest putObjectRequest = new PutObjectRequest(bucketName, key, file.getInputStream(), metadata);
         PutObjectResult result = amazonS3.putObject(putObjectRequest);
         return new UploadFileResponse(
                 file.getOriginalFilename(),
-                key.toString(),
+                key,
                 file.getContentType(),
                 result.getETag(),
                 file.getSize(),
