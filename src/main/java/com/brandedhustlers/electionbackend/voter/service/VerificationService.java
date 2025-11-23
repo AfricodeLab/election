@@ -10,6 +10,7 @@ import com.brandedhustlers.electionbackend.voter.dto.OtpSendResponse;
 import com.brandedhustlers.electionbackend.voter.repository.VerificationTokenRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import jakarta.mail.MessagingException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.NoSuchElementException;
 
+@Slf4j
 @Service
 public class VerificationService {
     private final VoterRepository voters;
@@ -56,6 +58,7 @@ public class VerificationService {
 
 
         String otp = generateOtp6();
+        log.info("otp: {}", otp);
         String hash = sha256(otp);
 
 

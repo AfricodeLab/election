@@ -24,12 +24,14 @@ public class OutBoxService implements OutBoxRelay {
     private final OutBoxRepository outbox;
     private final RabbitTemplate rabbit;
     private final ObjectMapper objectMapper;
-    private final Hash getHash;
+    private final Hash getHash;  // Salt is already in Hash class
     private final VoteRepository voteRepository;
 
     public OutBoxService(OutBoxRepository outbox,
                          RabbitTemplate rabbit,
-                         ObjectMapper objectMapper, Hash getHash, VoteRepository voteRepository) {
+                         ObjectMapper objectMapper,
+                         Hash getHash,
+                         VoteRepository voteRepository) {
         this.outbox = outbox;
         this.rabbit = rabbit;
         this.objectMapper = objectMapper;
@@ -44,28 +46,34 @@ public class OutBoxService implements OutBoxRelay {
         List<OutBox> batch = outbox.findTopByPublishedAtIsNull();
         for (OutBox o : batch) {
             try {
-                // Deserialize payload back to Vote
-                Vote vote = objectMapper.readValue(o.getPayload(), Vote.class);
+                log.info("Processing outbox entry {} for vote {}", o.getId(), o.getAggregateId());
 
-                Vote tableVote = voteRepository.findById(vote.getId())
-                        .orElseThrow(() -> new IllegalArgumentException("vote not found"));
+                Vote tableVote = voteRepository.findById(o.getAggregateId())
+                        .orElseThrow(() -> new IllegalArgumentException("vote not found: " + o.getAggregateId()));
 
-                // Recompute hash from the current state
-                String outboxVoteHash = getHash.hashVote(vote);
                 String currentVoteHash = getHash.hashVote(tableVote);
 
-                if (!outboxVoteHash.equals(currentVoteHash)) {
-                    log.warn("Vote {} has changed since outbox entry created, skipping", vote.getId());
+                if (!o.getVoteHash().equals(currentVoteHash)) {
+                    log.warn("Vote {} has changed since outbox entry created. Expected hash: {}, Current hash: {}",
+                            o.getAggregateId(), o.getVoteHash(), currentVoteHash);
                     o.setPublishStatus(PublishStatus.FAILED_VALIDATION);
                     o.setFailedValidationAt(Timestamp.from(Instant.now()));
+                    outbox.save(o);
                     continue;
                 }
 
                 rabbit.convertAndSend(RabbitMQConfig.VOTING_VOTE_CAST, o.getPayload());
                 o.setPublishedAt(Timestamp.from(Instant.now()));
+                o.setFailedValidationAt(null);
+                o.setPublishStatus(PublishStatus.SUCCESS);
                 outbox.save(o);
+
+                log.info("Successfully published vote {} from outbox entry {}",
+                        o.getAggregateId(), o.getId());
+
             } catch (Exception e) {
-                log.error("Failed to publish outbox entry {}", o.getId(), e);
+                log.error("Failed to publish outbox entry {} for vote {}",
+                        o.getId(), o.getAggregateId(), e);
             }
         }
     }

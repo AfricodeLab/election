@@ -35,5 +35,7 @@ public class ElectionVoter {
 
     private Timestamp verifiedAt;
 
+    private Timestamp votedAt;
+
     private boolean hasVoted;
 }
