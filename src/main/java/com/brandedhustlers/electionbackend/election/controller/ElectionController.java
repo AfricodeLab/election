@@ -7,8 +7,10 @@ import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
+import com.brandedhustlers.electionbackend.election.dto.UpdateCandidateCmd;
 import com.brandedhustlers.electionbackend.election.dto.UpdateElection;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
+import com.brandedhustlers.electionbackend.election.service.CandidateService;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,14 +30,16 @@ public class ElectionController {
     private final ObjectMapper objectMapper;
     private final AppUserRepository appUserRepository;
     private final GetUser getUser;
+    private final CandidateService candidateService;
 
     public ElectionController(ElectionService electionService,
                               ObjectMapper objectMapper,
-                              AppUserRepository appUserRepository, GetUser getUser) {
+                              AppUserRepository appUserRepository, GetUser getUser, CandidateService candidateService) {
         this.electionService = electionService;
         this.objectMapper = objectMapper;
         this.appUserRepository = appUserRepository;
         this.getUser = getUser;
+        this.candidateService = candidateService;
     }
 
 
@@ -88,5 +92,17 @@ public class ElectionController {
     @GetMapping("/live")
     public ResponseEntity<?> live(HttpServletRequest httpServletRequest, Pageable pageable) {
         return new ResponseEntity<>(electionService.getLiveElectionForVoterOrg(httpServletRequest, pageable), HttpStatus.OK);
+    }
+
+    @PutMapping("/update-candidate/{candidateId}")
+    public ResponseEntity<?> updateCandidateDuringLiveElection(@RequestBody UpdateCandidateCmd updateCandidateCmd,
+                                                               @PathVariable UUID candidateId){
+        AppUser admin = appUserRepository.findById(getUser.getCurrentAuthenticatedUserId())
+                .orElseThrow(() -> new UserNotFound("Invalid org admin not found."));
+        return new ResponseEntity<>(candidateService.updateCandidate(
+                candidateId,
+                updateCandidateCmd,
+                admin.getAppUserId()
+        ), HttpStatus.OK);
     }
 }

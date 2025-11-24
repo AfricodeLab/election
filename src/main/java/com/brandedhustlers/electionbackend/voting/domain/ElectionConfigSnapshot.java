@@ -22,7 +22,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "election_config_snapshot", indexes = {
         @Index(name = "idx_config_snapshot_election", columnList = "election_id, created_at")
-})
+}, schema = "voting")
 @Getter
 @Setter
 @NoArgsConstructor

@@ -34,6 +34,8 @@ public class Candidate {
     @Column(columnDefinition = "TEXT")
     private String manifesto;
 
+    private Integer candidatePosition;
+
     private String candidatePhotoURL;
 
     private LocalDate dateOfBirth;

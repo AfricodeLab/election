@@ -74,12 +74,7 @@ public class OutBox {
      */
     @Column(name = "anchored_at")
     private Timestamp anchoredAt;
-}
 
-//todo anything in the outbox, that is valid
-//todo the payload should also have the voter id to allow for validation
-//todo for final results the tally table would be updated,
-//beause of the validation of the voter side, the user belongs to the org,
-//todo check if I can detect which vote does not match
-//todo if the vote does not match what's on the chain,
+    private UUID electionId;
+}
 

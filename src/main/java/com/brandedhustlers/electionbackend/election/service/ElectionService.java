@@ -26,8 +26,11 @@ import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.voting.service.ConfigAnchorService;
+import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -44,6 +47,7 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class ElectionService implements IElectionService {
     private final ElectionRepository electionRepository;
     private final JWTService jwtService;
@@ -54,6 +58,8 @@ public class ElectionService implements IElectionService {
     private final AuditEmitter auditEmitter;
     private final CandidateMapper candidateMapper;
     private final GetUser getUser;
+    private final ConfigSnapshotService configSnapshotService;
+    private final ConfigAnchorService configAnchorService;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -63,7 +69,7 @@ public class ElectionService implements IElectionService {
                            CandidateRepository candidateRepository,
                            AuditEmitter auditEmitter,
                            CandidateMapper candidateMapper,
-                           GetUser getUser) {
+                           GetUser getUser, ConfigSnapshotService configSnapshotService, ConfigAnchorService configAnchorService) {
         this.electionRepository = electionRepository;
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
@@ -73,6 +79,8 @@ public class ElectionService implements IElectionService {
         this.auditEmitter = auditEmitter;
         this.candidateMapper = candidateMapper;
         this.getUser = getUser;
+        this.configSnapshotService = configSnapshotService;
+        this.configAnchorService = configAnchorService;
     }
 
     @Override
@@ -396,6 +404,48 @@ public class ElectionService implements IElectionService {
                 .toList();
 
         return new PageImpl<>(assignedElections, pageable, assignedElections.size());
+    }
+
+    /**
+     * Transition election to LIVE status.
+     * This is when voting begins.
+     */
+    @Transactional
+    public void transitionToLive(UUID electionId, UUID adminId) {
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() -> new IllegalArgumentException("Election not found"));
+
+        if (election.getElectionStatus() == ElectionStatus.LIVE) {
+            throw new IllegalStateException("Election already live");
+        }
+
+        /**
+         * Step 1: Capture GO_LIVE config snapshot.
+         * This is our baseline for detecting changes later.
+         */
+        configSnapshotService.captureSnapshot(
+                electionId,
+                "GO_LIVE",
+                adminId,
+                "Initial config snapshot at go-live"
+        );
+
+        /**
+         * Step 2: Anchor config to blockchain.
+         * This creates cryptographic proof of what the config was.
+         * (Implementation in next section)
+         */
+        configAnchorService.anchorConfig(electionId);
+
+        /**
+         * Step 3: Update election status.
+         */
+        election.setElectionStatus(ElectionStatus.LIVE);
+        electionRepository.save(election);
+
+        log.info("Election {} transitioned to LIVE, config anchored", electionId);
+
+//        return electionMapper.entityToDto(election);
     }
 
     private boolean authorityCheck(UUID appUserId, PermissionType allowedPermission) {

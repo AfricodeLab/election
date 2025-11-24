@@ -21,7 +21,7 @@ import java.util.UUID;
  * This creates cryptographic proof of "these were the official results."
  */
 @Entity
-@Table(name = "election_results_anchor")
+@Table(name = "election_results_anchor", schema = "voting")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -31,7 +31,7 @@ public class ElectionResultsAnchor {
 
     @Id
     @Column(name = "election_id", nullable = false)
-    private UUID electionId;  // One results anchor per election
+    private UUID electionId;
 
     /**
      * Full results JSON stored locally.
