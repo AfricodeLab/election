@@ -20,7 +20,7 @@ import java.util.UUID;
  * Mismatch = something changed during voting = flag for review.
  */
 @Entity
-@Table(name = "election_config_anchor")
+@Table(name = "election_config_anchor", schema = "voting")
 @Getter
 @Setter
 @NoArgsConstructor
@@ -30,7 +30,7 @@ public class ElectionConfigAnchor {
 
     @Id
     @Column(name = "election_id", nullable = false)
-    private UUID electionId;  // One config anchor per election
+    private UUID electionId;
 
     /**
      * Full config JSON stored locally (not on chain).

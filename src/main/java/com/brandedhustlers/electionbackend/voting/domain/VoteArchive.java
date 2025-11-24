@@ -22,7 +22,7 @@ import java.util.UUID;
 @Table(name = "vote_archive", indexes = {
         @Index(name = "idx_vote_archive_election", columnList = "election_id"),
         @Index(name = "idx_vote_archive_hash", columnList = "vote_hash")
-})
+}, schema = "voting")
 @Getter
 @Setter
 @NoArgsConstructor

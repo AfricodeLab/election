@@ -6,9 +6,9 @@ import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
-import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.brandedhustlers.electionbackend.ops.domain.Launch;
 import com.brandedhustlers.electionbackend.ops.domain.LaunchElection;
 import com.brandedhustlers.electionbackend.ops.domain.LaunchElectionId;
@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
  * LaunchServiceImpl: Implements guarded lifecycle for Launch aggregates and the Launch↔Election linkage.
  * Justification: centralizes invariants (status transitions, org scoping) so controllers remain thin and
  * other modules do not duplicate rules. All writes are transactional to ensure atomic state updates and
- * audit emissions (hook points left as TODOs) happen consistently.
+ * audit emissions happen consistently.
  */
 @Service
 public class LaunchService {
@@ -49,6 +49,7 @@ public class LaunchService {
     private final ElectionRepository electionRepository;
     private final ElectionMapper electionMapper;
     private final GetUser getUser;
+    private final ElectionService electionService;
 
 
     public LaunchService(LaunchRepository launchRepository,
@@ -57,7 +58,7 @@ public class LaunchService {
                          RabbitTemplate rabbitTemplate,
                          AuditEmitter auditEmitter,
                          ElectionRepository electionRepository,
-                         ElectionMapper electionMapper, GetUser getUser) {
+                         ElectionMapper electionMapper, GetUser getUser, ElectionService electionService) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
@@ -66,6 +67,7 @@ public class LaunchService {
         this.electionRepository = electionRepository;
         this.electionMapper = electionMapper;
         this.getUser = getUser;
+        this.electionService = electionService;
     }
 
 
@@ -325,9 +327,8 @@ public class LaunchService {
 
             List<Election> launchElections = l.getElection();
             for(Election election : launchElections){
-                election.setElectionStatus(ElectionStatus.LIVE);
+                electionService.transitionToLive(election.getElectionId(), actor.getAppUserId());
             }
-            electionRepository.saveAll(launchElections);
 
             rabbitTemplate.convertAndSend("notif.email", launchLivePayload);
 
@@ -342,8 +343,6 @@ public class LaunchService {
         }
 
         Launch transition = launchRepository.save(l);
-
-        // TODO: audit.emit("ops.launch.status_changed", {from,to})
 
         UUID actorId = actor.getAppUserId();
         String actorName = actor.getFirstName() + " " + actor.getLastName();

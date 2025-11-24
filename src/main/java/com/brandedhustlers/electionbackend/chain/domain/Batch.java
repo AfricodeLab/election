@@ -46,4 +46,6 @@ public class Batch {
      */
     @Column(name = "vote_count")
     private Integer voteCount;
+
+    private String chainTxId;
 }

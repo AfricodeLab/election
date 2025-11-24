@@ -24,7 +24,7 @@ import java.util.UUID;
         @Index(name = "idx_tampering_election", columnList = "election_id"),
         @Index(name = "idx_tampering_detected", columnList = "detected_at"),
         @Index(name = "idx_tampering_vote", columnList = "vote_id")
-})
+}, schema = "voting")
 @Getter
 @Setter
 @NoArgsConstructor
