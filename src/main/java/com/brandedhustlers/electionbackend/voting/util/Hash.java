@@ -50,7 +50,7 @@ public class Hash {
             String saltedData = json + salt;
             log.debug("Hashing vote: {} (with salt)", vote.getId());
 
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            MessageDigest md = MessageDigest.getInstance("SHA-512");
             byte[] digest = md.digest(saltedData.getBytes(StandardCharsets.UTF_8));
 
             StringBuilder sb = new StringBuilder();
@@ -59,8 +59,8 @@ public class Hash {
             }
             return sb.toString();
         } catch (Exception e) {
-            log.error("Failed to hash vote {}: {}", vote != null ? vote.getId() : "null", e.getMessage(), e);
-            throw new RuntimeException(e);
+            log.error("Failed to hash vote due to an internal error.");
+            throw new RuntimeException(e.getMessage());
         }
     }
 }

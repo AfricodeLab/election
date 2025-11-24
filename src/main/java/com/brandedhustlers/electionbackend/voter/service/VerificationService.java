@@ -58,7 +58,7 @@ public class VerificationService {
 
 
         String otp = generateOtp6();
-        log.info("otp: {}", otp);
+        log.info("otp fpr voter: {}", otp);
         String hash = sha256(otp);
 
 
