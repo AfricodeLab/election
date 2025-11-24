@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.chain.domain;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
@@ -38,4 +39,11 @@ public class Batch {
     private Timestamp anchoredAt;
 
     private Timestamp createdAt;
+
+    /**
+     * Number of votes included in this batch's Merkle tree.
+     * Helps with validation (should match outbox count for this batch).
+     */
+    @Column(name = "vote_count")
+    private Integer voteCount;
 }

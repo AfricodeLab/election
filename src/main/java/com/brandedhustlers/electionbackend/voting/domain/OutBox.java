@@ -46,6 +46,34 @@ public class OutBox {
 
     @Column
     private Timestamp publishedAt; // null until published
+
+    /**
+     * True when this vote has been validated and is waiting to be anchored.
+     * Set by outbox scheduler after successful validation.
+     */
+    @Column(name = "anchor_pending")
+    @Builder.Default
+    private Boolean anchorPending = false;
+
+    /**
+     * True when this vote's hash has been included in a blockchain batch.
+     * Set by anchor scheduler after submitting to chain.
+     */
+    @Column(name = "anchored")
+    @Builder.Default
+    private Boolean anchored = false;
+
+    /**
+     * Links to the Batch that contains this vote's hash.
+     */
+    @Column(name = "batch_id")
+    private UUID batchId;
+
+    /**
+     * When this vote was included in a blockchain batch.
+     */
+    @Column(name = "anchored_at")
+    private Timestamp anchoredAt;
 }
 
 //todo anything in the outbox, that is valid

@@ -59,8 +59,9 @@ public class Hash {
             }
             return sb.toString();
         } catch (Exception e) {
-            log.error("Failed to hash vote due to an internal error.");
-            throw new RuntimeException(e.getMessage());
+            e.printStackTrace();
+            log.error("Failed to hash vote {} due to an internal error: {}", vote.getId(), e.getMessage(), e);
+            throw new RuntimeException("Failed to hash vote: " + vote.getId(), e);
         }
     }
 }

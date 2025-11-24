@@ -86,6 +86,21 @@ public class Election {
     private Launch launch;
 
     private boolean shouldEndAutomatically = true; //if true election will end automatically if the total expected votes is reached
+
+    /**
+     * Set to true when config changes during voting.
+     * Prevents auto-release until admin reviews.
+     */
+    @Column(name = "review_required")
+    @Builder.Default
+    private Boolean reviewRequired = false;
+
+    /**
+     * Human-readable reason why review is needed.
+     * Example: "Candidate name changed during voting"
+     */
+    @Column(name = "review_reason", columnDefinition = "TEXT")
+    private String reviewReason;
 }
 
 //todo: work on voter eligibility, based on age, position, etc, vote and voter is 1 : 1,
