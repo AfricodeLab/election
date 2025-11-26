@@ -95,4 +95,7 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
 
     @Query("select e from Election e where e.electionId = :electionId and e.deleteYn = 'N'")
     Optional<Election> findByElectionId(UUID electionId);
+
+    @Query("select e.organization from Election e where e.electionId = :electionId")
+    Organization getElectionOrganization(UUID electionId);
 }

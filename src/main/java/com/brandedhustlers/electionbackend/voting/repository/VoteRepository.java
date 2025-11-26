@@ -24,4 +24,8 @@ public interface VoteRepository extends JpaRepository<Vote, UUID> {
 
     @Query("select v from Vote v where v.electionId = :electionId and v.castAt BETWEEN :fromTs and :toTs")
     List<Vote> findIdsBetween(UUID electionId, Instant fromTs, Instant toTs);
+
+    long countByElectionId(UUID electionId);
+
+    List<Vote> findByElectionId(UUID electionId);
 }

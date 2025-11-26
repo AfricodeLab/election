@@ -28,5 +28,6 @@ public interface OutBoxRepository extends JpaRepository<OutBox, UUID> {
     // NEW: Count pending anchor votes
     @Query("SELECT COUNT(o) FROM OutBox o WHERE o.electionId = :electionId AND o.anchorPending = true")
     long countByElectionIdAndAnchorPendingTrue(@Param("electionId") UUID electionId);
+
 }
 
