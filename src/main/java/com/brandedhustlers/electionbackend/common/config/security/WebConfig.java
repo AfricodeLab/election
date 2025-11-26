@@ -7,6 +7,8 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+import java.util.List;
+
 @EnableWebMvc
 @Configuration
 public class WebConfig {
@@ -16,7 +18,7 @@ public class WebConfig {
         configuration.addAllowedOriginPattern("*");
         configuration.addAllowedMethod("*");
         configuration.addAllowedHeader("*");
-        configuration.addAllowedOrigin("*");
+        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
         configuration.setAllowCredentials(true);
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
