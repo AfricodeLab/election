@@ -13,6 +13,7 @@ import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.http.ResponseCookie;
@@ -23,11 +24,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.UUID;
 
 @Service
 public class AuthService implements IAuthService{
@@ -38,6 +37,7 @@ public class AuthService implements IAuthService{
     private final CloudinaryService cloudinaryService;
     private final HttpServletRequest request;
     private final RoleRepository roleRepository;
+    private final GetUser getUser;
 
     public AuthService(JWTService jwtService,
                        AppUserRepository appUserRepository,
@@ -45,7 +45,8 @@ public class AuthService implements IAuthService{
                        AuthenticationManager authenticationManager,
                        CloudinaryService cloudinaryService,
                        HttpServletRequest request,
-                       RoleRepository roleRepository) {
+                       RoleRepository roleRepository,
+                       GetUser getUser) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
@@ -53,6 +54,7 @@ public class AuthService implements IAuthService{
         this.cloudinaryService = cloudinaryService;
         this.request = request;
         this.roleRepository = roleRepository;
+        this.getUser = getUser;
     }
 
     @Override
@@ -65,7 +67,8 @@ public class AuthService implements IAuthService{
                 .firstName(registrationRequest.firstName())
                 .lastName(registrationRequest.lastName())
                 .appUserEmail(registrationRequest.email())
-                .organizationName(registrationRequest.organizationName())
+                .username(registrationRequest.username())
+                .organizationName(registrationRequest.organizationName())    //redo this entire method
                 .password(passwordEncoder.encode(registrationRequest.password()))
                 .userRole(UserRole.OBSERVER)
                 .build();
@@ -109,10 +112,8 @@ public class AuthService implements IAuthService{
     }
 
     @Override
-    public CreateUserResponse createUser(CreateUserRequest createUserRequest, MultipartFile userImage) throws IOException {
-        UUID createdBy = jwtService.extractAppUserId(request);
-        AppUser creator = appUserRepository.findById(createdBy)
-                .orElseThrow(() -> new UserNotFound("creating user account does not exist"));
+    public CreateUserResponse createUser(CreateUserRequest createUserRequest, MultipartFile userImage) {
+        AppUser creator = getUser.getCurrentAuthenticatedUser();
 
         Role userRole = roleRepository.findByRoleName(createUserRequest.userRole())
                 .orElseThrow(() -> new InvalidRole("Role not found"));
