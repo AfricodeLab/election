@@ -4,5 +4,6 @@ public enum ElectionStatus {
     DRAFT,
     UPCOMING,
     LIVE,
-    ENDED
+    ENDED,
+    RESULTS_RELEASED
 }

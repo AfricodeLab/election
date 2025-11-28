@@ -443,6 +443,7 @@ public class ElectionService implements IElectionService {
         election.setElectionStatus(ElectionStatus.LIVE);
         electionRepository.save(election);
 
+        //todo emit election live even so participants reverive email
         log.info("Election {} transitioned to LIVE, config anchored", electionId);
 
 //        return electionMapper.entityToDto(election);

@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.election.controller;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
@@ -10,10 +11,12 @@ import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
 import com.brandedhustlers.electionbackend.election.dto.UpdateCandidateCmd;
 import com.brandedhustlers.electionbackend.election.dto.UpdateElection;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
+import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.election.service.CandidateService;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -21,8 +24,10 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/election")
 public class ElectionController {
@@ -31,15 +36,17 @@ public class ElectionController {
     private final AppUserRepository appUserRepository;
     private final GetUser getUser;
     private final CandidateService candidateService;
+    private final ElectionRepository electionRepository;
 
     public ElectionController(ElectionService electionService,
                               ObjectMapper objectMapper,
-                              AppUserRepository appUserRepository, GetUser getUser, CandidateService candidateService) {
+                              AppUserRepository appUserRepository, GetUser getUser, CandidateService candidateService, ElectionRepository electionRepository) {
         this.electionService = electionService;
         this.objectMapper = objectMapper;
         this.appUserRepository = appUserRepository;
         this.getUser = getUser;
         this.candidateService = candidateService;
+        this.electionRepository = electionRepository;
     }
 
 
@@ -102,7 +109,56 @@ public class ElectionController {
         return new ResponseEntity<>(candidateService.updateCandidate(
                 candidateId,
                 updateCandidateCmd,
-                admin.getAppUserId()
+                admin
         ), HttpStatus.OK);
+    }
+
+    @PostMapping("/live/{electionId}")
+    public ResponseEntity<?> bringElectionLive(@PathVariable UUID electionId) {
+        try {
+            // Get authenticated user
+            AppUser user = getUser.getCurrentAuthenticatedUser();
+
+            // Verify admin role
+            if (!user.getUserRole().equals(UserRole.ADMIN)) {
+                return ResponseEntity.status(403).body(Map.of(
+                        "status", "forbidden",
+                        "message", "Only admins can bring elections live"
+                ));
+            }
+
+            // Verify org access (admin must belong to election's org)
+            Organization electionOrg = electionRepository.getElectionOrganization(electionId);
+            if (!user.getAppUserOrganization().equals(electionOrg)) {
+                return ResponseEntity.status(403).body(Map.of(
+                        "status", "forbidden",
+                        "message", "You cannot manage elections from other organizations"
+                ));
+            }
+
+            // Transition to live (anchors config to blockchain)
+            electionService.transitionToLive(electionId, user.getAppUserId());
+
+            log.info("Election {} brought live by admin {}", electionId, user.getAppUserId());
+
+            return ResponseEntity.ok(Map.of(
+                    "status", "success",
+                    "message", "Election is now live"));
+
+        } catch (IllegalStateException e) {
+            // Election already live or invalid status transition
+            log.warn("Cannot bring election {} live: {}", electionId, e.getMessage());
+            return ResponseEntity.status(400).body(Map.of(
+                    "status", "error",
+                    "message", e.getMessage()
+            ));
+
+        } catch (Exception e) {
+            log.error("Failed to bring election {} live", electionId, e);
+            return ResponseEntity.status(500).body(Map.of(
+                    "status", "error",
+                    "message", "Internal server error: " + e.getMessage()
+            ));
+        }
     }
 }

@@ -61,11 +61,19 @@ public class ConfigAnchorService {
              * - Candidate list (id, name, position)
              * - Eligibility rules (if any)
              */
+            if (configAnchorRepo.existsById(electionId)) {
+                log.warn("Config already anchored for election {}", electionId);
+                return configAnchorRepo.findById(electionId).orElseThrow();
+            }
+
             Election election = electionRepo.findById(electionId)
                     .orElseThrow(() -> new IllegalArgumentException("Election not found"));
 
             List<Candidate> candidates = candidateRepo.findByElectionElectionId(electionId);
 
+            /**
+             * Build canonical config DTO.
+             */
             ElectionConfigDTO config = ElectionConfigDTO.builder()
                     .electionId(election.getElectionId())
                     .orgId(election.getOrganization().getOrganizationId())
@@ -77,24 +85,18 @@ public class ConfigAnchorService {
                                     c.getCandidateId(),
                                     c.getCandidateName(),
                                     c.getCandidatePosition()
-                            )).toList())
+                            ))
+                            .toList())
                     .build();
 
-            /**
-             * Step 2: Serialize to JSON (canonical format).
-             * We use sorted keys to ensure deterministic hashing.
-             */
             String configJson = objectMapper.writeValueAsString(config);
             String configHash = sha256Hex(configJson);
 
             log.info("Anchoring config for election {}, hash: {}", electionId, configHash);
 
             /**
-             * Step 3: Submit to blockchain.
-             * Only the hash goes on-chain, full JSON stays local.
-             *
-             * This calls the new ConfigContract:AnchorConfig method
-             * (we'll create this in Part 3).
+             * REAL BLOCKCHAIN CALL HERE.
+             * Submit to ConfigContract:AnchorConfig.
              */
             String txId = chain.anchorConfig(
                     election.getElectionId().toString(),
@@ -104,8 +106,7 @@ public class ConfigAnchorService {
             );
 
             /**
-             * Step 4: Store anchor record locally.
-             * This links the local config JSON to the blockchain tx.
+             * Store anchor record locally.
              */
             ElectionConfigAnchor anchor = ElectionConfigAnchor.builder()
                     .electionId(electionId)
@@ -126,6 +127,71 @@ public class ConfigAnchorService {
             throw new RuntimeException("Config anchoring failed", e);
         }
     }
+
+    /**
+     * Verify if current config matches anchored config.
+     * Returns null if match, or a diff report if mismatch.
+     */
+    @Transactional(readOnly = true)
+    public ConfigValidationResult validateConfig(UUID electionId) {
+        try {
+            // Get anchored config
+            ElectionConfigAnchor anchor = configAnchorRepo.findById(electionId)
+                    .orElseThrow(() -> new IllegalStateException("No config anchor found"));
+
+            // Build current config
+            Election election = electionRepo.findById(electionId).orElseThrow();
+            List<Candidate> candidates = candidateRepo.findByElectionElectionId(electionId);
+
+            ElectionConfigDTO currentConfig = ElectionConfigDTO.builder()
+                    .electionId(election.getElectionId())
+                    .orgId(election.getOrganization().getOrganizationId())
+                    .title(election.getElectionTitle())
+                    .startTime(election.getElectionStartTime())
+                    .endTime(election.getElectionEndTime())
+                    .candidates(candidates.stream()
+                            .map(c -> new ElectionConfigDTO.CandidateInfo(
+                                    c.getCandidateId(),
+                                    c.getCandidateName(),
+                                    c.getCandidatePosition()
+                            ))
+                            .toList())
+                    .build();
+
+            String currentJson = objectMapper.writeValueAsString(currentConfig);
+            String currentHash = sha256Hex(currentJson);
+
+            // Compare hashes
+            if (anchor.getConfigHash().equals(currentHash)) {
+                return new ConfigValidationResult(true, null, null);
+            } else {
+                // Config changed - build diff
+                ElectionConfigDTO anchoredConfig = objectMapper.readValue(
+                        anchor.getConfigJson(),
+                        ElectionConfigDTO.class
+                );
+
+                return new ConfigValidationResult(
+                        false,
+                        anchoredConfig,
+                        currentConfig
+                );
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to validate config for election {}", electionId, e);
+            throw new RuntimeException("Config validation failed", e);
+        }
+    }
+
+    /**
+     * Result of config validation.
+     */
+    public record ConfigValidationResult(
+            boolean matches,
+            ElectionConfigDTO anchoredConfig,
+            ElectionConfigDTO currentConfig
+    ) {}
 
     private String sha256Hex(String input) {
         try {

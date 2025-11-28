@@ -1,9 +1,13 @@
 package com.brandedhustlers.electionbackend.election.service;
 
+import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.domain.Election;
+import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.UpdateCandidateCmd;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
+import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.service.AlertService;
@@ -23,28 +27,35 @@ public class CandidateService {
     private final ElectionRepository electionRepo;
     private final ConfigSnapshotService snapshotService;
     private final AlertService alertService;
+    private final CandidateMapper candidateMapper;
 
     public CandidateService(
             CandidateRepository candidateRepo,
             ElectionRepository electionRepo,
             ConfigSnapshotService snapshotService,
-            AlertService alertService
-    ) {
+            AlertService alertService,
+            CandidateMapper candidateMapper) {
         this.candidateRepo = candidateRepo;
         this.electionRepo = electionRepo;
         this.snapshotService = snapshotService;
         this.alertService = alertService;
+        this.candidateMapper = candidateMapper;
     }
 
     /**
      * Update a candidate. If election is LIVE, restrictions apply.
      */
     @Transactional
-    public Candidate updateCandidate(UUID candidateId, UpdateCandidateCmd cmd, UUID adminId) {
+    public CandidateDTO updateCandidate(UUID candidateId, UpdateCandidateCmd cmd, AppUser admin) {
         Candidate candidate = candidateRepo.findById(candidateId)
                 .orElseThrow(() -> new IllegalArgumentException("Candidate not found"));
 
         Election election = candidate.getElection();
+
+        Organization organization = election.getOrganization();
+        if (admin.getAppUserOrganization().equals(organization)){
+            throw new IllegalArgumentException("Admin with ID: " + admin.getAppUserId() + " is not a member of this org.");
+        }
 
         /**
          * Check if election is currently LIVE (voting in progress).
@@ -71,7 +82,7 @@ public class CandidateService {
                 snapshotService.captureSnapshot(
                         election.getElectionId(),
                         "CHANGE_DETECTED",
-                        adminId,
+                        admin.getAppUserId(),
                         String.format("Candidate candidateName changed: '%s' → '%s'",
                                 candidate.getCandidateName(), cmd.candidateName())
                 );
@@ -130,6 +141,6 @@ public class CandidateService {
             log.info("Candidate {} updated (election not live)", candidateId);
         }
 
-        return candidate;
+        return candidateMapper.entityToDTO(candidate);
     }
 }

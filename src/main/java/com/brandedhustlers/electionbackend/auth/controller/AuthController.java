@@ -4,9 +4,7 @@ import com.brandedhustlers.electionbackend.auth.dto.CreateUserRequest;
 import com.brandedhustlers.electionbackend.auth.dto.LoginRequest;
 import com.brandedhustlers.electionbackend.auth.dto.RegistrationRequest;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
-import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -20,34 +18,29 @@ import java.io.IOException;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
     private final AuthService authService;
-    private final HttpServletRequest servletRequest;
     private final HttpServletResponse servletResponse;
-    private final JWTService jwtService;
     private final ObjectMapper objectMapper;
 
     public AuthController(AuthService authService,
-                          HttpServletRequest request,
                           HttpServletResponse response,
-                          JWTService jwtService, ObjectMapper objectMapper, ObjectMapper objectMapper1) {
+                          ObjectMapper objectMapper) {
         this.authService = authService;
-        this.servletRequest = request;
         this.servletResponse = response;
-        this.jwtService = jwtService;
-        this.objectMapper = objectMapper1;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping("/register-user")
     public ResponseEntity<?> registerUser(
             @Valid @RequestBody RegistrationRequest registrationRequest
             ){
-        return new ResponseEntity<>(authService.register(registrationRequest), HttpStatus.OK);
+        return new ResponseEntity<>(authService.register(registrationRequest), HttpStatus.CREATED);
     }
 
     @PostMapping("/login")
     public ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest request
     ){
-        return  new ResponseEntity<>(authService.login(request, servletResponse), HttpStatus.CREATED);
+        return  new ResponseEntity<>(authService.login(request, servletResponse), HttpStatus.OK);
     }
 
     @PostMapping("/create-user")
@@ -56,6 +49,6 @@ public class AuthController {
             @RequestPart(name = "userImage", required = false)MultipartFile userImage
             ) throws IOException {
         CreateUserRequest request1 = objectMapper.readValue(request,CreateUserRequest.class);
-        return new ResponseEntity<>(authService.createUser(request1, userImage), HttpStatus.OK);
+        return new ResponseEntity<>(authService.createUser(request1, userImage), HttpStatus.CREATED);
     }
 }
