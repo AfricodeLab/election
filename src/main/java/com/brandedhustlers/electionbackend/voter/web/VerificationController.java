@@ -85,8 +85,8 @@ public class VerificationController {
                 } else {
                     incomplete.add(Map.of(
                             "voterId", voter.getVoterId(),
-                            "name", voter.getName(),
-                            "email", voter.getEmail(),
+                            "name", voter.getName() != null ? voter.getName() : "",
+                            "email", voter.getEmail() != null ? voter.getEmail() : "",
                             "missingAttributes", missing
                     ));
                 }

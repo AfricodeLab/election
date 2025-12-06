@@ -131,6 +131,9 @@ public class Election {
         this.updatedAt = Timestamp.from(Instant.now());
         this.createdAt = Timestamp.from(Instant.now());
     }
-}
 
-//todo: work on voter eligibility, based on age, position, etc, vote and voter is 1 : 1,
+    @PreUpdate
+    protected void onUpdate(){
+        this.updatedAt = Timestamp.from(Instant.now());
+    }
+}
