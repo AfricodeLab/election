@@ -6,6 +6,7 @@ import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.election.service.EligibilityService;
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoter;
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
@@ -48,6 +49,7 @@ public class VotingService implements IVotingService {
     private final Hash getHash;
     private final VoteArchiveRepository voteArchive;
     private final AuditEmitter emitter;
+    private final EligibilityService eligibilityService;
 
     private static final Duration STEP_UP_WINDOW = Duration.ofMinutes(15);
 
@@ -61,7 +63,7 @@ public class VotingService implements IVotingService {
                          VoterRepository voterRepository,
                          ElectionVoterRepository evRepository,
                          Hash getHash,
-                         VoteArchiveRepository voteArchive, AuditEmitter emitter) {
+                         VoteArchiveRepository voteArchive, AuditEmitter emitter, EligibilityService eligibilityService) {
         this.votes = votes;
         this.evRepo = evRepo;
         this.candidateRepository = candidateRepository;
@@ -73,6 +75,7 @@ public class VotingService implements IVotingService {
         this.evRepository = evRepository;
         this.getHash = getHash;
         this.emitter = emitter;
+        this.eligibilityService = eligibilityService;
     }
 
     @Override
@@ -93,6 +96,28 @@ public class VotingService implements IVotingService {
 
             if (existingEv.isPresent()) {
                 return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED");
+            }
+
+            /**
+             * Check voter eligibility BEFORE taking row lock.
+             * This is fast and prevents ineligible voters from even attempting to vote.
+             */
+            if (election.getEligibilityPolicy() != null) {
+                EligibilityService.EligibilityResult eligibilityResult =
+                        eligibilityService.evaluate(actor.getAttributes(), election.getEligibilityPolicy());
+
+                if (!eligibilityResult.isAllowed()) {
+                    log.warn("Voter {} ineligible for election {}: {}",
+                            voterId, cmd.electionId(), eligibilityResult.getReason());
+
+                    return new VoteAckDTO(
+                            null,
+                            "REJECTED",
+                            "INELIGIBLE: " + eligibilityResult.getReason()
+                    );
+                }
+
+                log.info("Voter {} passed eligibility check for election {}", voterId, cmd.electionId());
             }
 
             //create the election voter here instead removing load from org admins, tied to the voter entity
@@ -181,6 +206,7 @@ public class VotingService implements IVotingService {
                     .aggregateId(vote.getId())
                     .payload(om.writeValueAsString(payload))
                     .createdAt(Timestamp.from(Instant.now()))
+                    .electionId(vote.getElectionId())
                     .voteHash(voteHash)
                     .anchorPending(false)
                     .anchored(false)

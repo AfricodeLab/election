@@ -23,7 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @RestController
-@RequestMapping("/api/elections")  // Added base path for consistency
+@RequestMapping("/api/v1/elections")  // Added base path for consistency
 @Slf4j
 public class ElectionReleaseController {
 
@@ -303,14 +303,13 @@ public class ElectionReleaseController {
         Organization electionOrg = electionRepository.getElectionOrganization(electionId);
         AppUser admin = getUser.getCurrentAuthenticatedUser();
 
-        if (!admin.getUserRole().equals(UserRole.ADMIN)) {
+        if (!admin.getUserRole().equals(UserRole.SUPER_ADMIN)) {
             throw new IllegalArgumentException("You do not have the authority to access this resource.");
         }
 
-        if (!admin.getAppUserOrganization().equals(electionOrg)) {
-            throw new IllegalArgumentException(
-                    "You do not belong to this organization and cannot access this election.");
-        }
+       /* if (!admin.getAppUserOrganization().equals(electionOrg)) {
+            throw new IllegalArgumentException("You do not belong to this organization and cannot access this election.");
+        }*/ //todo change this to org admin access
 
         return admin;
     }

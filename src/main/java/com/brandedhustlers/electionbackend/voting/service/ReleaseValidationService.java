@@ -1,9 +1,14 @@
 package com.brandedhustlers.electionbackend.voting.service;
 
 import com.brandedhustlers.electionbackend.election.domain.Election;
+import com.brandedhustlers.electionbackend.election.domain.EligibilityPolicy;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.election.service.EligibilityService;
+import com.brandedhustlers.electionbackend.voter.domain.Voter;
+import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import com.brandedhustlers.electionbackend.voting.domain.ElectionConfigSnapshot;
 import com.brandedhustlers.electionbackend.voting.domain.TamperingLog;
+import com.brandedhustlers.electionbackend.voting.domain.Vote;
 import com.brandedhustlers.electionbackend.voting.repository.*;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +30,8 @@ public class ReleaseValidationService {
     private final OutBoxRepository outbox;
     private final TamperingLogRepository tamperingLog;
     private final ConfigAnchorService configAnchorService;
+    private final EligibilityService eligibilityService;
+    private final VoterRepository voterRepo;
 
     public ReleaseValidationService(
             ElectionRepository electionRepo,
@@ -33,7 +40,7 @@ public class ReleaseValidationService {
             VoteRepository voteRepo,
             OutBoxRepository outbox,
             TamperingLogRepository tamperingLog,
-            ConfigAnchorService configAnchorService
+            ConfigAnchorService configAnchorService, EligibilityService eligibilityService, VoterRepository voterRepo
     ) {
         this.electionRepo = electionRepo;
         this.configAnchorRepo = configAnchorRepo;
@@ -42,6 +49,8 @@ public class ReleaseValidationService {
         this.outbox = outbox;
         this.tamperingLog = tamperingLog;
         this.configAnchorService = configAnchorService;
+        this.eligibilityService = eligibilityService;
+        this.voterRepo = voterRepo;
     }
 
     /**
@@ -78,7 +87,12 @@ public class ReleaseValidationService {
         report.addCheck(reviewCheck);
         if (progressCallback != null) progressCallback.accept(reviewCheck);
 
-        // Determine overall status
+        // NEW: Add eligibility re-check
+        ValidationCheck eligibilityCheck = runEligibilityRecheck(electionId);
+        report.addCheck(eligibilityCheck);
+        if (progressCallback != null) progressCallback.accept(eligibilityCheck);
+
+        // Compute overall status
         report.computeOverallStatus();
 
         return report;
@@ -273,6 +287,88 @@ public class ReleaseValidationService {
             check.setStatus(ValidationStatus.BLOCKED);
             check.setMessage("Review check failed: " + e.getMessage());
             log.error("Review check failed for election {}", electionId, e);
+        }
+
+        check.setCompletedAt(Instant.now());
+        return check;
+    }
+
+    /**
+     * NEW METHOD: Re-check eligibility for all votes.
+     * Detects if voter attributes changed after they voted.
+     */
+    private ValidationCheck runEligibilityRecheck(UUID electionId) {
+        ValidationCheck check = new ValidationCheck(
+                "eligibility_recheck",
+                "Eligibility Re-validation",
+                ValidationStatus.IN_PROGRESS
+        );
+
+        try {
+            Election election = electionRepo.findById(electionId).orElseThrow();
+            EligibilityPolicy policy = election.getEligibilityPolicy();
+
+            if (policy == null) {
+                check.setStatus(ValidationStatus.PASS);
+                check.setMessage("No eligibility policy defined");
+                check.setCompletedAt(Instant.now());
+                return check;
+            }
+
+            // Get all votes for this election
+            List<Vote> votes = voteRepo.findByElectionId(electionId);
+
+            int totalVotes = votes.size();
+            int nowIneligible = 0;
+            List<Map<String, Object>> driftCases = new ArrayList<>();
+
+            for (Vote vote : votes) {
+                Voter voter = voterRepo.findById(vote.getVoterId()).orElse(null);
+                if (voter == null) {
+                    log.warn("Voter not found for vote {}", vote.getId());
+                    continue;
+                }
+
+                // Re-evaluate eligibility NOW (with current attributes)
+                EligibilityService.EligibilityResult result =
+                        eligibilityService.evaluate(voter.getAttributes(), policy);
+
+                if (!result.isAllowed()) {
+                    // Voter was eligible at cast time, but is now ineligible
+                    nowIneligible++;
+
+                    driftCases.add(Map.of(
+                            "voteId", vote.getId().toString(),
+                            "voterId", vote.getVoterId().toString(),
+                            "voterName", voter.getName(),
+                            "reason", result.getReason(),
+                            "castAt", vote.getCastAt().toString()
+                    ));
+                }
+            }
+
+            if (nowIneligible > 0) {
+                check.setStatus(ValidationStatus.WARNING);
+                check.setMessage(
+                        String.format("%d of %d voter(s) (%.1f%%) voted when eligible but are now ineligible due to attribute changes",
+                                nowIneligible, totalVotes, (nowIneligible * 100.0 / totalVotes))
+                );
+                check.setDetails(Map.of(
+                        "totalVotes", totalVotes,
+                        "driftCount", nowIneligible,
+                        "policy", "Votes are counted (eligibility evaluated at cast time)",
+                        "driftCases", driftCases.stream().limit(20).toList(),  // First 20 for review
+                        "note", "These voters were eligible when they voted. Attribute changes occurred after voting."
+                ));
+            } else {
+                check.setStatus(ValidationStatus.PASS);
+                check.setMessage(String.format("All %d voters still meet eligibility requirements", totalVotes));
+            }
+
+        } catch (Exception e) {
+            log.error("Eligibility recheck failed for election {}", electionId, e);
+            check.setStatus(ValidationStatus.BLOCKED);
+            check.setMessage("Eligibility recheck failed: " + e.getMessage());
         }
 
         check.setCompletedAt(Instant.now());

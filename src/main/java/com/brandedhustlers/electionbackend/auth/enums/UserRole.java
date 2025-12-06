@@ -6,7 +6,8 @@ public enum UserRole {
     AUDITOR("Auditor"),
     CONTRIBUTOR("Contributor"),
     OBSERVER("Observer"),
-    VOTER("VOTER");
+    VOTER("VOTER"),
+    ORG_ADMIN("Organization Admin");
 
     private final String name;
 

@@ -89,7 +89,7 @@ public class JWTAuthFilter extends OncePerRequestFilter {
                 voterAuth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(voterAuth);
 
-                log.debug("voter auth token: {}", voterAuth);
+//                log.debug("voter auth token: {}", voterAuth);
 
                 chain.doFilter(request, response);
                 return;

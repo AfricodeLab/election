@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.voting.dto;
 
+import com.brandedhustlers.electionbackend.election.domain.EligibilityPolicy;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
@@ -19,6 +20,8 @@ public class ElectionConfigDTO {
     private UUID electionId;
     private UUID orgId;
     private String title;
+    private EligibilityPolicy eligibilityPolicy;
+    private Integer policyVersion;
     private Timestamp startTime;
     private Timestamp endTime;
     private List<CandidateInfo> candidates;

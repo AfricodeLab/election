@@ -87,6 +87,8 @@ public class ConfigAnchorService {
                                     c.getCandidatePosition()
                             ))
                             .toList())
+                    .eligibilityPolicy(election.getEligibilityPolicy())
+                    .policyVersion(election.getPolicyVersion())
                     .build();
 
             String configJson = objectMapper.writeValueAsString(config);

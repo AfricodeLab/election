@@ -57,7 +57,7 @@ public class VoteArchive {
      * Format: SHA-256(vote fields + salt)
      * This is our "ground truth" for detecting tampering.
      */
-    @Column(name = "vote_hash", nullable = false, length = 64)
+    @Column(name = "vote_hash", nullable = false)
     private String voteHash;
 
     /**

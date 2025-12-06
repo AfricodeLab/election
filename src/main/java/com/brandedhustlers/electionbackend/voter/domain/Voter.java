@@ -8,9 +8,12 @@ import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 import java.sql.Timestamp;
+import java.util.Map;
 import java.util.UUID;
 
 @Entity
@@ -54,12 +57,39 @@ public class Voter {
     @UpdateTimestamp
     private Timestamp updatedAt;
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "created_by_id")
     private AppUser createdBy;
 
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn;
+
+    /**
+     * NEW: Voter attributes for eligibility checking.
+     * Stored as JSONB in PostgreSQL.
+     *
+     * Example:
+     * {
+     *   "age": 25,
+     *   "region": "Greater Accra",
+     *   "citizen": true,
+     *   "role": "staff",
+     *   "employmentStatus": "active"
+     * }
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "attributes")
+    private Map<String, Object> attributes;
+
+    /**
+     * How/when attributes were sourced.
+     * Example: "CSV_UPLOAD_2025-01-15", "API_SYNC", "MANUAL_ENTRY"
+     */
+    @Column(name = "attributes_source")
+    private String attributesSource;
+
+    @Column(name = "attributes_updated_at")
+    private Timestamp attributesUpdatedAt;
 
 
     @PrePersist

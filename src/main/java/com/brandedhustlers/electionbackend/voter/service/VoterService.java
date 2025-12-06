@@ -9,31 +9,33 @@ import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
-import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.VoterDTO;
 import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import com.brandedhustlers.electionbackend.voter.mapper.VoterMapper;
-import com.brandedhustlers.electionbackend.voter.repository.ElectionVoterRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
+@Slf4j
 public class VoterService implements IVoterService {
 
     private final AppUserRepository appUserRepository;
     private final VoterMapper voterMapper;
     private final VoterRepository voterRepository;
     private final AuditEmitter auditEmitter;
-    private final ElectionVoterRepository electionVoterRepository;
-    private final ElectionRepository electionRepository;
+    private final AttributeExtractor attributeExtractor;
     private final GetUser getUser;
 
 
@@ -41,15 +43,13 @@ public class VoterService implements IVoterService {
                         VoterMapper voterMapper,
                         VoterRepository voterRepository,
                         AuditEmitter auditEmitter,
-                        ElectionVoterRepository electionVoterRepository,
-                        ElectionRepository electionRepository,
+                        AttributeExtractor attributeExtractor,
                         GetUser getUser) {
         this.appUserRepository = appUserRepository;
         this.voterMapper = voterMapper;
         this.voterRepository = voterRepository;
         this.auditEmitter = auditEmitter;
-        this.electionVoterRepository = electionVoterRepository;
-        this.electionRepository = electionRepository;
+        this.attributeExtractor = attributeExtractor;
         this.getUser = getUser;
     }
 
@@ -67,6 +67,21 @@ public class VoterService implements IVoterService {
             throw new AccessDeniedException("You must belong to an organization to create a voter");
         }
 
+        /**
+         * NEW: Extract/compute attributes from voter data.
+         * This combines:
+         * - Auto-derived attributes (age from ID, region from phone)
+         * - Manually provided attributes (from cmd.attributes())
+         */
+        Map<String, Object> attributes = attributeExtractor.extractAttributes(
+                cmd.nationalId(),
+                cmd.phone(),
+                cmd.email(),
+                cmd.attributes()
+        );
+
+        log.info("Creating voter with attributes: {}", attributes);
+
         Voter newVoter = Voter.builder()
                 .name(cmd.name())
                 .phone(cmd.phone())
@@ -75,15 +90,12 @@ public class VoterService implements IVoterService {
                 .nationalId(cmd.nationalId())
                 .voterStatus(VoterStatus.ACTIVE)
                 .createdBy(actor)
+                .attributes(attributes)
+                .attributesSource("MANUAL_CREATION")
+                .attributesUpdatedAt(Timestamp.from(Instant.now()))
                 .build();
 
         voterRepository.save(newVoter);
-
-
-        //create voter verification token
-
-
-        //Todo debug phantom logs
 
         UUID actorId = actor.getAppUserId();
         String actorName = actor.getFirstName();

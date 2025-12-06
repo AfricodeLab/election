@@ -6,6 +6,7 @@ public record RegistrationRequest(
         String email,
         String username,
         String organizationName,
-        String password
+        String password,
+        CreateOrganizationRequest userOrg
 ) {
 }
