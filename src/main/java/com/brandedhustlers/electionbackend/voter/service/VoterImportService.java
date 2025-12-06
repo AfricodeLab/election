@@ -1,8 +1,6 @@
 package com.brandedhustlers.electionbackend.voter.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
-import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.domain.VoterImportJob;
@@ -11,7 +9,6 @@ import com.brandedhustlers.electionbackend.voter.dto.ImportStatusDTO;
 import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import com.brandedhustlers.electionbackend.voter.repository.VoterImportJobRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
-import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
@@ -26,9 +23,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.sql.Timestamp;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -36,22 +32,16 @@ public class VoterImportService implements IVoterImportService {
 
     private final VoterImportJobRepository jobRepository;
     private final VoterRepository voterRepository;
-    private final HttpServletRequest httpServletRequest;
-    private final JWTService jwtService;
-    private final AppUserRepository appUserRepository;
+    private final AttributeExtractor attributeExtractor;
     private final GetUser getUser;
 
     public VoterImportService(VoterImportJobRepository jobRepository,
                               VoterRepository voterRepository,
-                              HttpServletRequest httpServletRequest,
-                              JWTService jwtService,
-                              AppUserRepository appUserRepository,
+                              AttributeExtractor attributeExtractor,
                               GetUser getUser) {
         this.jobRepository = jobRepository;
         this.voterRepository = voterRepository;
-        this.httpServletRequest = httpServletRequest;
-        this.jwtService = jwtService;
-        this.appUserRepository = appUserRepository;
+        this.attributeExtractor = attributeExtractor;
         this.getUser = getUser;
     }
 
@@ -195,11 +185,20 @@ public class VoterImportService implements IVoterImportService {
         List<CreateVoterCmd> voters = new ArrayList<>();
 
         try (FileInputStream fis = new FileInputStream(filePath.toFile());
-                 Workbook workbook = new XSSFWorkbook(fis)) {
+             Workbook workbook = new XSSFWorkbook(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);
-            boolean isFirstRow = true;
+            Row headerRow = sheet.getRow(0);
 
+            /**
+             * NEW: Detect which columns are present.
+             * Expected columns:
+             * - Required: name, phone, email, nationalId
+             * - Optional: age, region, citizen, role, employmentStatus, etc.
+             */
+            Map<String, Integer> columnMap = buildColumnMap(headerRow);
+
+            boolean isFirstRow = true;
             for (Row row : sheet) {
                 if (isFirstRow) {
                     isFirstRow = false;
@@ -210,18 +209,112 @@ public class VoterImportService implements IVoterImportService {
                     continue;
                 }
 
-                String name = getCellValueAsString(row.getCell(0));
-                String phone = getCellValueAsString(row.getCell(1));
-                String email = getCellValueAsString(row.getCell(2));
-                String nationalId = getCellValueAsString(row.getCell(3));
+                String name = getCellValue(row, columnMap.get("name"));
+                String phone = getCellValue(row, columnMap.get("phone"));
+                String email = getCellValue(row, columnMap.get("email"));
+                String nationalId = getCellValue(row, columnMap.get("nationalId"));
 
                 if (name != null && phone != null && email != null && nationalId != null) {
-                    voters.add(new CreateVoterCmd(name, phone, email, nationalId));
+                    /**
+                     * NEW: Extract optional attribute columns.
+                     */
+                    Map<String, Object> attributes = new HashMap<>();
+
+                    // Age
+                    if (columnMap.containsKey("age")) {
+                        String ageStr = getCellValue(row, columnMap.get("age"));
+                        if (ageStr != null) {
+                            try {
+                                attributes.put("age", Integer.parseInt(ageStr));
+                            } catch (NumberFormatException e) {
+                                log.warn("Invalid age value: {}", ageStr);
+                            }
+                        }
+                    }
+
+                    // Region
+                    if (columnMap.containsKey("region")) {
+                        String region = getCellValue(row, columnMap.get("region"));
+                        if (region != null) {
+                            attributes.put("region", region);
+                        }
+                    }
+
+                    // Citizen (boolean)
+                    if (columnMap.containsKey("citizen")) {
+                        String citizenStr = getCellValue(row, columnMap.get("citizen"));
+                        if (citizenStr != null) {
+                            attributes.put("citizen",
+                                    "true".equalsIgnoreCase(citizenStr) ||
+                                            "yes".equalsIgnoreCase(citizenStr) ||
+                                            "1".equals(citizenStr)
+                            );
+                        }
+                    }
+
+                    // Role
+                    if (columnMap.containsKey("role")) {
+                        String role = getCellValue(row, columnMap.get("role"));
+                        if (role != null) {
+                            attributes.put("role", role);
+                        }
+                    }
+
+                    // Employment Status
+                    if (columnMap.containsKey("employmentStatus")) {
+                        String status = getCellValue(row, columnMap.get("employmentStatus"));
+                        if (status != null) {
+                            attributes.put("employmentStatus", status);
+                        }
+                    }
+
+                    voters.add(new CreateVoterCmd(
+                            name,
+                            phone,
+                            email,
+                            nationalId,
+                            attributes.isEmpty() ? null : attributes
+                    ));
                 }
             }
         }
 
         return voters;
+    }
+
+    /**
+     * Build a map of column name → column index.
+     * Makes it easy to check which columns are present.
+     */
+    private Map<String, Integer> buildColumnMap(Row headerRow) {
+        Map<String, Integer> columnMap = new HashMap<>();
+
+        if (headerRow == null) {
+            return columnMap;
+        }
+
+        for (Cell cell : headerRow) {
+            String columnName = getCellValueAsString(cell);
+            if (columnName != null) {
+                // Normalize: lowercase, no spaces
+                String normalized = columnName.toLowerCase().replaceAll("\\s+", "");
+                columnMap.put(normalized, cell.getColumnIndex());
+            }
+        }
+
+        log.info("Detected columns: {}", columnMap.keySet());
+        return columnMap;
+    }
+
+    /**
+     * Get cell value at specific column index (handles null safely).
+     */
+    private String getCellValue(Row row, Integer columnIndex) {
+        if (columnIndex == null) {
+            return null;
+        }
+        Cell cell = row.getCell(columnIndex);
+        return getCellValueAsString(cell);
     }
 
     private boolean isRowEmpty(Row row) {
@@ -273,9 +366,6 @@ public class VoterImportService implements IVoterImportService {
 
     @Transactional
     protected void processVoters(VoterImportJob job, List<CreateVoterCmd> voterCmds) {
-
-
-        // Get current user - adjust based on your security context
         AppUser currentUser = getCurrentUser();
 
         for (CreateVoterCmd cmd : voterCmds) {
@@ -290,6 +380,19 @@ public class VoterImportService implements IVoterImportService {
                     continue;
                 }
 
+                /**
+                 * NEW: Extract attributes from voter data.
+                 * This merges:
+                 * - Attributes from CSV/Excel (if provided)
+                 * - Auto-derived attributes (age from ID, region from phone)
+                 */
+                Map<String, Object> attributes = attributeExtractor.extractAttributes(
+                        cmd.nationalId(),
+                        cmd.phone(),
+                        cmd.email(),
+                        cmd.attributes()
+                );
+
                 Voter voter = Voter.builder()
                         .organization(currentUser.getAppUserOrganization())
                         .name(cmd.name())
@@ -298,6 +401,9 @@ public class VoterImportService implements IVoterImportService {
                         .nationalId(cmd.nationalId())
                         .voterStatus(VoterStatus.ACTIVE)
                         .createdBy(currentUser)
+                        .attributes(attributes)
+                        .attributesSource("BULK_IMPORT_" + job.getFileRef())
+                        .attributesUpdatedAt(Timestamp.from(Instant.now()))
                         .build();
 
                 voterRepository.save(voter);

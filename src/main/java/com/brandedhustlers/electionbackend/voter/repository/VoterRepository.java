@@ -34,4 +34,7 @@ public interface VoterRepository extends JpaRepository<Voter, UUID> {
     Optional<Voter> findByOrganization_OrganizationIdAndEmailIgnoreCase(UUID organizationId, String email);
 
     Optional<Voter> findByEmailIgnoreCase(String email);
+
+    @Query("select v from Voter v where v.organization.organizationId = :orgId and v.deleteYn = 'N'")
+    List<Voter> findByOrgId(UUID orgId);
 }

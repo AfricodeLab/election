@@ -50,7 +50,7 @@ public class Hash {
             String saltedData = json + salt;
             log.debug("Hashing vote: {} (with salt)", vote.getId());
 
-            MessageDigest md = MessageDigest.getInstance("SHA-512");
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] digest = md.digest(saltedData.getBytes(StandardCharsets.UTF_8));
 
             StringBuilder sb = new StringBuilder();

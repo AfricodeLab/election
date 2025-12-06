@@ -16,6 +16,7 @@ import com.brandedhustlers.electionbackend.election.service.CandidateService;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -52,7 +53,7 @@ public class ElectionController {
 
     @PostMapping("/create")
     public ResponseEntity<?> createElection(
-            @RequestBody CreateElectionRequest request
+            @RequestBody @Valid CreateElectionRequest request
     ) {
         return new ResponseEntity<>(electionService.createElection(request), HttpStatus.CREATED);
     }

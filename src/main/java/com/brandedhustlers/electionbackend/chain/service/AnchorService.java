@@ -7,7 +7,6 @@ import com.brandedhustlers.electionbackend.election.repository.ElectionRepositor
 import com.brandedhustlers.electionbackend.voting.domain.OutBox;
 import com.brandedhustlers.electionbackend.voting.repository.OutBoxRepository;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,7 +44,7 @@ public class AnchorService {
      * Run every 30 seconds (changed from 10s for cost efficiency).
      * Anchors all validated votes that are pending anchor.
      */
-    @Scheduled(fixedDelay = 30000)
+//    @Scheduled(fixedDelay = 30000)
     @Transactional
     public void anchorPendingVotes() {
         Timestamp now = Timestamp.from(Instant.now());

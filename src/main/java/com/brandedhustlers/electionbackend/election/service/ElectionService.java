@@ -109,6 +109,7 @@ public class ElectionService implements IElectionService {
                 .expectedVoterCount(request.expectedVoterCount())
                 .isPubliclyVisible(request.isPubliclyVisible())
                 .shouldEndAutomatically(request.shouldEndAutomatically())
+                .eligibilityPolicy(request.electionEligibilityPolicy())
                 .organization(electionOrg)
                 .createdBy(creator)
                 .deleteYn(DeleteYn.N)
@@ -385,7 +386,8 @@ public class ElectionService implements IElectionService {
                             election.getOrganization(),
                             election.getDeleteYn(),
                             election.isPubliclyVisible(),
-                            candidates
+                            candidates,
+                            election.getEligibilityPolicy()
                     );
                 })
                 .toList();

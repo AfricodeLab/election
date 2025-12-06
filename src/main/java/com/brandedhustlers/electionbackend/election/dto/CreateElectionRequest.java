@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.election.dto;
 
+import com.brandedhustlers.electionbackend.election.domain.EligibilityPolicy;
 import com.brandedhustlers.electionbackend.election.enums.ElectionType;
 
 import java.sql.Timestamp;
@@ -14,6 +15,7 @@ public record CreateElectionRequest(
         ElectionType electionType,
         Long expectedVoterCount,
         boolean isPubliclyVisible,
-        boolean shouldEndAutomatically
+        boolean shouldEndAutomatically,
+        EligibilityPolicy electionEligibilityPolicy
 ) {
 }
