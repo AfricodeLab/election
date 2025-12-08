@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.voting.service;
 
 import com.brandedhustlers.electionbackend.election.domain.Election;
@@ -29,7 +30,7 @@ public class ReleaseValidationService {
     private final VoteRepository voteRepo;
     private final OutBoxRepository outbox;
     private final TamperingLogRepository tamperingLog;
-    private final ConfigAnchorService configAnchorService;
+//    private final ConfigAnchorService configAnchorService;
     private final EligibilityService eligibilityService;
     private final VoterRepository voterRepo;
 
@@ -40,7 +41,7 @@ public class ReleaseValidationService {
             VoteRepository voteRepo,
             OutBoxRepository outbox,
             TamperingLogRepository tamperingLog,
-            ConfigAnchorService configAnchorService, EligibilityService eligibilityService, VoterRepository voterRepo
+             EligibilityService eligibilityService, VoterRepository voterRepo
     ) {
         this.electionRepo = electionRepo;
         this.configAnchorRepo = configAnchorRepo;
@@ -48,18 +49,19 @@ public class ReleaseValidationService {
         this.voteRepo = voteRepo;
         this.outbox = outbox;
         this.tamperingLog = tamperingLog;
-        this.configAnchorService = configAnchorService;
         this.eligibilityService = eligibilityService;
         this.voterRepo = voterRepo;
     }
 
-    /**
+    */
+/**
      * Run full release validation.
      *
      * @param electionId The election to validate
      * @param progressCallback Called after each check completes (for UI updates)
      * @return Complete validation report
-     */
+     *//*
+
     @Transactional(readOnly = true)
     public ReleaseValidationReport validate(UUID electionId, Consumer<ValidationCheck> progressCallback) {
 
@@ -98,10 +100,12 @@ public class ReleaseValidationService {
         return report;
     }
 
-    /**
+    */
+/**
      * Check 1: Config Integrity.
      * Compare current config to anchored config.
-     */
+     *//*
+
     private ValidationCheck runConfigIntegrityCheck(UUID electionId) {
         ValidationCheck check = new ValidationCheck(
                 "config_integrity",
@@ -159,10 +163,12 @@ public class ReleaseValidationService {
         return check;
     }
 
-    /**
+    */
+/**
      * Check 2: Vote Coverage.
      * Ensure all votes are anchored.
-     */
+     *//*
+
     private ValidationCheck runVoteCoverageCheck(UUID electionId) {
         ValidationCheck check = new ValidationCheck(
                 "vote_coverage",
@@ -203,10 +209,12 @@ public class ReleaseValidationService {
         return check;
     }
 
-    /**
+    */
+/**
      * Check 3: Tampering Detection.
      * Check for any unrestorable votes.
-     */
+     *//*
+
     private ValidationCheck runTamperingCheck(UUID electionId) {
         ValidationCheck check = new ValidationCheck(
                 "tampering_detection",
@@ -260,10 +268,12 @@ public class ReleaseValidationService {
         return check;
     }
 
-    /**
+    */
+/**
      * Check 4: Review Status.
      * Check if election is flagged for manual review.
-     */
+     *//*
+
     private ValidationCheck runReviewStatusCheck(UUID electionId) {
         ValidationCheck check = new ValidationCheck(
                 "review_status",
@@ -293,10 +303,12 @@ public class ReleaseValidationService {
         return check;
     }
 
-    /**
+    */
+/**
      * NEW METHOD: Re-check eligibility for all votes.
      * Detects if voter attributes changed after they voted.
-     */
+     *//*
+
     private ValidationCheck runEligibilityRecheck(UUID electionId) {
         ValidationCheck check = new ValidationCheck(
                 "eligibility_recheck",
@@ -375,9 +387,11 @@ public class ReleaseValidationService {
         return check;
     }
 
-    /**
+    */
+/**
      * Validation status enum.
-     */
+     *//*
+
     public enum ValidationStatus {
         PENDING,
         IN_PROGRESS,
@@ -386,9 +400,11 @@ public class ReleaseValidationService {
         BLOCKED
     }
 
-    /**
+    */
+/**
      * Individual validation check.
-     */
+     *//*
+
     @Data
     public static class ValidationCheck {
         private String checkId;
@@ -406,9 +422,11 @@ public class ReleaseValidationService {
         }
     }
 
-    /**
+    */
+/**
      * Complete validation report.
-     */
+     *//*
+
     @Data
     public static class ReleaseValidationReport {
         private UUID electionId;
@@ -441,3 +459,4 @@ public class ReleaseValidationService {
     }
 }
 
+*/
