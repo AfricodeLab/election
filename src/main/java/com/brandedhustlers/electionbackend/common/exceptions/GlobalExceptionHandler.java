@@ -34,6 +34,20 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(LaunchNotfound.class)
+    public ResponseEntity<?> handleLaunchNotfound(LaunchNotfound e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.NOT_FOUND.value(),
+                new APIException.APIError(
+                        HttpStatus.NOT_FOUND,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
+    }
+
     @ExceptionHandler(NoSuchElementException.class)
     public ResponseEntity<?> handleNoSuchElementException(NoSuchElementException e, HttpServletRequest request) {
         APIException apiException = new APIException(
@@ -66,15 +80,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<?> handleDataIntegrityViolationException(DataIntegrityViolationException e, HttpServletRequest request) {
         APIException apiException = new APIException(
-                HttpStatus.CONFLICT.value(),
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
                 new APIException.APIError(
-                        HttpStatus.CONFLICT,
-                        "User attempted to enter a value that already exists",
+                        HttpStatus.INTERNAL_SERVER_ERROR,
+                        e.getMessage(),
                         Timestamp.from(Instant.now())
                 ),
                 request.getRequestId()
         );
-        return new ResponseEntity<>(apiException, HttpStatus.CONFLICT);
+        return new ResponseEntity<>(apiException, HttpStatus.INTERNAL_SERVER_ERROR);
     }
 
 

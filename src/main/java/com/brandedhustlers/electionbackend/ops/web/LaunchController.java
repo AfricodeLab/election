@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.ops.web;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.ops.dto.CreateLaunchCmd;
 import com.brandedhustlers.electionbackend.ops.enums.LaunchStatus;
 import com.brandedhustlers.electionbackend.ops.service.LaunchService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -11,7 +12,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,12 +46,9 @@ public class LaunchController {
 
 
     @PostMapping
-    public ResponseEntity<?> create(@RequestParam String launchName,
-                                    @RequestParam(required = false) String launchDescription,
-                                    @RequestParam(required = false) Instant startAt,
-                                    @RequestParam(required = false) Instant endAt) {
+    public ResponseEntity<?> create(@RequestBody CreateLaunchCmd createLaunchCmd) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        return new ResponseEntity<>(svc.create(orgId, launchName, launchDescription, startAt, endAt), HttpStatus.CREATED);
+        return new ResponseEntity<>(svc.create(orgId, createLaunchCmd.name(), createLaunchCmd.description(), createLaunchCmd.startAt(), createLaunchCmd.endAt()), HttpStatus.CREATED);
     }
 
     @GetMapping("/get-launch/{launchId}")

@@ -70,4 +70,13 @@ public class VoterAuthToken extends AbstractAuthenticationToken {
     public int hashCode() {
         return Objects.hash(super.hashCode(), voter, voterOrganization, getStepUpVerifiedAt());
     }
+
+    @Override
+    public String toString() {
+        return "VoterAuthToken{" +
+                "voterID=" + voter +
+                ", voterOrganization=" + voterOrganization +
+                ", stepUpVerifiedAt=" + stepUpVerifiedAt +
+                '}';
+    }
 }
