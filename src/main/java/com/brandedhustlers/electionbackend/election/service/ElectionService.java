@@ -26,7 +26,6 @@ import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
-import com.brandedhustlers.electionbackend.voting.service.ConfigAnchorService;
 import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
@@ -59,7 +58,7 @@ public class ElectionService implements IElectionService {
     private final CandidateMapper candidateMapper;
     private final GetUser getUser;
     private final ConfigSnapshotService configSnapshotService;
-    private final ConfigAnchorService configAnchorService;
+//    private final ConfigAnchorService configAnchorService;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -69,7 +68,7 @@ public class ElectionService implements IElectionService {
                            CandidateRepository candidateRepository,
                            AuditEmitter auditEmitter,
                            CandidateMapper candidateMapper,
-                           GetUser getUser, ConfigSnapshotService configSnapshotService, ConfigAnchorService configAnchorService) {
+                           GetUser getUser, ConfigSnapshotService configSnapshotService) {
         this.electionRepository = electionRepository;
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
@@ -80,7 +79,6 @@ public class ElectionService implements IElectionService {
         this.candidateMapper = candidateMapper;
         this.getUser = getUser;
         this.configSnapshotService = configSnapshotService;
-        this.configAnchorService = configAnchorService;
     }
 
     @Override
@@ -437,7 +435,7 @@ public class ElectionService implements IElectionService {
          * This creates cryptographic proof of what the config was.
          * (Implementation in next section)
          */
-        configAnchorService.anchorConfig(electionId);
+//        configAnchorService.anchorConfig(electionId);
 
         /**
          * Step 3: Update election status.
