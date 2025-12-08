@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.chain.service;
 
 import lombok.extern.slf4j.Slf4j;
@@ -20,9 +21,11 @@ public class BlockchainService {
         this.contract = contract;
     }
 
-    /**
+    */
+/**
      * Anchor vote batch (existing method - keep as is).
-     */
+     *//*
+
     public String anchorBatch(String electionId, String orgId, String merkleRoot, String timestampIso) {
         try {
             var fn = contractName + ":AnchorBatch";
@@ -34,7 +37,8 @@ public class BlockchainService {
         }
     }
 
-    /**
+    */
+/**
      * Anchor election config.
      * Calls ConfigContract:AnchorConfig on the blockchain.
      *
@@ -43,15 +47,18 @@ public class BlockchainService {
      * @param configHash SHA-256 hash (64 hex chars)
      * @param timestamp ISO-8601 timestamp
      * @return Transaction ID (electionId is returned by chaincode)
-     */
+     *//*
+
     public String anchorConfig(String electionId, String orgId, String configHash, String timestamp) {
         try {
             log.info("Anchoring config: election={}, hash={}", electionId, configHash);
 
-            /**
+            */
+/**
              * Submit to ConfigContract:AnchorConfig.
              * Chaincode returns the electionId as confirmation.
-             */
+             *//*
+
             byte[] result = contract.submitTransaction(
                     "ConfigContract:AnchorConfig",
                     electionId,
@@ -71,7 +78,8 @@ public class BlockchainService {
         }
     }
 
-    /**
+    */
+/**
      * Anchor election results.
      * Calls ReleaseContract:AnchorResults on the blockchain.
      *
@@ -85,7 +93,8 @@ public class BlockchainService {
      * @param releasedBy Admin user ID who released
      * @param timestamp ISO-8601 timestamp
      * @return Transaction ID (electionId is returned by chaincode)
-     */
+     *//*
+
     public String anchorResults(
             String electionId,
             String orgId,
@@ -99,10 +108,12 @@ public class BlockchainService {
             log.info("Anchoring results: election={}, hash={}, excluded={}, forced={}",
                     electionId, resultsHash, excludedVoteCount, forceReleased);
 
-            /**
+            */
+/**
              * Submit to ReleaseContract:AnchorResults.
              * Convert int and boolean to strings for chaincode.
-             */
+             *//*
+
             byte[] result = contract.submitTransaction(
                     "ReleaseContract:AnchorResults",
                     electionId,
@@ -125,9 +136,11 @@ public class BlockchainService {
         }
     }
 
-    /**
+    */
+/**
      * Get latest batch for an election (read-only query).
-     */
+     *//*
+
     public String getLatestBatch(String electionId) {
         try {
             var fn = contractName + ":GetLatestBatch";
@@ -145,9 +158,11 @@ public class BlockchainService {
         }
     }
 
-    /**
+    */
+/**
      * Get config anchor for an election (read-only query).
-     */
+     *//*
+
     public String getConfig(String electionId) {
         try {
             byte[] result = contract.evaluateTransaction(
@@ -167,9 +182,11 @@ public class BlockchainService {
         }
     }
 
-    /**
+    */
+/**
      * Get results anchor for an election (read-only query).
-     */
+     *//*
+
     public String getResults(String electionId) {
         try {
             byte[] result = contract.evaluateTransaction(
@@ -189,9 +206,11 @@ public class BlockchainService {
         }
     }
 
-    /**
+    */
+/**
      * List all batches for an election (read-only query).
-     */
+     *//*
+
     public String listBatches(String electionId) {
         try {
             var fn = contractName + ":ListBatches";
@@ -204,4 +223,4 @@ public class BlockchainService {
             return "[]";
         }
     }
-}
+}*/

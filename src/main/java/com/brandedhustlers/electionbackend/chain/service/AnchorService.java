@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.chain.service;
 
 import com.brandedhustlers.electionbackend.chain.domain.Batch;
@@ -40,20 +41,24 @@ public class AnchorService {
         this.chain = chain;
     }
 
-    /**
+    */
+/**
      * Run every 30 seconds (changed from 10s for cost efficiency).
      * Anchors all validated votes that are pending anchor.
-     */
+     *//*
+
 //    @Scheduled(fixedDelay = 30000)
     @Transactional
     public void anchorPendingVotes() {
         Timestamp now = Timestamp.from(Instant.now());
 
-        /**
+        */
+/**
          * Fetch all outbox entries where:
          * - anchor_pending = true (validated and ready to anchor)
          * - anchored = false (not yet included in a batch)
-         */
+         *//*
+
         List<OutBox> pendingEntries = outbox.findByAnchorPendingTrueAndAnchoredFalse();
 
         if (pendingEntries.isEmpty()) {
@@ -63,10 +68,12 @@ public class AnchorService {
 
         log.info("Found {} votes pending anchor", pendingEntries.size());
 
-        /**
+        */
+/**
          * Group by election ID.
          * We create one batch per election per cycle.
-         */
+         *//*
+
         Map<UUID, List<OutBox>> byElection = pendingEntries.stream()
                 .collect(Collectors.groupingBy(o -> {
                     // Extract electionId from the vote (via aggregateId)
@@ -74,9 +81,11 @@ public class AnchorService {
                     return extractElectionId(o);
                 }));
 
-        /**
+        */
+/**
          * Process each election's batch.
-         */
+         *//*
+
         byElection.forEach((electionId, entries) -> {
             try {
                 anchorElectionBatch(electionId, entries, now);
@@ -87,17 +96,20 @@ public class AnchorService {
         });
     }
 
-    /**
+    */
+/**
      * Anchor a single batch for one election.
      *
      * @param electionId The election
      * @param entries Outbox entries to include in this batch
      * @param now Current timestamp
-     */
+     *//*
+
     private void anchorElectionBatch(UUID electionId, List<OutBox> entries, Timestamp now) {
         UUID orgId = electionRepo.findOrgId(electionId);
 
-        /**
+        */
+/**
          * CRITICAL CHANGE:
          * Build Merkle tree from OUTBOX HASHES, not from re-reading votes table.
          *
@@ -108,7 +120,8 @@ public class AnchorService {
          * 1. Were cast originally
          * 2. Passed validation (or were restored)
          * 3. Are guaranteed to be in their original state
-         */
+         *//*
+
         List<byte[]> leaves = entries.stream()
                 .map(o -> hexToBytes(o.getVoteHash()))
                 .toList();
@@ -123,10 +136,12 @@ public class AnchorService {
         log.info("Anchoring batch for election {}: {} votes, root: {}",
                 electionId, entries.size(), merkleRoot);
 
-        /**
+        */
+/**
          * Submit to blockchain.
          * This calls AnchorContract:AnchorBatch (your existing method).
-         */
+         *//*
+
         String batchIdStr = chain.anchorBatch(
                 electionId.toString(),
                 orgId.toString(),
@@ -156,9 +171,11 @@ public class AnchorService {
 
         batchRepo.save(batch);
 
-        /**
+        */
+/**
          * Mark all outbox entries as anchored.
-         */
+         *//*
+
         entries.forEach(o -> {
             o.setAnchorPending(false);
             o.setAnchored(true);
@@ -171,10 +188,12 @@ public class AnchorService {
                 batchId, electionId, entries.size());
     }
 
-    /**
+    */
+/**
      * Extract election ID from outbox payload.
      * Your payload format: {"id":"...","electionId":"...","candidateId":"...","orgId":"..."}
-     */
+     *//*
+
     private UUID extractElectionId(OutBox outboxEntry) {
         try {
             com.fasterxml.jackson.databind.ObjectMapper mapper =
@@ -190,9 +209,11 @@ public class AnchorService {
         }
     }
 
-    /**
+    */
+/**
      * Convert hex string to byte array.
-     */
+     *//*
+
     private byte[] hexToBytes(String hex) {
         int len = hex.length();
         byte[] data = new byte[len / 2];
@@ -210,4 +231,4 @@ public class AnchorService {
             return UUID.randomUUID();
         }
     }
-}
+}*/

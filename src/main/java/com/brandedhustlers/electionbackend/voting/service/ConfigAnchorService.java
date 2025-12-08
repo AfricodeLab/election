@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.voting.service;
 
 import com.brandedhustlers.electionbackend.chain.service.BlockchainService;
@@ -44,23 +45,27 @@ public class ConfigAnchorService {
         this.objectMapper = objectMapper;
     }
 
-    /**
+    */
+/**
      * Anchor election config to blockchain.
      * Called when election transitions to LIVE.
      *
      * @param electionId The election to anchor
      * @return The config anchor record
-     */
+     *//*
+
     @Transactional
     public ElectionConfigAnchor anchorConfig(UUID electionId) {
         try {
-            /**
+            */
+/**
              * Step 1: Build canonical config representation.
              * Include only immutable election properties:
              * - Election ID, title, times
              * - Candidate list (id, name, position)
              * - Eligibility rules (if any)
-             */
+             *//*
+
             if (configAnchorRepo.existsById(electionId)) {
                 log.warn("Config already anchored for election {}", electionId);
                 return configAnchorRepo.findById(electionId).orElseThrow();
@@ -71,9 +76,11 @@ public class ConfigAnchorService {
 
             List<Candidate> candidates = candidateRepo.findByElectionElectionId(electionId);
 
-            /**
+            */
+/**
              * Build canonical config DTO.
-             */
+             *//*
+
             ElectionConfigDTO config = ElectionConfigDTO.builder()
                     .electionId(election.getElectionId())
                     .orgId(election.getOrganization().getOrganizationId())
@@ -96,10 +103,12 @@ public class ConfigAnchorService {
 
             log.info("Anchoring config for election {}, hash: {}", electionId, configHash);
 
-            /**
+            */
+/**
              * REAL BLOCKCHAIN CALL HERE.
              * Submit to ConfigContract:AnchorConfig.
-             */
+             *//*
+
             String txId = chain.anchorConfig(
                     election.getElectionId().toString(),
                     election.getOrganization().getOrganizationId().toString(),
@@ -107,9 +116,11 @@ public class ConfigAnchorService {
                     Instant.now().toString()
             );
 
-            /**
+            */
+/**
              * Store anchor record locally.
-             */
+             *//*
+
             ElectionConfigAnchor anchor = ElectionConfigAnchor.builder()
                     .electionId(electionId)
                     .configJson(configJson)
@@ -130,10 +141,12 @@ public class ConfigAnchorService {
         }
     }
 
-    /**
+    */
+/**
      * Verify if current config matches anchored config.
      * Returns null if match, or a diff report if mismatch.
-     */
+     *//*
+
     @Transactional(readOnly = true)
     public ConfigValidationResult validateConfig(UUID electionId) {
         try {
@@ -186,9 +199,11 @@ public class ConfigAnchorService {
         }
     }
 
-    /**
+    */
+/**
      * Result of config validation.
-     */
+     *//*
+
     public record ConfigValidationResult(
             boolean matches,
             ElectionConfigDTO anchoredConfig,
@@ -211,3 +226,4 @@ public class ConfigAnchorService {
         }
     }
 }
+*/

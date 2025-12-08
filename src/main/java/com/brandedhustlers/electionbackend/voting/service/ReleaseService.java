@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.voting.service;
 
 import com.brandedhustlers.electionbackend.chain.service.BlockchainService;
@@ -55,23 +56,27 @@ public class ReleaseService {
         this.objectMapper = objectMapper;
     }
 
-    /**
+    */
+/**
      * Release election results after validation.
      *
      * @param electionId The election
      * @param adminUserId Admin releasing the results
      * @param forceRelease True to override validation warnings/errors
      * @return Release result with anchored data
-     */
+     *//*
+
     @Transactional
     public ReleaseResult releaseResults(UUID electionId, UUID adminUserId, boolean forceRelease) {
 
         log.info("Starting release for election {}, admin={}, force={}",
                 electionId, adminUserId, forceRelease);
 
-        /**
+        */
+/**
          * Step 1: Run validation.
-         */
+         *//*
+
         ReleaseValidationService.ReleaseValidationReport validation =
                 validationService.validate(electionId, null);
 
@@ -82,23 +87,29 @@ public class ReleaseService {
             );
         }
 
-        /**
+        */
+/**
          * Step 2: Get excluded votes (unrestorable tampering).
-         */
+         *//*
+
         List<UUID> excludedVoteIds = tamperingLog
                 .findByElectionIdAndIncidentType(electionId, "ARCHIVE_TAMPERED")
                 .stream()
                 .map(TamperingLog::getVoteId)
                 .toList();
 
-        /**
+        */
+/**
          * Step 3: Compute final tally (excluding bad votes).
-         */
+         *//*
+
         Map<UUID, Long> tally = computeTally(electionId, excludedVoteIds);
 
-        /**
+        */
+/**
          * Step 4: Build results object.
-         */
+         *//*
+
         ElectionResults results = ElectionResults.builder()
                 .electionId(electionId)
                 .orgId(electionRepo.findOrgId(electionId))
@@ -118,9 +129,11 @@ public class ReleaseService {
         log.info("Computed results for election {}: {} valid votes, {} excluded, hash={}",
                 electionId, results.getValidVotes(), results.getExcludedVoteCount(), resultsHash);
 
-        /**
+        */
+/**
          * Step 5: Anchor to blockchain.
-         */
+         *//*
+
         String txId = chain.anchorResults(
                 electionId.toString(),
                 results.getOrgId().toString(),
@@ -131,9 +144,11 @@ public class ReleaseService {
                 Instant.now().toString()
         );
 
-        /**
+        */
+/**
          * Step 6: Store anchor record locally.
-         */
+         *//*
+
         ElectionResultsAnchor anchor = ElectionResultsAnchor.builder()
                 .electionId(electionId)
                 .resultsJson(resultsJson)
@@ -147,9 +162,11 @@ public class ReleaseService {
 
         resultsAnchorRepo.save(anchor);
 
-        /**
+        */
+/**
          * Step 7: Update election status.
-         */
+         *//*
+
         var election = electionRepo.findById(electionId).orElseThrow();
         election.setElectionStatus(ElectionStatus.RESULTS_RELEASED);
         electionRepo.save(election);
@@ -159,9 +176,11 @@ public class ReleaseService {
         return new ReleaseResult(results, validation, txId);
     }
 
-    /**
+    */
+/**
      * Compute tally excluding specific votes.
-     */
+     *//*
+
     private Map<UUID, Long> computeTally(UUID electionId, List<UUID> excludedVoteIds) {
         // Get all votes for this election
         List<Vote> allVotes = voteRepo.findByElectionId(electionId);
@@ -199,9 +218,11 @@ public class ReleaseService {
         }
     }
 
-    /**
+    */
+/**
      * Exception thrown when release is blocked.
-     */
+     *//*
+
     public static class ReleaseBlockedException extends RuntimeException {
         private final ReleaseValidationService.ReleaseValidationReport validationReport;
 
@@ -215,9 +236,11 @@ public class ReleaseService {
         }
     }
 
-    /**
+    */
+/**
      * Results object (stored in DB and anchored to chain).
-     */
+     *//*
+
     @Data
     @Builder
     public static class ElectionResults {
@@ -233,12 +256,14 @@ public class ReleaseService {
         private boolean forceReleased;
     }
 
-    /**
+    */
+/**
      * Release result returned to caller.
-     */
+     *//*
+
     public record ReleaseResult(
             ElectionResults results,
             ReleaseValidationService.ReleaseValidationReport validation,
             String chainTxId
     ) {}
-}
+}*/
