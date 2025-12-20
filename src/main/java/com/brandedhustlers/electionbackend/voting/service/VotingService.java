@@ -102,7 +102,7 @@ public class VotingService implements IVotingService {
              * Check voter eligibility BEFORE taking row lock.
              * This is fast and prevents ineligible voters from even attempting to vote.
              */
-            if (election.getEligibilityPolicy() != null) {
+           /* if (election.getEligibilityPolicy() != null) {
                 EligibilityService.EligibilityResult eligibilityResult =
                         eligibilityService.evaluate(actor.getAttributes(), election.getEligibilityPolicy());
 
@@ -118,7 +118,7 @@ public class VotingService implements IVotingService {
                 }
 
                 log.info("Voter {} passed eligibility check for election {}", voterId, cmd.electionId());
-            }
+            }*/
 
             //create the election voter here instead removing load from org admins, tied to the voter entity
             ElectionVoterId embeddedId = new ElectionVoterId(
