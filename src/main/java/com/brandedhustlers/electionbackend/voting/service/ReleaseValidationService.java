@@ -40,7 +40,9 @@ public class ReleaseValidationService {
             VoteRepository voteRepo,
             OutBoxRepository outbox,
             TamperingLogRepository tamperingLog,
-            ConfigAnchorService configAnchorService, EligibilityService eligibilityService, VoterRepository voterRepo
+            ConfigAnchorService configAnchorService,
+            EligibilityService eligibilityService,
+            VoterRepository voterRepo
     ) {
         this.electionRepo = electionRepo;
         this.configAnchorRepo = configAnchorRepo;

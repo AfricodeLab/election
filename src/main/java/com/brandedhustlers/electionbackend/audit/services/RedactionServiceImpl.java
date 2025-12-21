@@ -30,7 +30,9 @@ public class RedactionServiceImpl implements RedactionService {
             var md = java.security.MessageDigest.getInstance("SHA-256");
             byte[] dig = md.digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
-            for (byte b : dig) sb.append(String.format("%02x", b));
+            for (byte b : dig) {
+                sb.append(String.format("%02x", b));
+            }
             return sb.toString();
         } catch (Exception e) {
             return null;

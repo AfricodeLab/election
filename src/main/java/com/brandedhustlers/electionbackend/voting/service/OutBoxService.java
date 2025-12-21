@@ -50,7 +50,7 @@ public class OutBoxService implements OutBoxRelay {
 
     @Override
     @Transactional
-//    @Scheduled(fixedDelay = 10000) // Every 10 seconds
+    @Scheduled(fixedDelay = 10000) // Every 10 seconds
     public void publishPending() {
         List<OutBox> batch = outbox.findTopByPublishedAtIsNull();
 
