@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Role;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -13,8 +14,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.Collection;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 public class CustomUserDetailsService implements UserDetailsService {
 
@@ -35,7 +38,7 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     private Collection<? extends GrantedAuthority> getAuthorities(AppUser user){
         String prefix = "ROLE_";
-        return user.getRoles()
+        Set<SimpleGrantedAuthority> set = user.getRoles()
                 .stream()
                 .map(Role::getRoleName)
                 .map(String::toUpperCase)
@@ -44,5 +47,7 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .map(StringBuilder::toString)//converting stringbuilder to tring
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toSet());
+        log.info("user roles: {}", set);
+        return set;
     }
 }

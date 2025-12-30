@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.audit.dto.AuditEventDTO;
 import com.brandedhustlers.electionbackend.audit.dto.AuditSearchFilter;
 import com.brandedhustlers.electionbackend.audit.dto.PageResponse;
 import com.brandedhustlers.electionbackend.audit.services.AuditQueryService;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,16 +14,17 @@ import java.util.UUID;
 @RequestMapping("/api/v1/audit")
 public class AuditController {
     private final AuditQueryService query;
+    private final GetUser getUser;
 
-    public AuditController(AuditQueryService query) {
+    public AuditController(AuditQueryService query,
+                           GetUser getUser) {
         this.query = query;
+        this.getUser = getUser;
     }
 
     @GetMapping("/trail")
-    public ResponseEntity<PageResponse<AuditEventDTO>> trail(
-            @RequestParam UUID orgId,
+    public ResponseEntity<PageResponse<AuditEventDTO>>  trail(
             @RequestParam(required = false) String eventType,
-            @RequestParam(required = false) UUID actorId,
             @RequestParam(required = false) String targetType,
             @RequestParam(required = false) UUID targetId,
             @RequestParam(required = false) String severity,
@@ -32,6 +34,8 @@ public class AuditController {
             @RequestParam(defaultValue = "50") int size,
             @RequestParam(defaultValue = "occurred_at,DESC") String sort
     ) {
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        UUID actorId = getUser.getCurrentAuthenticatedUserId();
         AuditSearchFilter f = AuditSearchFilter.builder()
                 .orgId(orgId).eventType(eventType).actorId(actorId).targetType(targetType).targetId(targetId)
                 .severity(severity).page(page).size(size).sort(sort)

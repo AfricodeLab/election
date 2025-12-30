@@ -10,7 +10,9 @@ import com.brandedhustlers.electionbackend.voter.dto.OtpSendResponse;
 import com.brandedhustlers.electionbackend.voter.repository.VerificationTokenRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import jakarta.mail.MessagingException;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,7 +52,8 @@ public class VerificationService {
                 .orElseThrow(() -> new NoSuchElementException("VOTER-404 not found"));
 
         var now = Instant.now();
-        var last = tokens.findFirstByVoterIdAndCreatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(voter.getVoterId(), now).orElse(null);
+        var last = tokens.findFirstByVoterIdAndCreatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(voter.getVoterId(), now)
+                .orElse(null);
 
         if (last != null && Duration.between(last.getCreatedAt(), now).compareTo(RESEND_COOLDOWN) < 0) {
             throw new IllegalStateException("OTP-429 resend too soon, please wait");
@@ -70,6 +73,7 @@ public class VerificationService {
                 .attempts(0)
                 .createdAt(now)
                 .expiresAt(now.plus(OTP_TTL))
+                .isUsed(false)
                 .build();
         tokens.save(t);
 
@@ -84,7 +88,7 @@ public class VerificationService {
     }
 
 
-    public OtpConfirmResponse confirmOtp(OtpConfirmRequest req) {
+    public OtpConfirmResponse confirmOtp(OtpConfirmRequest req, HttpServletResponse response) {
         var voter = voters.findByEmailIgnoreCase(req.email())
                 .orElseThrow(() -> new NoSuchElementException("Voter not found"));
 
@@ -103,10 +107,19 @@ public class VerificationService {
             return new OtpConfirmResponse(false, "Incorrect code. Attempts left: " + (MAX_ATTEMPTS - tok.getAttempts()), null);
         }
 
-        tok.setCreatedAt(now);
+        tok.setUsed(true);
         tokens.save(tok);
 
         String voterToken = jwtService.generateVoterToken(voter.getEmail());
+
+        ResponseCookie jwtCookie = ResponseCookie.from("voterToken", voterToken)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Strict")
+                .path("/")
+                .maxAge(3600)
+                .build();
+        response.setHeader("Set-Cookie", jwtCookie.toString());
 
         return new OtpConfirmResponse(true,
                 "Voter verified",

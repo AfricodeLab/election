@@ -1,12 +1,10 @@
 package com.brandedhustlers.electionbackend.ops.web;
 
-import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.ops.dto.CreateLaunchCmd;
 import com.brandedhustlers.electionbackend.ops.enums.LaunchStatus;
 import com.brandedhustlers.electionbackend.ops.service.LaunchService;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,26 +22,15 @@ import java.util.UUID;
 public class LaunchController {
     private final LaunchService svc;
     private final JWTService jwtService;
-    private final AppUserRepository appUserRepository;
-    private final HttpServletRequest httpServletRequest;
     private final GetUser getUser;
 
     public LaunchController(LaunchService svc,
                             JWTService jwtService,
-                            AppUserRepository appUserRepository,
-                            HttpServletRequest httpServletRequest,
                             GetUser getUser) {
         this.svc = svc;
         this.jwtService = jwtService;
-        this.appUserRepository = appUserRepository;
-        this.httpServletRequest = httpServletRequest;
         this.getUser = getUser;
     }
-
-    private UUID getAppUserId(HttpServletRequest request) {
-        return jwtService.extractAppUserId(request);
-    }
-
 
     @PostMapping
     public ResponseEntity<?> create(@RequestBody CreateLaunchCmd createLaunchCmd) {

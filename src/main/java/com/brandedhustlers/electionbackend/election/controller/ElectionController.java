@@ -98,8 +98,8 @@ public class ElectionController {
     }
 
     @GetMapping("/live")
-    public ResponseEntity<?> live(HttpServletRequest httpServletRequest, Pageable pageable) {
-        return new ResponseEntity<>(electionService.getLiveElectionForVoterOrg(httpServletRequest, pageable), HttpStatus.OK);
+    public ResponseEntity<?> live(Pageable pageable) {
+        return new ResponseEntity<>(electionService.getLiveElectionForVoterOrg(pageable), HttpStatus.OK);
     }
 
     @PutMapping("/update-candidate/{candidateId}")
@@ -121,7 +121,7 @@ public class ElectionController {
             AppUser user = getUser.getCurrentAuthenticatedUser();
 
             // Verify admin role
-            if (!user.getUserRole().equals(UserRole.ADMIN)) {
+            if (!user.getUserRole().equals(UserRole.ADMIN) && !user.getUserRole().equals(UserRole.SUPER_ADMIN)) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
                         "message", "Only admins can bring elections live"
@@ -130,10 +130,15 @@ public class ElectionController {
 
             // Verify org access (admin must belong to election's org)
             Organization electionOrg = electionRepository.getElectionOrganization(electionId);
-            if (!user.getAppUserOrganization().equals(electionOrg)) {
+
+            log.info(String.valueOf(electionOrg.equals(user.getAppUserOrganization())));
+            log.info("election org: {}", electionOrg.toString());
+            log.info("user org: {}", user.getAppUserOrganization().toString());
+
+            if (!(user.getAppUserOrganization().getOrganizationId().equals(electionOrg.getOrganizationId()))) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
-                        "message", "You cannot manage elections from other organizations"
+                        "message","You cannot manage elections from other organizations"
                 ));
             }
 

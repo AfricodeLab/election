@@ -23,6 +23,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Table(name = "app_user", schema = "auth")
+@ToString
 public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

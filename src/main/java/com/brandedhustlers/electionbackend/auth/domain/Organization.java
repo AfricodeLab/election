@@ -16,6 +16,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(schema = "auth", name = "organization")
+@ToString
 public class Organization {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

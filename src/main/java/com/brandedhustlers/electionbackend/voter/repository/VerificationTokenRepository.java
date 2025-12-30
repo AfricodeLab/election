@@ -14,7 +14,7 @@ public interface VerificationTokenRepository extends JpaRepository<VerificationT
     @Query("select vr from VerificationToken vr where  vr.voterId = :voterId")
     Optional<VerificationToken> findTopByVoterIdAndElectionIdOrderByCreatedAtDesc(UUID voterId, UUID electionId);
 
-    @Query("select vr from VerificationToken vr where vr.voterId = :voterId and vr.expiresAt > :now order by vr.expiresAt desc")
+    @Query("select vr from VerificationToken vr where vr.voterId = :voterId and vr.isUsed = TRUE")
     Optional<VerificationToken> findFirstByVoterIdAndCreatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(UUID voterId, Instant now);
 
 }

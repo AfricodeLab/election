@@ -26,9 +26,9 @@ import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voting.service.ConfigAnchorService;
 import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -38,8 +38,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -156,7 +154,7 @@ public class ElectionService implements IElectionService {
                 actorName,
                 actorRole,
                 actorType,
-                "Launch",
+                "Create Election",
                 election.getElectionId(),
                 election.getElectionTitle(),
                 source,
@@ -394,18 +392,21 @@ public class ElectionService implements IElectionService {
         return new PageImpl<>(elections, pageable, elections.size());
     }
 
-    public Page<ElectionDTO> getLiveElectionForVoterOrg(HttpServletRequest httpServletRequest, Pageable pageable) {
-        String token = httpServletRequest.getHeader("Authorization").substring(7);
-        //I need the voterId and the org Id
-        UUID voterOrgId = UUID.fromString(jwtService.extractVoterOrgId(token));
+    public Page<ElectionDTO> getLiveElectionForVoterOrg(Pageable pageable) {
 
-        List<ElectionDTO> assignedElections = electionRepository.findLiveByOrgAndAssigned(
-                        voterOrgId, ElectionStatus.LIVE, Timestamp.from(Instant.now())
-                ).stream()
+        Voter currentVoter = getUser.getCurrentAuthenticatedVoter();
+        UUID voterOrgId = currentVoter.getOrganization().getOrganizationId();
+        UUID voterId = currentVoter.getVoterId();
+
+        List<ElectionDTO> unvotedElections = electionRepository.findLiveByOrgAndNotVoted(
+                        voterOrgId,
+                        ElectionStatus.LIVE,
+                        voterId)
+                .stream()
                 .map(electionMapper::entityToDto)
                 .toList();
 
-        return new PageImpl<>(assignedElections, pageable, assignedElections.size());
+        return new PageImpl<>(unvotedElections, pageable, unvotedElections.size());
     }
 
     /**

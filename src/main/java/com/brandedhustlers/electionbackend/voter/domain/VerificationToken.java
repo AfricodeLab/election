@@ -40,4 +40,6 @@ public class VerificationToken {
 
     private String channel;
 
+    private boolean isUsed;
+
 }

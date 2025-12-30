@@ -81,7 +81,7 @@ public class VoterController {
     }*/
 
     @PostMapping("/import")
-    public ResponseEntity<Map<String, Object>> uploadFile(
+    public ResponseEntity<?> uploadFile(
             @RequestParam("file") MultipartFile file) {
 
         AppUser creator = getUser.getCurrentAuthenticatedUser();
