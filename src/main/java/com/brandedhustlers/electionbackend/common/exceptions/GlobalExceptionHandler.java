@@ -34,6 +34,20 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(NoAuthenticatedUser.class)
+    public ResponseEntity<?> handleNoAuthenticatedUser(NoAuthenticatedUser e, HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.UNAUTHORIZED.value(),
+                new APIException.APIError(
+                        HttpStatus.UNAUTHORIZED,
+                        "User is not authenticated or JWT was not provided. Please login again.",
+                        Timestamp.from(Instant.now())
+                ),
+                request.getRequestId()
+        );
+        return new ResponseEntity<>(apiException, HttpStatus.UNAUTHORIZED);
+    }
+
     @ExceptionHandler(LaunchNotfound.class)
     public ResponseEntity<?> handleLaunchNotfound(LaunchNotfound e, HttpServletRequest request) {
         APIException apiException = new APIException(

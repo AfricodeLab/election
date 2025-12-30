@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.ops.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
+import com.brandedhustlers.electionbackend.auth.exceptions.ConflictException;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.Election;
@@ -81,6 +82,13 @@ public class LaunchService {
         }
         if (startAt != null && endAt != null && startAt.isAfter(endAt)) {
             throw new IllegalStateException("OPS-4001 invalid time window");
+        }
+
+        List<String> existingOrgLaunches = launchRepository.findByOrgId(orgId).stream()
+                .map(Launch::getName).toList();
+
+        if (existingOrgLaunches.contains(name)){
+            throw new ConflictException("A launch with this name already exists in this organization");
         }
 
         Launch newLaunch = Launch.builder()

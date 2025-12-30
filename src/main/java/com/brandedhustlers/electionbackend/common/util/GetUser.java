@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.security.VoterAuthToken;
+import com.brandedhustlers.electionbackend.common.exceptions.NoAuthenticatedUser;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import org.springframework.security.core.Authentication;
@@ -71,7 +72,7 @@ public class GetUser {
      * Validate authentication presence and expected principal type.
      */
     private void validateAuthentication(Authentication authentication, Class<?> expectedPrincipalClass) {
-        if (authentication == null || !authentication.isAuthenticated()) {
+        if (authentication == null) {
             SecurityContextHolder.clearContext();
             throw new SecurityException("No authenticated session found");
         }
@@ -79,7 +80,7 @@ public class GetUser {
         Object principal = authentication.getPrincipal();
         if (!expectedPrincipalClass.isInstance(principal)) {
             SecurityContextHolder.clearContext();
-            throw new SecurityException("Unexpected authentication principal type: " + principal.getClass().getSimpleName());
+            throw new NoAuthenticatedUser("Unexpected authentication principal type: " + principal.getClass().getSimpleName());
         }
     }
 }

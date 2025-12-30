@@ -13,7 +13,6 @@ import com.brandedhustlers.electionbackend.voting.repository.VoteRepository;
 import com.brandedhustlers.electionbackend.voting.util.Hash;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -50,7 +49,7 @@ public class OutBoxService implements OutBoxRelay {
 
     @Override
     @Transactional
-    @Scheduled(fixedDelay = 10000) // Every 10 seconds
+//    @Scheduled(fixedDelay = 10000) // Every 10 seconds
     public void publishPending() {
         List<OutBox> batch = outbox.findTopByPublishedAtIsNull();
 

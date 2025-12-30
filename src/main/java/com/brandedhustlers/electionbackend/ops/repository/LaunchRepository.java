@@ -18,4 +18,7 @@ public interface LaunchRepository extends JpaRepository<Launch, UUID> {
     @Query("select l from Launch l where l.id = :launchId and l.deleteYn = 'N'")
     Optional<Launch> findByLaunchId(UUID launchId);
 
+    @Query("select l from Launch  l where l.orgId = :orgId")
+    List<Launch> findByOrgId(UUID orgId);
+
 }

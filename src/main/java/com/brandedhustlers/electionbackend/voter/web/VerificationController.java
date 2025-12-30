@@ -15,6 +15,7 @@ import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import com.brandedhustlers.electionbackend.voter.service.AttributeExtractor;
 import com.brandedhustlers.electionbackend.voter.service.VerificationService;
 import jakarta.mail.MessagingException;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -52,8 +53,8 @@ public class VerificationController {
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<OtpConfirmResponse> confirm(@RequestBody OtpConfirmRequest req) {
-        return ResponseEntity.ok(service.confirmOtp(req));
+    public ResponseEntity<OtpConfirmResponse> confirm(@RequestBody OtpConfirmRequest req, HttpServletResponse response) {
+        return ResponseEntity.ok(service.confirmOtp(req, response));
     }
 
     @GetMapping("/voters/attribute-coverage")

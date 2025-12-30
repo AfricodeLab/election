@@ -14,6 +14,7 @@ import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.BufferedReader;
@@ -50,6 +51,9 @@ public class VoterImportService implements IVoterImportService {
     public UUID startImport(String fileRef) {
         UUID jobId = UUID.randomUUID();
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        UUID userId = getUser.getCurrentAuthenticatedUser().getAppUserId();
+
+        log.info("Starting import job {} for org {} by user {}", jobId, orgId, userId);
 
         // Create import job
         VoterImportJob job = VoterImportJob.builder()
@@ -63,9 +67,10 @@ public class VoterImportService implements IVoterImportService {
                 .build();
 
         jobRepository.save(job);
+        jobRepository.flush(); // Ensure job is persisted before async processing
 
-        // Process asynchronously
-        processImportAsync(jobId, fileRef);
+        // Process asynchronously - pass userId since security context won't be available in async thread
+        processImportAsync(jobId, fileRef, userId);
 
         return jobId;
     }
@@ -90,36 +95,163 @@ public class VoterImportService implements IVoterImportService {
         );
     }
 
-    @Async
-    protected void processImportAsync(UUID jobId, String fileRef) {
+    @Async("taskExecutor")
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void processImportAsync(UUID jobId, String fileRef, UUID userId) {
+        log.info("Starting async processing for job {}", jobId);
+
         VoterImportJob job = jobRepository.findById(jobId)
-                .orElseThrow();
+                .orElseThrow(() -> new RuntimeException("Job not found: " + jobId));
 
         try {
             job.setStatus("RUNNING");
             job.setStartedAt(new Timestamp(System.currentTimeMillis()));
-            jobRepository.save(job);
+            jobRepository.saveAndFlush(job);
 
+            log.info("Parsing file: {}", fileRef);
             List<CreateVoterCmd> voters = parseFile(fileRef);
-            job.setTotal(voters.size());
-            jobRepository.save(job);
 
-            processVoters(job, voters);
+            job.setTotal(voters.size());
+            jobRepository.saveAndFlush(job);
+
+            log.info("Found {} voters to import for job {}", voters.size(), jobId);
+
+            if (voters.isEmpty()) {
+                log.warn("No voters found in file: {}", fileRef);
+                job.setStatus("DONE");
+                job.setFinishedAt(new Timestamp(System.currentTimeMillis()));
+                jobRepository.saveAndFlush(job);
+                return;
+            }
+
+            processVoters(job, voters, userId);
 
             job.setStatus("DONE");
             job.setFinishedAt(new Timestamp(System.currentTimeMillis()));
-            jobRepository.save(job);
+            jobRepository.saveAndFlush(job);
+
+            log.info("Completed import for job {}. Total: {}, Processed: {}, Failed: {}",
+                    jobId, job.getTotal(), job.getProcessed(), job.getFailed());
 
         } catch (Exception e) {
             log.error("Import failed for job {}", jobId, e);
+
             job.setStatus("FAILED");
             job.setFinishedAt(new Timestamp(System.currentTimeMillis()));
-            jobRepository.save(job);
+            jobRepository.saveAndFlush(job);
         }
+    }
+
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    protected void processVoters(VoterImportJob job, List<CreateVoterCmd> voterCmds, UUID userId) {
+        // Fetch user in this transaction context (security context not available in async)
+        AppUser currentUser = getUser.getCurrentAuthenticatedUser();
+
+        if (currentUser == null) {
+            throw new RuntimeException("User not found: " + userId);
+        }
+
+        if (currentUser.getAppUserOrganization() == null) {
+            throw new RuntimeException("User has no organization: " + userId);
+        }
+
+        log.info("Processing {} voters with user {} ({})",
+                voterCmds.size(), currentUser.getAppUserEmail(), currentUser.getAppUserId());
+
+        int batchCount = 0;
+        for (CreateVoterCmd cmd : voterCmds) {
+            try {
+                // Validate required fields
+                if (cmd.name() == null || cmd.name().trim().isEmpty()) {
+                    log.warn("Skipping voter with empty name");
+                    job.setFailed(job.getFailed() + 1);
+                    continue;
+                }
+
+                if (cmd.phone() == null || cmd.phone().trim().isEmpty()) {
+                    log.warn("Skipping voter {} with empty phone", cmd.name());
+                    job.setFailed(job.getFailed() + 1);
+                    continue;
+                }
+
+                if (cmd.email() == null || cmd.email().trim().isEmpty()) {
+                    log.warn("Skipping voter {} with empty email", cmd.name());
+                    job.setFailed(job.getFailed() + 1);
+                    continue;
+                }
+
+                if (cmd.nationalId() == null || cmd.nationalId().trim().isEmpty()) {
+                    log.warn("Skipping voter {} with empty nationalId", cmd.name());
+                    job.setFailed(job.getFailed() + 1);
+                    continue;
+                }
+
+                if (voterRepository.existsByEmail(cmd.email()) ||
+                        voterRepository.existsByPhone(cmd.phone()) ||
+                        voterRepository.existsByNationalId(cmd.nationalId())) {
+
+                    job.setFailed(job.getFailed() + 1);
+                    log.warn("Duplicate voter: {}", cmd.email());
+                    continue;
+                }
+
+                // Extract attributes if available
+                Map<String, Object> attributes = null;
+                if (cmd.attributes() != null && !cmd.attributes().isEmpty()) {
+                    attributes = attributeExtractor.extractAttributes(
+                            cmd.nationalId(),
+                            cmd.phone(),
+                            cmd.email(),
+                            cmd.attributes()
+                    );
+                }
+
+                Voter voter = Voter.builder()
+                        .organization(currentUser.getAppUserOrganization())
+                        .name(cmd.name())
+                        .phone(cmd.phone())
+                        .email(cmd.email())
+                        .nationalId(cmd.nationalId())
+                        .voterStatus(VoterStatus.ACTIVE)
+                        .createdBy(currentUser)
+                        .attributes(attributes)
+                        .attributesSource("BULK_IMPORT_" + job.getFileRef())
+                        .attributesUpdatedAt(Timestamp.from(Instant.now()))
+                        .build();
+
+                voterRepository.save(voter);
+                job.setProcessed(job.getProcessed() + 1);
+                batchCount++;
+
+                // Save progress every 100 records
+                if (batchCount >= 100) {
+                    voterRepository.flush();
+                    jobRepository.saveAndFlush(job);
+                    log.info("Progress: {}/{} voters processed", job.getProcessed(), job.getTotal());
+                    batchCount = 0;
+                }
+
+            } catch (Exception e) {
+                log.error("Failed to import voter: {} - {}", cmd.email(), e.getMessage(), e);
+                job.setFailed(job.getFailed() + 1);
+            }
+        }
+
+        // Final flush and save
+        voterRepository.flush();
+        jobRepository.saveAndFlush(job);
+
+        log.info("Final count for job {} - Total: {}, Processed: {}, Failed: {}",
+                job.getId(), job.getTotal(), job.getProcessed(), job.getFailed());
     }
 
     private List<CreateVoterCmd> parseFile(String fileRef) throws IOException {
         Path filePath = Paths.get(fileRef);
+
+        if (!Files.exists(filePath)) {
+            throw new IOException("File not found: " + fileRef);
+        }
+
         String fileName = filePath.getFileName().toString().toLowerCase();
 
         if (fileName.endsWith(".csv")) {
@@ -156,6 +288,7 @@ public class VoterImportService implements IVoterImportService {
             }
         }
 
+        log.info("Parsed {} voters from CSV file", voters.size());
         return voters;
     }
 
@@ -190,13 +323,17 @@ public class VoterImportService implements IVoterImportService {
             Sheet sheet = workbook.getSheetAt(0);
             Row headerRow = sheet.getRow(0);
 
-            /**
-             * NEW: Detect which columns are present.
-             * Expected columns:
-             * - Required: name, phone, email, nationalId
-             * - Optional: age, region, citizen, role, employmentStatus, etc.
-             */
+            if (headerRow == null) {
+                throw new IOException("Excel file has no header row");
+            }
+
             Map<String, Integer> columnMap = buildColumnMap(headerRow);
+
+            // Validate required columns
+            if (!columnMap.containsKey("name") || !columnMap.containsKey("phone") ||
+                    !columnMap.containsKey("email") || !columnMap.containsKey("nationalid")) {
+                throw new IOException("Excel file missing required columns. Required: name, phone, email, nationalId");
+            }
 
             boolean isFirstRow = true;
             for (Row row : sheet) {
@@ -212,12 +349,9 @@ public class VoterImportService implements IVoterImportService {
                 String name = getCellValue(row, columnMap.get("name"));
                 String phone = getCellValue(row, columnMap.get("phone"));
                 String email = getCellValue(row, columnMap.get("email"));
-                String nationalId = getCellValue(row, columnMap.get("nationalId"));
+                String nationalId = getCellValue(row, columnMap.get("nationalid"));
 
                 if (name != null && phone != null && email != null && nationalId != null) {
-                    /**
-                     * NEW: Extract optional attribute columns.
-                     */
                     Map<String, Object> attributes = new HashMap<>();
 
                     // Age
@@ -261,8 +395,8 @@ public class VoterImportService implements IVoterImportService {
                     }
 
                     // Employment Status
-                    if (columnMap.containsKey("employmentStatus")) {
-                        String status = getCellValue(row, columnMap.get("employmentStatus"));
+                    if (columnMap.containsKey("employmentstatus")) {
+                        String status = getCellValue(row, columnMap.get("employmentstatus"));
                         if (status != null) {
                             attributes.put("employmentStatus", status);
                         }
@@ -279,13 +413,10 @@ public class VoterImportService implements IVoterImportService {
             }
         }
 
+        log.info("Parsed {} voters from Excel file", voters.size());
         return voters;
     }
 
-    /**
-     * Build a map of column name → column index.
-     * Makes it easy to check which columns are present.
-     */
     private Map<String, Integer> buildColumnMap(Row headerRow) {
         Map<String, Integer> columnMap = new HashMap<>();
 
@@ -306,9 +437,6 @@ public class VoterImportService implements IVoterImportService {
         return columnMap;
     }
 
-    /**
-     * Get cell value at specific column index (handles null safely).
-     */
     private String getCellValue(Row row, Integer columnIndex) {
         if (columnIndex == null) {
             return null;
@@ -362,68 +490,5 @@ public class VoterImportService implements IVoterImportService {
             default:
                 return null;
         }
-    }
-
-    @Transactional
-    protected void processVoters(VoterImportJob job, List<CreateVoterCmd> voterCmds) {
-        AppUser currentUser = getCurrentUser();
-
-        for (CreateVoterCmd cmd : voterCmds) {
-            try {
-                // Check for duplicates
-                if (voterRepository.existsByEmail(cmd.email()) ||
-                        voterRepository.existsByPhone(cmd.phone()) ||
-                        voterRepository.existsByNationalId(cmd.nationalId())) {
-
-                    job.setFailed(job.getFailed() + 1);
-                    log.warn("Duplicate voter: {}", cmd.email());
-                    continue;
-                }
-
-                /**
-                 * NEW: Extract attributes from voter data.
-                 * This merges:
-                 * - Attributes from CSV/Excel (if provided)
-                 * - Auto-derived attributes (age from ID, region from phone)
-                 */
-                Map<String, Object> attributes = attributeExtractor.extractAttributes(
-                        cmd.nationalId(),
-                        cmd.phone(),
-                        cmd.email(),
-                        cmd.attributes()
-                );
-
-                Voter voter = Voter.builder()
-                        .organization(currentUser.getAppUserOrganization())
-                        .name(cmd.name())
-                        .phone(cmd.phone())
-                        .email(cmd.email())
-                        .nationalId(cmd.nationalId())
-                        .voterStatus(VoterStatus.ACTIVE)
-                        .createdBy(currentUser)
-                        .attributes(attributes)
-                        .attributesSource("BULK_IMPORT_" + job.getFileRef())
-                        .attributesUpdatedAt(Timestamp.from(Instant.now()))
-                        .build();
-
-                voterRepository.save(voter);
-                job.setProcessed(job.getProcessed() + 1);
-
-                // Save progress every 100 records
-                if (job.getProcessed() % 100 == 0) {
-                    jobRepository.save(job);
-                }
-
-            } catch (Exception e) {
-                log.error("Failed to import voter: {}", cmd.email(), e);
-                job.setFailed(job.getFailed() + 1);
-            }
-        }
-
-        jobRepository.save(job);
-    }
-
-    private AppUser getCurrentUser() {
-        return getUser.getCurrentAuthenticatedUser();
     }
 }

@@ -68,6 +68,23 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
                                             @Param("status") ElectionStatus status,
                                             @Param("now") Timestamp now);
 
+    @Query("""
+    SELECT e FROM Election e
+    WHERE e.organization.organizationId = :orgId
+      AND e.electionStatus = :status
+      AND NOT EXISTS (
+        SELECT 1 FROM ElectionVoter ev
+        WHERE ev.election.electionId = e.electionId
+          AND ev.voter.voterId = :voterId
+          AND ev.hasVoted = true
+      )
+""")
+    List<Election> findLiveByOrgAndNotVoted(
+            @Param("orgId") UUID orgId,
+            @Param("status") ElectionStatus status,
+            @Param("voterId") UUID voterId
+    );
+
 /*    @Query("""
               select e from Election e
               where e.electionId = :electionId

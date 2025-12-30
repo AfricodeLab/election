@@ -16,9 +16,31 @@ public class WebConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowedOrigins(List.of("http://localhost:5173", "https://345840eda4c2.ngrok-free.app","https://2mb8mjbf-8085.uks1.devtunnels.ms/"));
+
+        // Replace "*" with specific headers
+        configuration.setAllowedHeaders(List.of(
+                "Authorization",
+                "Content-Type",
+                "Accept",
+                "X-Requested-With",
+                "ngrok-skip-browser-warning"
+        ));
+
+        configuration.setExposedHeaders(List.of(
+                "Authorization",
+                "Content-Type"
+        ));
+
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:5173",
+                "https://345840eda4c2.ngrok-free.app",
+                "https://2mb8mjbf-8085.uks1.devtunnels.ms",
+                "https://fabf289e5006.ngrok-free.app"
+        ));
+
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
