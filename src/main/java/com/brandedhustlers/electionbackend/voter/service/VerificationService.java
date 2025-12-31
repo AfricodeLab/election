@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.voter.service;
 
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
 import com.brandedhustlers.electionbackend.voter.domain.VerificationToken;
@@ -56,6 +57,8 @@ public class VerificationService {
                 .orElse(null);
 
         if (last != null && Duration.between(last.getCreatedAt(), now).compareTo(RESEND_COOLDOWN) < 0) {
+            last.setDeleteYn(DeleteYn.Y);
+            tokens.save(last);
             throw new IllegalStateException("OTP-429 resend too soon, please wait");
         }
 
@@ -108,6 +111,7 @@ public class VerificationService {
         }
 
         tok.setUsed(true);
+        tok.setDeleteYn(DeleteYn.Y);
         tokens.save(tok);
 
         String voterToken = jwtService.generateVoterToken(voter.getEmail());
