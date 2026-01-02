@@ -11,6 +11,7 @@ import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
+import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.results.domain.Tally;
 import com.brandedhustlers.electionbackend.results.dto.TallyDto;
 import com.brandedhustlers.electionbackend.results.repository.TallyRepository;
@@ -31,15 +32,17 @@ public class ResultsService {
     private final AppUserRepository appUserRepository;
     private final CandidateRepository candidateRepository;
     private final CandidateMapper candidateMapper;
+    private final ElectionRepository electionRepository;
     private final GetUser getUser;
 
     public ResultsService(TallyRepository repo,
                           AppUserRepository appUserRepository,
                           CandidateRepository candidateRepository,
-                          CandidateMapper candidateMapper,
+                          CandidateMapper candidateMapper, ElectionRepository electionRepository,
                           GetUser getUser) {
         this.repo = repo;
         this.appUserRepository = appUserRepository;
+        this.electionRepository = electionRepository;
         this.getUser = getUser;
         this.candidateRepository = candidateRepository;
         this.candidateMapper = candidateMapper;
@@ -56,6 +59,8 @@ public class ResultsService {
                 .map(t -> t.getId().getCandidateId())
                 .collect(Collectors.toSet());
 
+        String electionTitle = electionRepository.getElectionTitleById(electionId);
+
         List<Candidate> candidates = candidateRepository.findAllById(candidateIds);
 
         Map<UUID, Candidate> candidateMap = candidates.stream()
@@ -66,6 +71,7 @@ public class ResultsService {
                     Candidate candidate = candidateMap.get(tally.getId().getCandidateId());
                     return new TallyDto(
                             tally.getId().getElectionId(),
+                            electionTitle,
                             candidateMapper.entityToDTO(candidate),
                             tally.getCount(),
                             tally.getUpdatedAt()
