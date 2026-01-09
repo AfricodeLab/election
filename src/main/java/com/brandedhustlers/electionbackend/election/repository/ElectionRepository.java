@@ -21,6 +21,9 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
     @Query("select e from Election e where e.organization.organizationId = :organizationId")
     List<Election> findByOrganizationId(UUID organizationId);
 
+    @Query("select e.electionTitle from Election e where e.electionId = :electionId")
+    String getElectionTitleById(UUID electionId);
+
     boolean existsByElectionIdAndOrganization_OrganizationId(UUID electionId, UUID organizationOrganizationId);
 
     @Query("""
