@@ -56,6 +56,8 @@ public class JWTService {
         claims.put("voterId", voter.getVoterId().toString());
         claims.put("role", UserRole.VOTER.getName());
         claims.put("stepUpVerifiedAt", Instant.now().toEpochMilli());
+        claims.put("iss", "brandedhuslters_backend");
+        claims.put("aud", "election_client");
 
         return Jwts.builder()
                 .claims()
