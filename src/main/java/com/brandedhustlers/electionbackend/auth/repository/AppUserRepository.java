@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -19,5 +20,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
     Optional<AppUser> findByUsernameOrEmail(String query);
 
     boolean existsByUsername(String username);
+
+    @Query("select  a from AppUser a where a.appUserOrganization.organizationId = :orgId")
+    List<AppUser> getUsersInOrg(UUID orgId);
 }
 

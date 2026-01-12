@@ -9,6 +9,7 @@ import com.brandedhustlers.electionbackend.voter.dto.ImportStatusDTO;
 import com.brandedhustlers.electionbackend.voter.service.VoterImportService;
 import com.brandedhustlers.electionbackend.voter.service.VoterService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -142,5 +143,10 @@ public class VoterController {
         } else {
             return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
         }
+    }
+
+    @GetMapping("/org/voters")
+    public ResponseEntity<?> getOrgVoters(Pageable pageable){
+        return new ResponseEntity<>(voterService.getOrgVoters(pageable), HttpStatus.OK);
     }
 }
