@@ -216,6 +216,16 @@ public class DataSeeder implements CommandLineRunner {
                         .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
+                        .firstName("Elikem").lastName("Fenuku")
+                        .username("reynolds")
+                        .appUserEmail("reynoldsfenuku@gmail.com")
+                        .password(encoder.encode("test"))
+                        .userRole(UserRole.SUPER_ADMIN)
+                        .roles(new HashSet<>(roles.values()))
+                        .organizationName("Electoral Commission")
+                        .appUserOrganization(orgs.get("Electoral Commission"))
+                        .build(),
+                AppUser.builder()
                         .firstName("Ekow").lastName("Davis")
                         .username("davis")
                         .appUserEmail("reynoldsfenuku@gmail.com")

@@ -16,6 +16,9 @@ import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import com.brandedhustlers.electionbackend.voter.mapper.VoterMapper;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -127,6 +130,17 @@ public class VoterService implements IVoterService {
                 1
         );
         return voterMapper.entityToDto(newVoter);
+    }
+
+    public Page<VoterDTO> getOrgVoters(Pageable pageable){
+        UUID voterOrg = getUser.getCurrentAuthenticatedUserOrgId();
+
+        List<VoterDTO> orgVoters = voterRepository.findByOrgId(voterOrg)
+                .stream()
+                .map(voterMapper::entityToDto)
+                .toList();
+
+        return new PageImpl<>(orgVoters, pageable, orgVoters.size());
     }
 
     @Override

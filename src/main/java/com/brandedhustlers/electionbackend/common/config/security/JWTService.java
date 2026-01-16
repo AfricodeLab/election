@@ -124,6 +124,8 @@ public class JWTService {
         claims.put("userEmail", appUserEmail);
         claims.put("userOrgId", user.getAppUserOrganization() == null ? null : user.getAppUserOrganization().getOrganizationId());
         claims.put("role", user.getUserRole());
+        claims.put("iss", "brandedhuslters_backend");
+        claims.put("aud", "election_client");
 
         return Jwts.builder()
                 .claims()
