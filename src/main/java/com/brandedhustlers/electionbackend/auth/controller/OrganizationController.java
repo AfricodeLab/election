@@ -5,6 +5,7 @@ import com.brandedhustlers.electionbackend.auth.dto.CreateOrganizationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.OrganizationDTO;
 import com.brandedhustlers.electionbackend.auth.service.IOrganizationService;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -19,20 +20,22 @@ public class OrganizationController {
     private final IOrganizationService organizationService;
     private final HttpServletRequest httpServletRequest;
     private final JWTService jwtService;
+    private final GetUser getUser;
 
     public OrganizationController(IOrganizationService organizationService,
                                   HttpServletRequest httpServletRequest,
-                                  JWTService jwtService) {
+                                  JWTService jwtService, GetUser getUser) {
         this.organizationService = organizationService;
         this.httpServletRequest = httpServletRequest;
         this.jwtService = jwtService;
+        this.getUser = getUser;
     }
 
     @PostMapping("/create")
     public ResponseEntity<?> createOrganization(
             @RequestBody CreateOrganizationRequest request
     ) {
-        return new ResponseEntity<>(organizationService.createOrganization(request), HttpStatus.CREATED);
+        return new ResponseEntity<>(organizationService.createOrganization(request, getUser.getCurrentAuthenticatedUserId()), HttpStatus.CREATED);
     }
 
     @PutMapping("/update/{orgId}")

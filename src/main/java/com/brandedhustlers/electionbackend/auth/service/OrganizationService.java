@@ -13,6 +13,7 @@ import com.brandedhustlers.electionbackend.auth.mapper.OrganizationMapper;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
+import com.brandedhustlers.electionbackend.common.util.GetUser;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -33,25 +34,25 @@ public class OrganizationService implements IOrganizationService {
     private final OrganizationMapper organizationMapper;
     private final AppUserRepository userRepository;
     private final HttpServletRequest httpServletRequest;
+    private final GetUser getUser;
 
     public OrganizationService(JWTService jwtService,
                                OrganizationRepository organizationRepository,
                                HttpServletRequest servletRequest,
                                OrganizationMapper organizationMapper,
-                               AppUserRepository userRepository, HttpServletRequest httpServletRequest) {
+                               AppUserRepository userRepository, HttpServletRequest httpServletRequest, GetUser getUser) {
         this.jwtService = jwtService;
         this.organizationRepository = organizationRepository;
         this.servletRequest = servletRequest;
         this.organizationMapper = organizationMapper;
         this.userRepository = userRepository;
         this.httpServletRequest = httpServletRequest;
+        this.getUser = getUser;
     }
 
     @Override
-    public OrganizationDTO createOrganization(CreateOrganizationRequest request) {
-        UUID createdById = jwtService.extractAppUserId(httpServletRequest);
-
-        AppUser createdBy = userRepository.findById(createdById)
+    public OrganizationDTO createOrganization(CreateOrganizationRequest request, UUID creatorId) {
+        AppUser createdBy = userRepository.findById(creatorId)
                 .orElseThrow(() -> new UserNotFound("Creator account not found and hence new organization cannot be created."));
 
         Optional<Organization> potentialConflict =  organizationRepository.findByName(request.organizationName());

@@ -38,9 +38,6 @@ public class AppUser {
     @Column(nullable = false, unique = true)
     private String appUserEmail;
 
-    @Column(nullable = false)
-    private String organizationName;
-
     @Column(unique = true)
     private String username;
 
@@ -80,5 +77,9 @@ public class AppUser {
     @ManyToOne
     @JoinColumn(name = "organization_id")
     private Organization appUserOrganization;
+
+    public String getOrganizationName(){
+        return appUserOrganization == null ? null : appUserOrganization.getOrganizationName();
+    }
 
 }

@@ -33,9 +33,8 @@ public class WebConfig {
 
         configuration.setAllowedOrigins(List.of(
                 "http://localhost:5173",
-                "https://345840eda4c2.ngrok-free.app",
-                "https://2mb8mjbf-8085.uks1.devtunnels.ms",
-                "https://fabf289e5006.ngrok-free.app"
+                "https://4461b8903387.ngrok-free.app",
+                "https://424d565d5492.ngrok-free.app"
         ));
 
         configuration.setAllowCredentials(true);

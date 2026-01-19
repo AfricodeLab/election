@@ -27,8 +27,10 @@ import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
+import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import com.brandedhustlers.electionbackend.voting.service.ConfigAnchorService;
 import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -58,6 +60,8 @@ public class ElectionService implements IElectionService {
     private final GetUser getUser;
     private final ConfigSnapshotService configSnapshotService;
     private final ConfigAnchorService configAnchorService;
+    private final HttpServletRequest httpServletRequest;
+    private final VoterRepository voterRepository;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -67,7 +71,7 @@ public class ElectionService implements IElectionService {
                            CandidateRepository candidateRepository,
                            AuditEmitter auditEmitter,
                            CandidateMapper candidateMapper,
-                           GetUser getUser, ConfigSnapshotService configSnapshotService, ConfigAnchorService configAnchorService) {
+                           GetUser getUser, ConfigSnapshotService configSnapshotService, ConfigAnchorService configAnchorService, HttpServletRequest httpServletRequest, VoterRepository voterRepository) {
         this.electionRepository = electionRepository;
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
@@ -79,6 +83,8 @@ public class ElectionService implements IElectionService {
         this.getUser = getUser;
         this.configSnapshotService = configSnapshotService;
         this.configAnchorService = configAnchorService;
+        this.httpServletRequest = httpServletRequest;
+        this.voterRepository = voterRepository;
     }
 
     @Override

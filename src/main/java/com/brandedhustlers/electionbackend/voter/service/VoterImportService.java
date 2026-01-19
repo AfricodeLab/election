@@ -88,6 +88,7 @@ public class VoterImportService implements IVoterImportService {
 
         return new ImportStatusDTO(
                 job.getId(),
+                job.getOrgId(),
                 job.getStatus(),
                 job.getTotal(),
                 job.getProcessed(),

@@ -28,7 +28,8 @@ public class CloudinaryService {
 
     public String uploadFile(MultipartFile file) {
         try {
-            Map<String, Object> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.emptyMap());
+            Map<String, Object> uploadResult = cloudinary.uploader().upload(file.getBytes(), ObjectUtils.asMap("resource_type", "video"));
+            System.out.println((String) uploadResult.get("url"));
             return (String) uploadResult.get("url");
         } catch (Exception e) {
             log.error("failed to upload file", e);

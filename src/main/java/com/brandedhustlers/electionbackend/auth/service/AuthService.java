@@ -13,6 +13,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.mapper.AppUserMapper;
 import com.brandedhustlers.electionbackend.auth.mapper.OrganizationMapper;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
+import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
@@ -47,6 +48,7 @@ public class AuthService implements IAuthService {
     private final OrganizationService organizationService;
     private final OrganizationMapper organizationMapper;
     private final AppUserMapper appUserMapper;
+    private final OrganizationRepository organizationRepository;
 
     public AuthService(JWTService jwtService,
                        AppUserRepository appUserRepository,
@@ -55,7 +57,7 @@ public class AuthService implements IAuthService {
                        CloudinaryService cloudinaryService,
                        HttpServletRequest request,
                        RoleRepository roleRepository,
-                       GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper, OrganizationMapper organizationMapper1, AppUserMapper appUserMapper) {
+                       GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper, OrganizationMapper organizationMapper1, AppUserMapper appUserMapper, OrganizationRepository organizationRepository) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
@@ -67,6 +69,7 @@ public class AuthService implements IAuthService {
         this.organizationService = organizationService;
         this.organizationMapper = organizationMapper1;
         this.appUserMapper = appUserMapper;
+        this.organizationRepository = organizationRepository;
     }
 
     @Override
@@ -90,12 +93,6 @@ public class AuthService implements IAuthService {
             throw new UserAlreadyExists("Username already taken");
         }
 
-        // Create organization first
-        OrganizationDTO newOrgDto = organizationService.createOrganization(
-                registrationRequest.userOrg()
-        );
-        Organization organization = organizationMapper.dtoToEntity(newOrgDto);
-
         // Create user
         AppUser newUser = AppUser.builder()
                 .firstName(registrationRequest.firstName())
@@ -104,9 +101,21 @@ public class AuthService implements IAuthService {
                 .username(registrationRequest.username())
                 .password(passwordEncoder.encode(registrationRequest.password()))
                 .userRole(UserRole.ORG_ADMIN)
-                .appUserOrganization(organization)
+                .appUserOrganization(null)
                 .build();
 
+        appUserRepository.save(newUser);
+
+        // Create organization
+        OrganizationDTO newOrgDto = organizationService.createOrganization(
+                registrationRequest.userOrg(), newUser.getAppUserId()
+        );
+        Organization organization = organizationMapper.dtoToEntity(newOrgDto);
+
+        // Set both organization and organizationName BEFORE saving organization
+        newUser.setAppUserOrganization(organization);
+
+        organizationRepository.save(organization);
         appUserRepository.save(newUser);
 
         return new RegistrationResponse(
@@ -158,7 +167,6 @@ public class AuthService implements IAuthService {
                 .lastName(createUserRequest.lastName())
                 .username(createUserRequest.username() == null ? null : createUserRequest.username())
                 .appUserEmail(createUserRequest.companyEmail())
-                .organizationName(creator.getOrganizationName())
                 .appUserOrganization(creator.getAppUserOrganization())
                 .password(passwordEncoder.encode(createUserRequest.defaultPassword()))
                 .userRole(UserRole.valueOf(createUserRequest.userRole()))
