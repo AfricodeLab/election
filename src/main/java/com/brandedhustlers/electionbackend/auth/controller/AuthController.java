@@ -14,7 +14,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 
@@ -86,11 +85,11 @@ public class AuthController {
         return new ResponseEntity<>(new ChangePasswordResponse(true, "Password changed successfully"), HttpStatus.OK);
     }
 
-    @PostMapping("/video")
+/*    @PostMapping("/video")
     public ResponseEntity<?> video(@RequestPart(name = "video") MultipartFile video){
         cloudinaryService.uploadFile(video);
         return new ResponseEntity<>(HttpStatus.OK);
-    }
+    }*/
 
     public record ChangePasswordCmd(String oldPassword, String newPassword){}
     record ChangePasswordResponse(boolean success, String message){} //for anyone going through this codebase, I put the records here because I really didn't see why I should create a different file for them...since they'd only ever be use here...although the first one was use in the service...but yeah, you get me

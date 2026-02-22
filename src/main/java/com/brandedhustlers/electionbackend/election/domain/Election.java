@@ -1,11 +1,10 @@
 package com.brandedhustlers.electionbackend.election.domain;
 
-
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
-import com.brandedhustlers.electionbackend.election.enums.ElectionType;
+// ElectionType enum retained for legacy/migration reference only
 import com.brandedhustlers.electionbackend.ops.domain.Launch;
 import jakarta.persistence.*;
 import lombok.*;
@@ -38,8 +37,21 @@ public class Election {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String electionDescription;
 
-    @Enumerated(EnumType.STRING)
-    private ElectionType electionType;
+    /**
+     * Dynamic election type (replaces old ElectionType enum).
+     * Admins can create custom types; system built-in types are also stored here.
+     */
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "election_type_id")
+    private ElectionTypeEntity electionType;
+
+    /**
+     * Optional: the preset used to create this election.
+     * Stored for audit/tracking purposes; fields may have been overridden.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "preset_id")
+    private ElectionPreset presetUsed;
 
     @Enumerated(EnumType.STRING)
     private ElectionStatus electionStatus;
@@ -78,13 +90,13 @@ public class Election {
     @JoinColumn(name = "updated_by")
     private AppUser updatedBy;
 
-
     private boolean isPubliclyVisible = false;
 
     @ManyToOne
     private Launch launch;
 
-    private boolean shouldEndAutomatically = true; //if true election will end automatically if the total expected votes is reached
+    private boolean shouldEndAutomatically = true; // if true election will end automatically if the total expected
+                                                   // votes is reached
 
     /**
      * Set to true when config changes during voting.
@@ -107,10 +119,10 @@ public class Election {
      *
      * Example:
      * {
-     *   "all": [
-     *     {"field": "age", "op": ">=", "value": 18},
-     *     {"field": "citizen", "op": "==", "value": true}
-     *   ]
+     * "all": [
+     * {"field": "age", "op": ">=", "value": 18},
+     * {"field": "citizen", "op": "==", "value": true}
+     * ]
      * }
      */
     @JdbcTypeCode(SqlTypes.JSON)
@@ -125,15 +137,14 @@ public class Election {
     @Builder.Default
     private Integer policyVersion = 1;
 
-
     @PrePersist
-    protected void onCreate(){
+    protected void onCreate() {
         this.updatedAt = Timestamp.from(Instant.now());
         this.createdAt = Timestamp.from(Instant.now());
     }
 
     @PreUpdate
-    protected void onUpdate(){
+    protected void onUpdate() {
         this.updatedAt = Timestamp.from(Instant.now());
     }
 }
