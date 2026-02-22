@@ -15,7 +15,6 @@ import com.brandedhustlers.electionbackend.election.repository.ElectionRepositor
 import com.brandedhustlers.electionbackend.election.service.CandidateService;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;

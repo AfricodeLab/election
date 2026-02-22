@@ -63,7 +63,7 @@ public class GetUser {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         validateAuthentication(authentication, VoterAuthToken.class);
 
-        VoterAuthToken token = (VoterAuthToken) authentication.getPrincipal();
+        VoterAuthToken token = (VoterAuthToken) authentication;
 
         return voterRepository.findVoterById(token.getVoterId(), token.getVoterOrganizationId());
     }

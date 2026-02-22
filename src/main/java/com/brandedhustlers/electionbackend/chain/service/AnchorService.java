@@ -46,7 +46,7 @@ public class AnchorService {
      * Anchors all validated votes that are pending anchor.
      */
     @Scheduled(fixedDelay = 30000)
-    @Transactional
+    @Transactional()
     public void anchorPendingVotes() {
         Timestamp now = Timestamp.from(Instant.now());
 

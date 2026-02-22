@@ -45,6 +45,7 @@ public class GlobalExceptionHandler {
                 ),
                 request.getRequestId()
         );
+        e.printStackTrace();
         return new ResponseEntity<>(apiException, HttpStatus.UNAUTHORIZED);
     }
 
@@ -88,6 +89,7 @@ public class GlobalExceptionHandler {
                 ),
                 request.getRequestId()
         );
+        e.printStackTrace();
         return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
     }
 

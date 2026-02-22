@@ -212,7 +212,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
-                        .organizationName("Electoral Commission")
+//                        .organizationName("Electoral Commission")
                         .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
@@ -222,7 +222,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
-                        .organizationName("Electoral Commission")
+//                        .organizationName("Electoral Commission")
                         .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
@@ -232,7 +232,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.ADMIN)
                         .roles(roleSet(roles, UserRole.ADMIN))
-                        .organizationName("Electoral Commission")
+//                        .organizationName("Electoral Commission")
                         .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
@@ -242,7 +242,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.AUDITOR)
                         .roles(roleSet(roles, UserRole.AUDITOR))
-                        .organizationName("Open Civic Alliance")
+//                        .organizationName("Open Civic Alliance")
                         .appUserOrganization(orgs.get("Open Civic Alliance"))
                         .build(),
                 AppUser.builder()
@@ -252,7 +252,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.CONTRIBUTOR)
                         .roles(roleSet(roles, UserRole.CONTRIBUTOR))
-                        .organizationName("Demo Party")
+//                        .organizationName("Demo Party")
                         .appUserOrganization(orgs.get("Demo Party"))
                         .build(),
                 AppUser.builder()
@@ -262,7 +262,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.OBSERVER)
                         .roles(roleSet(roles, UserRole.OBSERVER))
-                        .organizationName("Open Civic Alliance")
+//                        .organizationName("Open Civic Alliance")
                         .appUserOrganization(orgs.get("Open Civic Alliance"))
                         .build()
         );
