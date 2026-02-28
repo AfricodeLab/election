@@ -82,7 +82,7 @@ class ElectionPresetServiceTest {
                 @Test
                 void successForAdmin() {
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
-                        when(electionTypeRepository.findByTypeIdAndDeleteYn(electionType.getTypeId(), DeleteYn.N))
+                        when(electionTypeRepository.findByElectionTypeId(electionType.getTypeId()))
                                         .thenReturn(Optional.of(electionType));
 
                         ElectionPreset saved = ElectionPreset.builder()
@@ -122,7 +122,7 @@ class ElectionPresetServiceTest {
                 void throwsWhenTypeNotFound() {
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
                         UUID unknownTypeId = UUID.randomUUID();
-                        when(electionTypeRepository.findByTypeIdAndDeleteYn(unknownTypeId, DeleteYn.N))
+                        when(electionTypeRepository.findByElectionTypeId(unknownTypeId))
                                         .thenReturn(Optional.empty());
 
                         assertThatThrownBy(() -> service.createPreset(

@@ -33,6 +33,8 @@ public interface ElectionTypeRepository extends JpaRepository<ElectionTypeEntity
 
     boolean existsByNameAndOrganization(String name, Organization organization);
 
-    Optional<ElectionTypeEntity> findByTypeIdAndDeleteYn(UUID typeId,
-            com.brandedhustlers.electionbackend.auth.enums.DeleteYn deleteYn);
+    @Query("select e from ElectionTypeEntity e where e.typeId = :typeId and e.deleteYn = 'N'")
+    Optional<ElectionTypeEntity> findByElectionTypeId(UUID typeId);
+
+
 }

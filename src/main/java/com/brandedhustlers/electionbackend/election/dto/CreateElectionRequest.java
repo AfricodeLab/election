@@ -16,7 +16,7 @@ public record CreateElectionRequest(
                 /**
                  * UUID of the ElectionTypeEntity (custom or system type).
                  */
-                UUID typeId,
+                String typeId,
 
                 /**
                  * Optional: UUID of an ElectionPreset to load defaults from.

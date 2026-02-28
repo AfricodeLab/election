@@ -14,11 +14,7 @@ import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
-import com.brandedhustlers.electionbackend.election.domain.Candidate;
-import com.brandedhustlers.electionbackend.election.domain.Election;
-import com.brandedhustlers.electionbackend.election.domain.ElectionPreset;
-import com.brandedhustlers.electionbackend.election.domain.ElectionTypeEntity;
-import com.brandedhustlers.electionbackend.election.domain.EligibilityPolicy;
+import com.brandedhustlers.electionbackend.election.domain.*;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
 import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
@@ -45,10 +41,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -121,9 +114,14 @@ public class ElectionService implements IElectionService {
         if (request.typeId() == null) {
             throw new InvalidUpdate("An election type must be specified (typeId)");
         }
-        ElectionTypeEntity electionType = electionTypeRepository.findByTypeIdAndDeleteYn(
-                request.typeId(), DeleteYn.N)
+        UUID electionTypeId = UUID.fromString(request.typeId());
+
+        log.debug("Election Type ID: {}", electionTypeId);
+
+        ElectionTypeEntity electionType = electionTypeRepository.findByElectionTypeId(electionTypeId)
                 .orElseThrow(() -> new InvalidUpdate("Election type not found: " + request.typeId()));
+
+        log.debug("election entity: {}", electionType);
 
         // Resolve preset defaults (if presetId was supplied)
         ElectionPreset resolvedPreset = null;
