@@ -40,7 +40,7 @@ public class ElectionPresetService {
             throw new AccessDeniedException("You must belong to an organization to create presets");
         }
 
-        ElectionTypeEntity type = electionTypeRepository.findByTypeIdAndDeleteYn(request.typeId(), DeleteYn.N)
+        ElectionTypeEntity type = electionTypeRepository.findByElectionTypeId(request.typeId())
                 .orElseThrow(() -> new InvalidUpdate("Election type not found: " + request.typeId()));
 
         ElectionPreset preset = ElectionPreset.builder()

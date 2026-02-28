@@ -182,7 +182,7 @@ class ElectionTypeServiceTest {
                                         .typeId(typeId).name("Custom").isSystem(false)
                                         .organization(org).deleteYn(DeleteYn.N).build();
 
-                        when(electionTypeRepository.findByTypeIdAndDeleteYn(typeId, DeleteYn.N))
+                        when(electionTypeRepository.findByElectionTypeId(typeId))
                                         .thenReturn(Optional.of(type));
                         when(electionTypeRepository.save(any())).thenReturn(type);
 
@@ -196,7 +196,7 @@ class ElectionTypeServiceTest {
                 void throwsWhenTypeNotFound() {
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
                         UUID typeId = UUID.randomUUID();
-                        when(electionTypeRepository.findByTypeIdAndDeleteYn(typeId, DeleteYn.N))
+                        when(electionTypeRepository.findByElectionTypeId(typeId))
                                         .thenReturn(Optional.empty());
 
                         assertThatThrownBy(() -> service.deleteType(typeId))
@@ -213,7 +213,7 @@ class ElectionTypeServiceTest {
                                         .typeId(typeId).name("PRESIDENTIAL").isSystem(true).organization(null)
                                         .deleteYn(DeleteYn.N).build();
 
-                        when(electionTypeRepository.findByTypeIdAndDeleteYn(typeId, DeleteYn.N))
+                        when(electionTypeRepository.findByElectionTypeId(typeId))
                                         .thenReturn(Optional.of(systemType));
 
                         assertThatThrownBy(() -> service.deleteType(typeId))
@@ -233,7 +233,7 @@ class ElectionTypeServiceTest {
                                         .typeId(typeId).name("Foreign Type").isSystem(false)
                                         .organization(otherOrg).deleteYn(DeleteYn.N).build();
 
-                        when(electionTypeRepository.findByTypeIdAndDeleteYn(typeId, DeleteYn.N))
+                        when(electionTypeRepository.findByElectionTypeId(typeId))
                                         .thenReturn(Optional.of(type));
 
                         assertThatThrownBy(() -> service.deleteType(typeId))

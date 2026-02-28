@@ -88,7 +88,7 @@ public class ElectionTypeService {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         requireAdmin(caller);
 
-        ElectionTypeEntity type = electionTypeRepository.findByTypeIdAndDeleteYn(typeId, DeleteYn.N)
+        ElectionTypeEntity type = electionTypeRepository.findByElectionTypeId(typeId)
                 .orElseThrow(() -> new InvalidUpdate("Election type not found: " + typeId));
 
         if (type.isSystem()) {

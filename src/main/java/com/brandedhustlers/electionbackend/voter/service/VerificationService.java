@@ -37,10 +37,9 @@ public class VerificationService {
     public static final String SESSION_KEY = "STEP_UP_VERIFIED_AT";
     private final SecureRandom rnd = new SecureRandom();
 
-
     public VerificationService(VoterRepository voters,
-                               VerificationTokenRepository tokens,
-                               MessagingService notif, JWTService jwtService) {
+            VerificationTokenRepository tokens,
+            MessagingService notif, JWTService jwtService) {
         this.voters = voters;
         this.tokens = tokens;
         this.notif = notif;
@@ -53,7 +52,7 @@ public class VerificationService {
                 .orElseThrow(() -> new NoSuchElementException("VOTER-404 not found"));
 
         var now = Instant.now();
-        var last = tokens.findFirstByVoterIdAndCreatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(voter.getVoterId(), now)
+        var last = tokens.findValidToken(voter.getVoterId(), now)
                 .orElse(null);
 
         if (last != null && Duration.between(last.getCreatedAt(), now).compareTo(RESEND_COOLDOWN) < 0) {
@@ -62,11 +61,9 @@ public class VerificationService {
             throw new IllegalStateException("OTP-429 resend too soon, please wait");
         }
 
-
         String otp = generateOtp6();
         log.info("otp generated for voter with email: {}", voter.getEmail());
         String hash = sha256(otp);
-
 
         var t = VerificationToken.builder()
                 .voterId(voter.getVoterId())
@@ -80,25 +77,21 @@ public class VerificationService {
                 .build();
         tokens.save(t);
 
-
         // Send email directly
         notif.sendOtpEmail(voter.getEmail(), voter.getName(), otp);
-
 
         // todo emit audit log here
 
         return new OtpSendResponse(t.getId(), "EMAIL");
     }
 
-
     public OtpConfirmResponse confirmOtp(OtpConfirmRequest req, HttpServletResponse response) {
         var voter = voters.findByEmailIgnoreCase(req.email())
                 .orElseThrow(() -> new NoSuchElementException("Voter not found"));
 
         var now = Instant.now();
-        var tok = tokens.findFirstByVoterIdAndCreatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(voter.getVoterId(), now)
+        var tok = tokens.findValidToken(voter.getVoterId(), now)
                 .orElseThrow(() -> new NoSuchElementException("No active code"));
-
 
         if (tok.getAttempts() >= MAX_ATTEMPTS) {
             throw new IllegalStateException("Too many attempts");
@@ -107,7 +100,8 @@ public class VerificationService {
         if (!hash.equals(tok.getTokenHash())) {
             tok.setAttempts(tok.getAttempts() + 1);
             tokens.save(tok);
-            return new OtpConfirmResponse(false, "Incorrect code. Attempts left: " + (MAX_ATTEMPTS - tok.getAttempts()), null);
+            return new OtpConfirmResponse(false, "Incorrect code. Attempts left: " + (MAX_ATTEMPTS - tok.getAttempts()),
+                    null);
         }
 
         tok.setUsed(true);
@@ -130,7 +124,6 @@ public class VerificationService {
                 voterToken);
     }
 
-
     private String generateOtp6() {
         int code = rnd.nextInt(900000) + 100000;
         return Integer.toString(code);
@@ -141,7 +134,8 @@ public class VerificationService {
             var md = java.security.MessageDigest.getInstance("SHA-256");
             byte[] dig = md.digest(s.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
-            for (byte b : dig) sb.append(String.format("%02x", b));
+            for (byte b : dig)
+                sb.append(String.format("%02x", b));
             return sb.toString();
         } catch (Exception e) {
             throw new RuntimeException(e);
