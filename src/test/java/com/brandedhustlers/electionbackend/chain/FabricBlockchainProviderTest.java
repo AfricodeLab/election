@@ -1,6 +1,6 @@
 package com.brandedhustlers.electionbackend.chain;
 
-import com.brandedhustlers.electionbackend.chain.service.BlockchainService;
+import com.brandedhustlers.electionbackend.chain.service.FabricBlockchainProvider;
 import org.hyperledger.fabric.gateway.Contract;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,13 +23,13 @@ import static org.mockito.Mockito.*;
  * Unit tests for BlockchainService - Hyperledger Fabric integration.
  */
 @ExtendWith(MockitoExtension.class)
-class BlockchainServiceTest {
+class FabricBlockchainProviderTest {
 
         @Mock
         private Contract contract;
 
         @InjectMocks
-        private BlockchainService blockchainService;
+        private FabricBlockchainProvider blockchainService;
 
         private String electionId;
         private String orgId;

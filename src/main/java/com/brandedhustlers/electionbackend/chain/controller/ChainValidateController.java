@@ -1,7 +1,7 @@
 package com.brandedhustlers.electionbackend.chain.controller;
 
 import com.brandedhustlers.electionbackend.chain.util.Merkle;
-import com.brandedhustlers.electionbackend.common.config.Fabric.ChainClient;
+import com.brandedhustlers.electionbackend.chain.service.BlockchainProvider;
 import com.brandedhustlers.electionbackend.voting.repository.VoteRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,9 +21,9 @@ import java.util.UUID;
 public class ChainValidateController {
 
     private final VoteRepository voteRepo;
-    private final ChainClient chain;
+    private final BlockchainProvider chain;
 
-    public ChainValidateController(VoteRepository voteRepo, ChainClient chain) {
+    public ChainValidateController(VoteRepository voteRepo, BlockchainProvider chain) {
         this.voteRepo = voteRepo;
         this.chain = chain;
     }
@@ -40,7 +40,7 @@ public class ChainValidateController {
         var localRoot = Merkle.rootHex(leaves);
 
         // get on-chain latest (or extend chaincode to fetch batch by window)
-        var latest = chain.getLatest(electionId.toString()).orElse(null);
+        var latest = chain.getLatestBatch(electionId.toString());
 
         var out = new LinkedHashMap<String, Object>();
         out.put("electionId", electionId.toString());

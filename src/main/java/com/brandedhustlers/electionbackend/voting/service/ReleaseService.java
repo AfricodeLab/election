@@ -1,6 +1,6 @@
 package com.brandedhustlers.electionbackend.voting.service;
 
-import com.brandedhustlers.electionbackend.chain.service.BlockchainService;
+import com.brandedhustlers.electionbackend.chain.service.BlockchainProvider;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.domain.ElectionResultsAnchor;
@@ -34,7 +34,7 @@ public class ReleaseService {
     private final TamperingLogRepository tamperingLog;
     private final ElectionResultsAnchorRepository resultsAnchorRepo;
     private final ReleaseValidationService validationService;
-    private final BlockchainService chain;
+    private final BlockchainProvider chain;
     private final ObjectMapper objectMapper;
 
     public ReleaseService(
@@ -43,9 +43,8 @@ public class ReleaseService {
             TamperingLogRepository tamperingLog,
             ElectionResultsAnchorRepository resultsAnchorRepo,
             ReleaseValidationService validationService,
-            BlockchainService chain,
-            ObjectMapper objectMapper
-    ) {
+            BlockchainProvider chain,
+            ObjectMapper objectMapper) {
         this.electionRepo = electionRepo;
         this.voteRepo = voteRepo;
         this.tamperingLog = tamperingLog;
@@ -58,8 +57,8 @@ public class ReleaseService {
     /**
      * Release election results after validation.
      *
-     * @param electionId The election
-     * @param adminUserId Admin releasing the results
+     * @param electionId   The election
+     * @param adminUserId  Admin releasing the results
      * @param forceRelease True to override validation warnings/errors
      * @return Release result with anchored data
      */
@@ -72,14 +71,12 @@ public class ReleaseService {
         /**
          * Step 1: Run validation.
          */
-        ReleaseValidationService.ReleaseValidationReport validation =
-                validationService.validate(electionId, null);
+        ReleaseValidationService.ReleaseValidationReport validation = validationService.validate(electionId, null);
 
         if (validation.isAutoReleaseBlocked() && !forceRelease) {
             throw new ReleaseBlockedException(
                     "Release blocked due to validation errors. Use forceRelease=true to override.",
-                    validation
-            );
+                    validation);
         }
 
         /**
@@ -128,8 +125,7 @@ public class ReleaseService {
                 results.getExcludedVoteCount(),
                 forceRelease,
                 adminUserId.toString(),
-                Instant.now().toString()
-        );
+                Instant.now().toString());
 
         /**
          * Step 6: Store anchor record locally.
@@ -171,8 +167,7 @@ public class ReleaseService {
                 .filter(v -> !excludedVoteIds.contains(v.getId()))
                 .collect(Collectors.groupingBy(
                         Vote::getCandidateId,
-                        Collectors.counting()
-                ));
+                        Collectors.counting()));
     }
 
     private String serializeResults(ElectionResults results) {
@@ -190,7 +185,8 @@ public class ReleaseService {
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
+                if (hex.length() == 1)
+                    hexString.append('0');
                 hexString.append(hex);
             }
             return hexString.toString();
@@ -226,7 +222,7 @@ public class ReleaseService {
         private long totalVotesCast;
         private long validVotes;
         private int excludedVoteCount;
-        private Map<UUID, Long> tally;  // candidateId → vote count
+        private Map<UUID, Long> tally; // candidateId → vote count
         private ReleaseValidationService.ReleaseValidationReport validationReport;
         private Instant releasedAt;
         private UUID releasedBy;
@@ -239,6 +235,6 @@ public class ReleaseService {
     public record ReleaseResult(
             ElectionResults results,
             ReleaseValidationService.ReleaseValidationReport validation,
-            String chainTxId
-    ) {}
+            String chainTxId) {
+    }
 }

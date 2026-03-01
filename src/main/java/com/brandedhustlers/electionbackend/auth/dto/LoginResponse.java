@@ -1,7 +1,7 @@
 package com.brandedhustlers.electionbackend.auth.dto;
 
 public record LoginResponse(
-        boolean success,
-        String accessToken
-) {
+                boolean success,
+                String accessToken,
+                String refreshToken) {
 }
