@@ -19,22 +19,20 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-
 @Slf4j
 @Service
 public class AnchorService {
 
     private final ElectionRepository electionRepo;
-    private final OutBoxRepository outbox;  // Changed from VoteRepository
+    private final OutBoxRepository outbox; // Changed from VoteRepository
     private final ChainBatchRepository batchRepo;
-    private final BlockchainService chain;
+    private final BlockchainProvider chain;
 
     public AnchorService(
             ElectionRepository electionRepo,
             OutBoxRepository outbox,
             ChainBatchRepository batchRepo,
-            BlockchainService chain
-    ) {
+            BlockchainProvider chain) {
         this.electionRepo = electionRepo;
         this.outbox = outbox;
         this.batchRepo = batchRepo;
@@ -92,8 +90,8 @@ public class AnchorService {
      * Anchor a single batch for one election.
      *
      * @param electionId The election
-     * @param entries Outbox entries to include in this batch
-     * @param now Current timestamp
+     * @param entries    Outbox entries to include in this batch
+     * @param now        Current timestamp
      */
     private void anchorElectionBatch(UUID electionId, List<OutBox> entries, Timestamp now) {
         UUID orgId = electionRepo.findOrgId(electionId);
@@ -132,8 +130,7 @@ public class AnchorService {
                 electionId.toString(),
                 orgId.toString(),
                 merkleRoot,
-                now.toInstant().toString()
-        );
+                now.toInstant().toString());
 
         UUID batchId = tryParseUuidOrRandom(batchIdStr);
 
@@ -147,7 +144,7 @@ public class AnchorService {
                 .electionId(electionId)
                 .orgId(orgId)
                 .merkleRoot(merkleRoot)
-                .voteCount(entries.size())  // NEW field
+                .voteCount(entries.size()) // NEW field
                 .fromTs(earliestVote)
                 .toTs(now)
                 .status("ANCHORED")
@@ -174,16 +171,15 @@ public class AnchorService {
 
     /**
      * Extract election ID from outbox payload.
-     * Your payload format: {"id":"...","electionId":"...","candidateId":"...","orgId":"..."}
+     * Your payload format:
+     * {"id":"...","electionId":"...","candidateId":"...","orgId":"..."}
      */
     private UUID extractElectionId(OutBox outboxEntry) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper =
-                    new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             Map<String, String> payload = mapper.readValue(
                     outboxEntry.getPayload(),
-                    Map.class
-            );
+                    Map.class);
             return UUID.fromString(payload.get("electionId"));
         } catch (Exception e) {
             log.error("Failed to extract electionId from outbox {}", outboxEntry.getId(), e);

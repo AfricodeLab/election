@@ -401,6 +401,7 @@ public class ElectionService implements IElectionService {
                 addCandidate);
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "elections", key = "#organizationId")
     public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable) {
         List<ElectionDTO> elections = electionRepository.findByOrganizationId(organizationId)
                 .stream()
@@ -409,6 +410,7 @@ public class ElectionService implements IElectionService {
         return new PageImpl<>(elections, pageable, elections.size());
     }
 
+    @org.springframework.cache.annotation.Cacheable(value = "liveElections")
     public Page<ElectionDTO> getLiveElectionForVoterOrg(Pageable pageable) {
 
         Voter currentVoter = getUser.getCurrentAuthenticatedVoter();

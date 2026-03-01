@@ -12,4 +12,6 @@ public interface IAuthService {
     LoginResponse login(LoginRequest loginRequest, HttpServletResponse response);
 
     CreateUserResponse createUser(CreateUserRequest createUserRequest) throws IOException;
+
+    TokenRefreshResponse refreshToken(TokenRefreshRequest request);
 }

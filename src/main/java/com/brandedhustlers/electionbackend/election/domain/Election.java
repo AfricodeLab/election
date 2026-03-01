@@ -68,7 +68,7 @@ public class Election {
 
     private Long totalVotes;
 
-    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Candidate> candidates = new ArrayList<>();
 
     private Timestamp createdAt;

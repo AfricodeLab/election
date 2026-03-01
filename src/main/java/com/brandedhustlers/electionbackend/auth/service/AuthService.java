@@ -5,6 +5,8 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.domain.Role;
 import com.brandedhustlers.electionbackend.auth.dto.*;
+import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshRequest;
+import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshResponse;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.InvalidRole;
@@ -15,6 +17,7 @@ import com.brandedhustlers.electionbackend.auth.mapper.OrganizationMapper;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
+import com.brandedhustlers.electionbackend.auth.domain.RefreshToken;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
@@ -49,15 +52,18 @@ public class AuthService implements IAuthService {
     private final OrganizationMapper organizationMapper;
     private final AppUserMapper appUserMapper;
     private final OrganizationRepository organizationRepository;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthService(JWTService jwtService,
-                       AppUserRepository appUserRepository,
-                       PasswordEncoder passwordEncoder,
-                       AuthenticationManager authenticationManager,
-                       CloudinaryService cloudinaryService,
-                       HttpServletRequest request,
-                       RoleRepository roleRepository,
-                       GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper, OrganizationMapper organizationMapper1, AppUserMapper appUserMapper, OrganizationRepository organizationRepository) {
+            AppUserRepository appUserRepository,
+            PasswordEncoder passwordEncoder,
+            AuthenticationManager authenticationManager,
+            CloudinaryService cloudinaryService,
+            HttpServletRequest request,
+            RoleRepository roleRepository,
+            GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper,
+            OrganizationMapper organizationMapper1, AppUserMapper appUserMapper,
+            OrganizationRepository organizationRepository, RefreshTokenService refreshTokenService) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
@@ -70,6 +76,7 @@ public class AuthService implements IAuthService {
         this.organizationMapper = organizationMapper1;
         this.appUserMapper = appUserMapper;
         this.organizationRepository = organizationRepository;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Override
@@ -108,8 +115,7 @@ public class AuthService implements IAuthService {
 
         // Create organization
         OrganizationDTO newOrgDto = organizationService.createOrganization(
-                registrationRequest.userOrg(), newUser.getAppUserId()
-        );
+                registrationRequest.userOrg(), newUser.getAppUserId());
         Organization organization = organizationMapper.dtoToEntity(newOrgDto);
 
         // Set both organization and organizationName BEFORE saving organization
@@ -120,25 +126,25 @@ public class AuthService implements IAuthService {
 
         return new RegistrationResponse(
                 true,
-                newUser.getUserRole().name()
-        );
+                newUser.getUserRole().name());
     }
 
     @Override
     public LoginResponse login(LoginRequest loginRequest, HttpServletResponse response) {
 
         Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(getIdentity(loginRequest), loginRequest.password())
-        );
+                new UsernamePasswordAuthenticationToken(getIdentity(loginRequest), loginRequest.password()));
         UserPrincipal authenticationPrincipal = (UserPrincipal) authentication.getPrincipal();
 
         AppUser authenticatedUser = appUserRepository.findById(authenticationPrincipal.getAppUserId())
                 .orElseThrow(() -> new UserNotFound("user not found."));
-        String token = jwtService
-                .generateToken(authenticatedUser.getAppUserEmail(),
-                        1218816000,
-                        authenticatedUser.getAppUserId(),
-                        authenticatedUser.getAppUserEmail());
+
+        String token = jwtService.generateAccessToken(
+                authenticatedUser.getAppUserEmail(),
+                authenticatedUser.getAppUserId(),
+                authenticatedUser.getAppUserEmail());
+
+        String refreshToken = refreshTokenService.createRefreshToken(authenticatedUser.getAppUserId()).getToken();
 
         ResponseCookie jwtCookie = ResponseCookie.from("JWTAccess_token", token)
                 .httpOnly(true)
@@ -151,8 +157,8 @@ public class AuthService implements IAuthService {
 
         return new LoginResponse(
                 true,
-                token
-        );
+                token,
+                refreshToken);
     }
 
     @Override
@@ -179,8 +185,7 @@ public class AuthService implements IAuthService {
         appUserRepository.save(newUser);
         return new CreateUserResponse(
                 true,
-                newUser.getUserRole().name()
-        );
+                newUser.getUserRole().name());
     }
 
     public Page<AppUserDTO> getUsers(UUID orgId, Pageable pageable) {
@@ -221,20 +226,36 @@ public class AuthService implements IAuthService {
     public void changePassword(AuthController.ChangePasswordCmd changePasswordCmd) {
         var currUser = getUser.getCurrentAuthenticatedUser();
 
-        if(!passwordEncoder.matches(changePasswordCmd.oldPassword(), currUser.getPassword())){
+        if (!passwordEncoder.matches(changePasswordCmd.oldPassword(), currUser.getPassword())) {
             throw new BadCredentialsException("User provided the wrong password");
         }
-        if(passwordEncoder.matches(changePasswordCmd.newPassword(), currUser.getPassword())){
+        if (passwordEncoder.matches(changePasswordCmd.newPassword(), currUser.getPassword())) {
             throw new BadCredentialsException("User provided the same password");
         }
         currUser.setPassword(passwordEncoder.encode(changePasswordCmd.newPassword()));
         appUserRepository.save(currUser);
     }
 
+    /*
+     * public ForgotPasswordResponse forgotPassword(ForgotPasswordCmd cmd){
+     * 
+     * }
+     */
 
-/*    public ForgotPasswordResponse forgotPassword(ForgotPasswordCmd cmd){
-
-    }*/
+    @Override
+    public TokenRefreshResponse refreshToken(TokenRefreshRequest request) {
+        return refreshTokenService.findByToken(request.refreshToken())
+                .map(refreshTokenService::verifyExpiration)
+                .map(RefreshToken::getUser)
+                .map(user -> {
+                    String accessToken = jwtService.generateAccessToken(
+                            user.getAppUserEmail(),
+                            user.getAppUserId(),
+                            user.getAppUserEmail());
+                    return new TokenRefreshResponse(accessToken, request.refreshToken());
+                })
+                .orElseThrow(() -> new RuntimeException("Refresh token is not in database!"));
+    }
 
     private String getIdentity(LoginRequest request) {
         return request.email() == null ? request.username() : request.email();
