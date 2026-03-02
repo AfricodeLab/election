@@ -13,7 +13,7 @@ import com.brandedhustlers.electionbackend.auth.repository.PermissionRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -29,11 +29,14 @@ public class DataSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final OrganizationRepository organizationRepository;
     private final AppUserRepository userRepository;
+    private final PasswordEncoder encoder;
 
     public DataSeeder(PermissionRepository permissionRepository,
                       RoleRepository roleRepository,
                       OrganizationRepository organizationRepository,
+                      PasswordEncoder encoder,
                       AppUserRepository userRepository) {
+        this.encoder = encoder;
         this.permissionRepository = permissionRepository;
         this.roleRepository = roleRepository;
         this.organizationRepository = organizationRepository;
@@ -44,7 +47,9 @@ public class DataSeeder implements CommandLineRunner {
     @Transactional
     public void run(String... args) {
         // Make it safe to re-run
-        if (userRepository.count() > 0 && organizationRepository.count() > 0) return;
+        if (userRepository.count() > 0 && organizationRepository.count() > 0) {
+            return;
+        }
 
         // 1) Seed all Permission rows from the enum
         Map<PermissionType, Permission> perms = seedPermissions();
@@ -102,57 +107,56 @@ public class DataSeeder implements CommandLineRunner {
     private void assignPermissionsToRoles(Map<UserRole, Role> roles,
                                           Map<PermissionType, Permission> perms) {
 
-
         // Buckets (tweak as you like)
         Set<Permission> adminSet = permSet(perms,
-                PermissionType.ADD_USERS, PermissionType.EDIT_USERS, PermissionType.DELETE_USERS, PermissionType.VIEW_USERS,
-                PermissionType.ADD_ROLES, PermissionType.EDIT_ROLES, PermissionType.DELETE_ROLES, PermissionType.VIEW_ROLES,
+                PermissionType.ADD_USERS, PermissionType.EDIT_USERS, PermissionType.DELETE_USERS,
+                PermissionType.VIEW_USERS,
+                PermissionType.ADD_ROLES, PermissionType.EDIT_ROLES, PermissionType.DELETE_ROLES,
+                PermissionType.VIEW_ROLES,
                 PermissionType.ADD_TAX, PermissionType.EDIT_TAX, PermissionType.DELETE_TAX, PermissionType.VIEW_TAX,
-                PermissionType.ADD_REPORTS, PermissionType.EDIT_REPORTS, PermissionType.DELETE_REPORTS, PermissionType.VIEW_REPORTS,
-                PermissionType.ADD_SETTINGS, PermissionType.EDIT_SETTINGS, PermissionType.DELETE_SETTINGS, PermissionType.VIEW_SETTINGS,
-                PermissionType.EDIT_ELECTIONS, PermissionType.VIEW_RESULTS
-        );
+                PermissionType.ADD_REPORTS, PermissionType.EDIT_REPORTS, PermissionType.DELETE_REPORTS,
+                PermissionType.VIEW_REPORTS,
+                PermissionType.ADD_SETTINGS, PermissionType.EDIT_SETTINGS, PermissionType.DELETE_SETTINGS,
+                PermissionType.VIEW_SETTINGS,
+                PermissionType.EDIT_ELECTIONS, PermissionType.VIEW_RESULTS);
 
         Set<Permission> auditorSet = permSet(perms,
                 PermissionType.VIEW_USERS, PermissionType.VIEW_ROLES,
-                PermissionType.VIEW_TAX, PermissionType.VIEW_REPORTS, PermissionType.VIEW_SETTINGS
-        );
+                PermissionType.VIEW_TAX, PermissionType.VIEW_REPORTS, PermissionType.VIEW_SETTINGS);
 
         Set<Permission> contributorSet = permSet(perms,
                 PermissionType.VIEW_USERS, PermissionType.VIEW_ROLES, PermissionType.VIEW_TAX,
                 PermissionType.ADD_REPORTS, PermissionType.EDIT_REPORTS, PermissionType.VIEW_REPORTS,
-                PermissionType.EDIT_ELECTIONS
-        );
+                PermissionType.EDIT_ELECTIONS);
 
         Set<Permission> observerSet = permSet(perms,
                 PermissionType.VIEW_USERS, PermissionType.VIEW_ROLES,
-                PermissionType.VIEW_TAX, PermissionType.VIEW_REPORTS, PermissionType.VIEW_SETTINGS
-        );
+                PermissionType.VIEW_TAX, PermissionType.VIEW_REPORTS, PermissionType.VIEW_SETTINGS);
 
         // SUPER_ADMIN gets everything
         Set<Permission> superAll = new HashSet<>(perms.values());
 
         upsertRolePermissions(roles.get(UserRole.SUPER_ADMIN), superAll);
-        if (roles.containsKey(UserRole.ADMIN))  {
+        if (roles.containsKey(UserRole.ADMIN)) {
             upsertRolePermissions(roles.get(UserRole.ADMIN), adminSet);
         }
-        if (roles.containsKey(UserRole.AUDITOR)){
+        if (roles.containsKey(UserRole.AUDITOR)) {
             upsertRolePermissions(roles.get(UserRole.AUDITOR), auditorSet);
         }
         if (roles.containsKey(UserRole.CONTRIBUTOR)) {
             upsertRolePermissions(roles.get(UserRole.CONTRIBUTOR), contributorSet);
         }
-        if (roles.containsKey(UserRole.OBSERVER)){
+        if (roles.containsKey(UserRole.OBSERVER)) {
             upsertRolePermissions(roles.get(UserRole.OBSERVER), observerSet);
         }
     }
 
     private void upsertRolePermissions(Role role, Set<Permission> desired) {
-        if (role == null){
+        if (role == null) {
             return;
         }
         Set<Permission> current = role.getRolePermissions();
-        if (current == null){
+        if (current == null) {
             current = new HashSet<>();
         }
         if (!current.equals(desired)) {
@@ -169,19 +173,20 @@ public class DataSeeder implements CommandLineRunner {
                         .isEnabled(true)
                         .deleteYn(DeleteYn.N)
                         .build(),
+
                 Organization.builder()
                         .organizationName("Open Civic Alliance")
                         .organizationDescription("Civil society monitors")
                         .isEnabled(true)
                         .deleteYn(DeleteYn.N)
                         .build(),
+
                 Organization.builder()
                         .organizationName("Demo Party")
                         .organizationDescription("Sample political organization")
                         .isEnabled(true)
                         .deleteYn(DeleteYn.N)
-                        .build()
-        );
+                        .build());
 
         Map<String, Organization> map = new HashMap<>();
         for (Organization org : toEnsure) {
@@ -201,9 +206,6 @@ public class DataSeeder implements CommandLineRunner {
     }
 
     private void seedUsers(Map<UserRole, Role> roles, Map<String, Organization> orgs) {
-        BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(12);
-
-
         List<AppUser> users = List.of(
                 AppUser.builder()
                         .firstName("Elikem").lastName("Fenuku")
@@ -212,7 +214,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
-//                        .organizationName("Electoral Commission")
+                        // .organizationName("Electoral Commission")
                         .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
@@ -222,7 +224,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
-//                        .organizationName("Electoral Commission")
+                        // .organizationName("Electoral Commission")
                         .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
@@ -232,7 +234,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.ADMIN)
                         .roles(roleSet(roles, UserRole.ADMIN))
-//                        .organizationName("Electoral Commission")
+                        // .organizationName("Electoral Commission")
                         .appUserOrganization(orgs.get("Electoral Commission"))
                         .build(),
                 AppUser.builder()
@@ -242,7 +244,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.AUDITOR)
                         .roles(roleSet(roles, UserRole.AUDITOR))
-//                        .organizationName("Open Civic Alliance")
+                        // .organizationName("Open Civic Alliance")
                         .appUserOrganization(orgs.get("Open Civic Alliance"))
                         .build(),
                 AppUser.builder()
@@ -252,7 +254,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.CONTRIBUTOR)
                         .roles(roleSet(roles, UserRole.CONTRIBUTOR))
-//                        .organizationName("Demo Party")
+                        // .organizationName("Demo Party")
                         .appUserOrganization(orgs.get("Demo Party"))
                         .build(),
                 AppUser.builder()
@@ -262,19 +264,16 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.OBSERVER)
                         .roles(roleSet(roles, UserRole.OBSERVER))
-//                        .organizationName("Open Civic Alliance")
+                        // .organizationName("Open Civic Alliance")
                         .appUserOrganization(orgs.get("Open Civic Alliance"))
-                        .build()
-        );
+                        .build());
 
         for (AppUser u : users) {
             boolean exists = userRepository.findByUsernameOrEmail(
-                    StringUtils.hasText(u.getAppUserEmail()) ? u.getAppUserEmail() : u.getUsername()
-            ).isPresent();
+                    StringUtils.hasText(u.getAppUserEmail()) ? u.getAppUserEmail() : u.getUsername()).isPresent();
             if (!exists) {
                 userRepository.save(u);
             }
         }
     }
 }
-

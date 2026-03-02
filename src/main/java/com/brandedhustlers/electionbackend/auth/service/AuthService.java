@@ -3,10 +3,9 @@ package com.brandedhustlers.electionbackend.auth.service;
 import com.brandedhustlers.electionbackend.auth.controller.AuthController;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.domain.RefreshToken;
 import com.brandedhustlers.electionbackend.auth.domain.Role;
 import com.brandedhustlers.electionbackend.auth.dto.*;
-import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshRequest;
-import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshResponse;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.InvalidRole;
@@ -17,10 +16,10 @@ import com.brandedhustlers.electionbackend.auth.mapper.OrganizationMapper;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
-import com.brandedhustlers.electionbackend.auth.domain.RefreshToken;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
+import com.brandedhustlers.electionbackend.common.exceptions.RefreshTokenException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -254,7 +253,7 @@ public class AuthService implements IAuthService {
                             user.getAppUserEmail());
                     return new TokenRefreshResponse(accessToken, request.refreshToken());
                 })
-                .orElseThrow(() -> new RuntimeException("Refresh token is not in database!"));
+                .orElseThrow(() -> new RefreshTokenException("Refresh token is not in database!"));
     }
 
     private String getIdentity(LoginRequest request) {

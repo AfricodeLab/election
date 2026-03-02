@@ -15,10 +15,7 @@ import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedExcepti
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.*;
-import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
-import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
-import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
-import com.brandedhustlers.electionbackend.election.dto.UpdateElection;
+import com.brandedhustlers.electionbackend.election.dto.*;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
@@ -422,7 +419,7 @@ public class ElectionService implements IElectionService {
                 ElectionStatus.LIVE,
                 voterId)
                 .stream()
-                .map(electionMapper::entityToDto)
+                 .map(electionMapper::entityToDto)
                 .toList();
 
         return new PageImpl<>(unvotedElections, pageable, unvotedElections.size());

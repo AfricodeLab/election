@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.election.repository;
 
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.election.domain.ElectionTypeEntity;
+import com.brandedhustlers.electionbackend.election.dto.ElectionTypeOptionDto;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
@@ -36,5 +37,9 @@ public interface ElectionTypeRepository extends JpaRepository<ElectionTypeEntity
     @Query("select e from ElectionTypeEntity e where e.typeId = :typeId and e.deleteYn = 'N'")
     Optional<ElectionTypeEntity> findByElectionTypeId(UUID typeId);
 
+    @Query("select e.typeId, e.name from ElectionTypeEntity e where e.deleteYn = 'N'")
+    List<ElectionTypeOptionDto> getElectionTypeOption();
 
+    @Query("select e.typeId, e.name from ElectionTypeEntity e where e.deleteYn = 'N' and e.organization.organizationId = :orgId")
+    List<ElectionTypeOptionDto> getElectionTypeOptionByOrg(UUID orgId);
 }

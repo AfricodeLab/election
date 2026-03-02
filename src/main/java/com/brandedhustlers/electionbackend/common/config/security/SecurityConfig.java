@@ -49,22 +49,23 @@ public class SecurityConfig {
         return registration;
     }
 
-
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         return http
                 .cors(Customizer.withDefaults())
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
-                        /*.requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "api/v1/auth/login", "api/v1/auth/register-user", "/actuator/**", "/v3/api-docs/**","swagger-ui.html", "/test/**", "/ws/websocket")
-                        .permitAll()*/
-                        .anyRequest().permitAll()
-                )
+                        /*
+                         * .requestMatchers("/swagger-ui/**", "/v3/api-docs/**", "api/v1/auth/login",
+                         * "api/v1/auth/register-user", "/actuator/**",
+                         * "/v3/api-docs/**","swagger-ui.html", "/test/**", "/ws/websocket")
+                         * .permitAll()
+                         */
+                        .anyRequest().permitAll())
                 .httpBasic(Customizer.withDefaults())
                 .sessionManagement(
                         session -> session
-                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
-                )
+                                .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(loggingFilter, UsernamePasswordAuthenticationFilter.class)
                 .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
                 .build();
@@ -72,7 +73,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(15);
+        return new BCryptPasswordEncoder();
     }
 
     @Bean
@@ -88,7 +89,7 @@ public class SecurityConfig {
     @Bean
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setPasswordEncoder(new BCryptPasswordEncoder(12));
+        authProvider.setPasswordEncoder(passwordEncoder());
         authProvider.setUserDetailsService(userDetailsService);
         return authProvider;
     }

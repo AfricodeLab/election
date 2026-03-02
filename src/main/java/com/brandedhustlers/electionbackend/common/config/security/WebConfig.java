@@ -35,7 +35,8 @@ public class WebConfig {
                 "http://localhost:5173",
                 "https://4652-154-161-175-248.ngrok-free.app",
                 "https://4461b8903387.ngrok-free.app",
-                "https://424d565d5492.ngrok-free.app"
+                "https://424d565d5492.ngrok-free.app",
+                "https://election.africodelab.net"
         ));
 
         configuration.setAllowCredentials(true);
