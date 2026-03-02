@@ -9,6 +9,7 @@ import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.ElectionTypeEntity;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionTypeRequest;
 import com.brandedhustlers.electionbackend.election.dto.ElectionTypeDTO;
+import com.brandedhustlers.electionbackend.election.dto.ElectionTypeOptionDto;
 import com.brandedhustlers.electionbackend.election.repository.ElectionTypeRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -108,7 +109,15 @@ public class ElectionTypeService {
                 caller.getAppUserId(), type.getName(), typeId);
     }
 
-    // ─── Private helpers ─────────────────────────────────────────────────────
+    public List<ElectionTypeOptionDto> getElectionTypeOptions(){
+        return electionTypeRepository.getElectionTypeOption();
+    }
+
+    public List<ElectionTypeOptionDto> getElectionTypeOptionsByOrg(){
+        return electionTypeRepository.getElectionTypeOptionByOrg(getUser.getCurrentAuthenticatedUserOrgId());
+    }
+
+
 
     private ElectionTypeDTO toDTO(ElectionTypeEntity e) {
         return new ElectionTypeDTO(
@@ -126,4 +135,5 @@ public class ElectionTypeService {
             throw new AccessDeniedException("Only admins can manage election types");
         }
     }
+
 }

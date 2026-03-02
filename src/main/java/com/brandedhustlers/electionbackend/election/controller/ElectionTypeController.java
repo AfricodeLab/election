@@ -105,4 +105,14 @@ public class ElectionTypeController {
         electionPresetService.deletePreset(presetId);
         return ResponseEntity.noContent().build();
     }
+
+    @GetMapping("/type")
+    public ResponseEntity<?> getElectionTypeOptions(){
+        return new ResponseEntity<>(electionTypeService.getElectionTypeOptions(), HttpStatus.OK);
+    }
+
+    @GetMapping("/type/org")
+    public ResponseEntity<?> getElectionTypeOptionForOrg(){
+        return new ResponseEntity<>(electionTypeService.getElectionTypeOptionsByOrg(), HttpStatus.OK);
+    }
 }
