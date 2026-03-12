@@ -1,9 +1,6 @@
 package com.brandedhustlers.electionbackend.common.config.persistence;
 
-import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.domain.Organization;
-import com.brandedhustlers.electionbackend.auth.domain.Permission;
-import com.brandedhustlers.electionbackend.auth.domain.Role;
+import com.brandedhustlers.electionbackend.auth.domain.*;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
@@ -11,6 +8,7 @@ import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.PermissionRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
+import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepository;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -29,18 +27,21 @@ public class DataSeeder implements CommandLineRunner {
     private final RoleRepository roleRepository;
     private final OrganizationRepository organizationRepository;
     private final AppUserRepository userRepository;
+    private final UserOrganizationRepository userOrganizationRepository;
     private final PasswordEncoder encoder;
 
     public DataSeeder(PermissionRepository permissionRepository,
                       RoleRepository roleRepository,
                       OrganizationRepository organizationRepository,
                       PasswordEncoder encoder,
-                      AppUserRepository userRepository) {
+                      AppUserRepository userRepository,
+                      UserOrganizationRepository userOrganizationRepository) {
         this.encoder = encoder;
         this.permissionRepository = permissionRepository;
         this.roleRepository = roleRepository;
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
+        this.userOrganizationRepository = userOrganizationRepository;
     }
 
     @Override
@@ -205,74 +206,71 @@ public class DataSeeder implements CommandLineRunner {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
+    private record UserSeed(AppUser user, Organization org) {}
+
     private void seedUsers(Map<UserRole, Role> roles, Map<String, Organization> orgs) {
-        List<AppUser> users = List.of(
-                AppUser.builder()
+        List<UserSeed> seeds = List.of(
+                new UserSeed(AppUser.builder()
                         .firstName("Elikem").lastName("Fenuku")
                         .username("kingmaker")
                         .appUserEmail("elikemfenuksu@gmail.com")
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
-                        // .organizationName("Electoral Commission")
-                        .appUserOrganization(orgs.get("Electoral Commission"))
-                        .build(),
-                AppUser.builder()
+                        .build(), orgs.get("Electoral Commission")),
+                new UserSeed(AppUser.builder()
                         .firstName("Elikem").lastName("Fenuku")
                         .username("reynolds")
                         .appUserEmail("reynoldsfenuku@gmail.com")
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
-                        // .organizationName("Electoral Commission")
-                        .appUserOrganization(orgs.get("Electoral Commission"))
-                        .build(),
-                AppUser.builder()
+                        .build(), orgs.get("Electoral Commission")),
+                new UserSeed(AppUser.builder()
                         .firstName("Ekow").lastName("Davis")
                         .username("davis")
                         .appUserEmail("reynoldsfenuku@gmail.com")
                         .password(encoder.encode("test"))
                         .userRole(UserRole.ADMIN)
                         .roles(roleSet(roles, UserRole.ADMIN))
-                        // .organizationName("Electoral Commission")
-                        .appUserOrganization(orgs.get("Electoral Commission"))
-                        .build(),
-                AppUser.builder()
+                        .build(), orgs.get("Electoral Commission")),
+                new UserSeed(AppUser.builder()
                         .firstName("Nat").lastName("Auditor")
                         .username("auditor")
                         .appUserEmail("auditor@civic.local")
                         .password(encoder.encode("test"))
                         .userRole(UserRole.AUDITOR)
                         .roles(roleSet(roles, UserRole.AUDITOR))
-                        // .organizationName("Open Civic Alliance")
-                        .appUserOrganization(orgs.get("Open Civic Alliance"))
-                        .build(),
-                AppUser.builder()
+                        .build(), orgs.get("Open Civic Alliance")),
+                new UserSeed(AppUser.builder()
                         .firstName("Joel").lastName("Contributor")
                         .username("contrib")
                         .appUserEmail("contrib@demoparty.local")
                         .password(encoder.encode("test"))
                         .userRole(UserRole.CONTRIBUTOR)
                         .roles(roleSet(roles, UserRole.CONTRIBUTOR))
-                        // .organizationName("Demo Party")
-                        .appUserOrganization(orgs.get("Demo Party"))
-                        .build(),
-                AppUser.builder()
+                        .build(), orgs.get("Demo Party")),
+                new UserSeed(AppUser.builder()
                         .firstName("roman").lastName("Observer")
                         .username("reigns")
                         .appUserEmail("observer@civic.local")
                         .password(encoder.encode("test"))
                         .userRole(UserRole.OBSERVER)
                         .roles(roleSet(roles, UserRole.OBSERVER))
-                        // .organizationName("Open Civic Alliance")
-                        .appUserOrganization(orgs.get("Open Civic Alliance"))
-                        .build());
+                        .build(), orgs.get("Open Civic Alliance")));
 
-        for (AppUser u : users) {
+        for (UserSeed seed : seeds) {
+            AppUser u = seed.user();
             boolean exists = userRepository.findByUsernameOrEmail(
                     StringUtils.hasText(u.getAppUserEmail()) ? u.getAppUserEmail() : u.getUsername()).isPresent();
             if (!exists) {
-                userRepository.save(u);
+                AppUser saved = userRepository.save(u);
+                userOrganizationRepository.save(UserOrganization.builder()
+                        .appUser(saved)
+                        .organization(seed.org())
+                        .roleInOrg(saved.getUserRole().name())
+                        .activeOrg(true)
+                        .build());
             }
         }
     }

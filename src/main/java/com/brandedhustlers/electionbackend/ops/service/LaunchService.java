@@ -5,6 +5,7 @@ import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.exceptions.ConflictException;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
@@ -51,6 +52,7 @@ public class LaunchService {
     private final ElectionMapper electionMapper;
     private final GetUser getUser;
     private final ElectionService electionService;
+    private final Util util;
 
 
     public LaunchService(LaunchRepository launchRepository,
@@ -59,7 +61,7 @@ public class LaunchService {
                          RabbitTemplate rabbitTemplate,
                          AuditEmitter auditEmitter,
                          ElectionRepository electionRepository,
-                         ElectionMapper electionMapper, GetUser getUser, ElectionService electionService) {
+                         ElectionMapper electionMapper, GetUser getUser, ElectionService electionService, Util util) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
@@ -69,6 +71,7 @@ public class LaunchService {
         this.electionMapper = electionMapper;
         this.getUser = getUser;
         this.electionService = electionService;
+        this.util = util;
     }
 
 
@@ -313,6 +316,7 @@ public class LaunchService {
     @Transactional
     public GetLaunch transitionStatus(UUID orgId, UUID launchId, LaunchStatus status) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
+        util.requireAdmin(actor);
 
         Launch l = launchRepository.findByLaunchId(launchId)
                 .orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found"));
@@ -399,5 +403,3 @@ public class LaunchService {
         );
     }
 }
-
-//todo end election functionality

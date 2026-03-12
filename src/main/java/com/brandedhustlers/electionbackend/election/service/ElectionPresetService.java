@@ -2,10 +2,10 @@ package com.brandedhustlers.electionbackend.election.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
-import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.ElectionPreset;
 import com.brandedhustlers.electionbackend.election.domain.ElectionTypeEntity;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionPresetRequest;
@@ -28,15 +28,16 @@ public class ElectionPresetService {
     private final ElectionPresetRepository electionPresetRepository;
     private final ElectionTypeRepository electionTypeRepository;
     private final GetUser getUser;
+    private final Util util;
 
     /**
      * Create a new preset for the caller's organization.
      */
     public ElectionPresetDTO createPreset(CreateElectionPresetRequest request) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        requireAdmin(caller);
+        util.requireAdmin(caller);
 
-        if (caller.getAppUserOrganization() == null) {
+        if (caller.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create presets");
         }
 
@@ -47,7 +48,7 @@ public class ElectionPresetService {
                 .name(request.name())
                 .description(request.description())
                 .electionType(type)
-                .organization(caller.getAppUserOrganization())
+                .organization(caller.getActiveOrganization())
                 .defaultEligibilityPolicy(request.defaultEligibilityPolicy())
                 .defaultExpectedVoterCount(request.defaultExpectedVoterCount())
                 .defaultShouldEndAutomatically(request.defaultShouldEndAutomatically())
@@ -66,10 +67,10 @@ public class ElectionPresetService {
      */
     public List<ElectionPresetDTO> getPresetsForOrg(UUID typeId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        if (caller.getAppUserOrganization() == null)
+        if (caller.getActiveOrganization() == null)
             return List.of();
 
-        UUID orgId = caller.getAppUserOrganization().getOrganizationId();
+        UUID orgId = caller.getActiveOrganization().getOrganizationId();
 
         List<ElectionPreset> presets = (typeId != null)
                 ? electionPresetRepository.findByOrgIdAndTypeId(orgId, typeId)
@@ -83,13 +84,13 @@ public class ElectionPresetService {
      */
     public void deletePreset(UUID presetId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        requireAdmin(caller);
+        util.requireAdmin(caller);
 
         ElectionPreset preset = electionPresetRepository.findByPresetIdAndDeleteYn(presetId, DeleteYn.N)
                 .orElseThrow(() -> new InvalidUpdate("Preset not found: " + presetId));
 
         if (!preset.getOrganization().getOrganizationId()
-                .equals(caller.getAppUserOrganization().getOrganizationId())) {
+                .equals(caller.getActiveOrganization().getOrganizationId())) {
             throw new AccessDeniedException("You can only delete presets from your own organization");
         }
 
@@ -119,12 +120,5 @@ public class ElectionPresetService {
                 p.getDefaultExpectedVoterCount(),
                 p.isDefaultShouldEndAutomatically(),
                 p.getCreatedAt());
-    }
-
-    private void requireAdmin(AppUser user) {
-        if (!user.getUserRole().equals(UserRole.ADMIN)
-                && !user.getUserRole().equals(UserRole.SUPER_ADMIN)) {
-            throw new AccessDeniedException("Only admins can manage election presets");
-        }
     }
 }

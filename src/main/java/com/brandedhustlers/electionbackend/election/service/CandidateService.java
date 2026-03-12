@@ -53,7 +53,7 @@ public class CandidateService {
         Election election = candidate.getElection();
 
         Organization organization = election.getOrganization();
-        if (admin.getAppUserOrganization().equals(organization)){
+        if (admin.getActiveOrganization().equals(organization)){
             throw new IllegalArgumentException("Admin with ID: " + admin.getAppUserId() + " is not a member of this org.");
         }
 

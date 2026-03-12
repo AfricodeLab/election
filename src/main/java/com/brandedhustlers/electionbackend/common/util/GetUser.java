@@ -41,7 +41,7 @@ public class GetUser {
     }
 
     public Organization getCurrentAuthenticatedUserOrg(){
-        return getCurrentAuthenticatedUser().getAppUserOrganization();
+        return getCurrentAuthenticatedUser().getActiveOrganization();
     }
 
     public UUID getCurrentAuthenticatedUserOrgId(){

@@ -44,7 +44,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getAppUserOrganization();
+        Organization creatorOrg = launchCreator.getActiveOrganization();
 
         return new ResponseEntity<>(svc.enrollDevice(creatorOrg.getOrganizationId(),enrolDevice), HttpStatus.OK);
     }
@@ -54,7 +54,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getAppUserOrganization();
+        Organization creatorOrg = launchCreator.getActiveOrganization();
 
         return new ResponseEntity<>(svc.get(creatorOrg.getOrganizationId(), deviceId), HttpStatus.OK);
     }
@@ -65,7 +65,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getAppUserOrganization();
+        Organization creatorOrg = launchCreator.getActiveOrganization();
 
         return new ResponseEntity<>(svc.listDevices(creatorOrg.getOrganizationId(), stationId, status, pageable), HttpStatus.OK);
     }
@@ -76,7 +76,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getAppUserOrganization();
+        Organization creatorOrg = launchCreator.getActiveOrganization();
 
         return new ResponseEntity<>(svc.rebind(creatorOrg.getOrganizationId(), deviceId, newStationId), HttpStatus.OK);
     }
@@ -89,7 +89,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getAppUserOrganization();
+        Organization creatorOrg = launchCreator.getActiveOrganization();
 
         // Note: in production this endpoint must authenticate device credentials, not user JWTs. Header kept for org scoping.
         return new ResponseEntity<>(svc.recordHeartbeat(creatorOrg.getOrganizationId(), deviceId, latencyMs, appVersion, deviceTime), HttpStatus.OK);

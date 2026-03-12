@@ -21,7 +21,7 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
     boolean existsByUsername(String username);
 
-    @Query("select  a from AppUser a where a.appUserOrganization.organizationId = :orgId")
+    @Query("select uo.appUser from UserOrganization uo where uo.organization.organizationId = :orgId")
     List<AppUser> getUsersInOrg(UUID orgId);
 }
 

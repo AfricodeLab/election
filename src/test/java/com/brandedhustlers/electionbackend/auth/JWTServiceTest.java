@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.auth;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
@@ -23,9 +24,12 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import javax.crypto.SecretKey;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Collections;
 import java.util.Date;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -72,8 +76,17 @@ class JWTServiceTest {
                 .appUserEmail("john@test.com")
                 .username("johndoe")
                 .userRole(UserRole.ORG_ADMIN)
-                .appUserOrganization(testOrg)
                 .build();
+
+        UserOrganization uo = UserOrganization.builder()
+                .id(UUID.randomUUID())
+                .appUser(testUser)
+                .organization(testOrg)
+                .roleInOrg("ORG_ADMIN")
+                .activeOrg(true)
+                .joinedAt(Timestamp.from(Instant.now()))
+                .build();
+        testUser.setUserOrganizations(Set.of(uo));
     }
 
     @Test
@@ -94,7 +107,7 @@ class JWTServiceTest {
         assertEquals("johndoe", claims.getSubject());
         assertEquals(userId.toString(), claims.get("userID"));
         assertEquals("john@test.com", claims.get("userEmail"));
-        assertEquals(orgId.toString(), claims.get("userOrgId").toString());
+        assertEquals(orgId.toString(), claims.get("activeOrgId").toString());
         assertEquals("ORG_ADMIN", claims.get("role").toString());
         assertEquals("brandedhuslters_backend", claims.get("iss"));
         assertEquals("election_client", claims.getAudience().iterator().next());
@@ -197,7 +210,7 @@ class JWTServiceTest {
         String token = jwtService.generateToken("johndoe", 3600000L, userId, "john@test.com");
 
         // Act
-        UUID extractedOrgId = jwtService.extractOrgId(token);
+        UUID extractedOrgId = jwtService.extractActiveOrgId(token);
 
         // Assert
         assertEquals(orgId, extractedOrgId);

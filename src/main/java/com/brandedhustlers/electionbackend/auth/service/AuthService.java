@@ -1,10 +1,7 @@
 package com.brandedhustlers.electionbackend.auth.service;
 
 import com.brandedhustlers.electionbackend.auth.controller.AuthController;
-import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.domain.Organization;
-import com.brandedhustlers.electionbackend.auth.domain.RefreshToken;
-import com.brandedhustlers.electionbackend.auth.domain.Role;
+import com.brandedhustlers.electionbackend.auth.domain.*;
 import com.brandedhustlers.electionbackend.auth.dto.*;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
@@ -16,6 +13,7 @@ import com.brandedhustlers.electionbackend.auth.mapper.OrganizationMapper;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
+import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
@@ -23,6 +21,7 @@ import com.brandedhustlers.electionbackend.common.exceptions.RefreshTokenExcepti
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +36,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 
+@Slf4j
 @Service
 public class AuthService implements IAuthService {
     private final JWTService jwtService;
@@ -52,6 +52,7 @@ public class AuthService implements IAuthService {
     private final AppUserMapper appUserMapper;
     private final OrganizationRepository organizationRepository;
     private final RefreshTokenService refreshTokenService;
+    private final UserOrganizationRepository userOrganizationRepository;
 
     public AuthService(JWTService jwtService,
             AppUserRepository appUserRepository,
@@ -62,7 +63,8 @@ public class AuthService implements IAuthService {
             RoleRepository roleRepository,
             GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper,
             OrganizationMapper organizationMapper1, AppUserMapper appUserMapper,
-            OrganizationRepository organizationRepository, RefreshTokenService refreshTokenService) {
+            OrganizationRepository organizationRepository, RefreshTokenService refreshTokenService,
+            UserOrganizationRepository userOrganizationRepository) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
@@ -76,6 +78,7 @@ public class AuthService implements IAuthService {
         this.appUserMapper = appUserMapper;
         this.organizationRepository = organizationRepository;
         this.refreshTokenService = refreshTokenService;
+        this.userOrganizationRepository = userOrganizationRepository;
     }
 
     @Override
@@ -107,21 +110,14 @@ public class AuthService implements IAuthService {
                 .username(registrationRequest.username())
                 .password(passwordEncoder.encode(registrationRequest.password()))
                 .userRole(UserRole.ORG_ADMIN)
-                .appUserOrganization(null)
                 .build();
 
         appUserRepository.save(newUser);
 
-        // Create organization
-        OrganizationDTO newOrgDto = organizationService.createOrganization(
+        // Create organization — this also creates a UserOrganization row
+        // linking the creator as ORG_ADMIN with activeOrg=true
+        organizationService.createOrganization(
                 registrationRequest.userOrg(), newUser.getAppUserId());
-        Organization organization = organizationMapper.dtoToEntity(newOrgDto);
-
-        // Set both organization and organizationName BEFORE saving organization
-        newUser.setAppUserOrganization(organization);
-
-        organizationRepository.save(organization);
-        appUserRepository.save(newUser);
 
         return new RegistrationResponse(
                 true,
@@ -172,7 +168,6 @@ public class AuthService implements IAuthService {
                 .lastName(createUserRequest.lastName())
                 .username(createUserRequest.username() == null ? null : createUserRequest.username())
                 .appUserEmail(createUserRequest.companyEmail())
-                .appUserOrganization(creator.getAppUserOrganization())
                 .password(passwordEncoder.encode(createUserRequest.defaultPassword()))
                 .userRole(UserRole.valueOf(createUserRequest.userRole()))
                 .userPreferences(null)
@@ -182,6 +177,18 @@ public class AuthService implements IAuthService {
                 .build();
 
         appUserRepository.save(newUser);
+
+        // Add new user to creator's active org
+        Organization creatorOrg = creator.getActiveOrganization();
+        if (creatorOrg != null) {
+            userOrganizationRepository.save(UserOrganization.builder()
+                    .appUser(newUser)
+                    .organization(creatorOrg)
+                    .roleInOrg(newUser.getUserRole().name())
+                    .activeOrg(true)
+                    .build());
+        }
+
         return new CreateUserResponse(
                 true,
                 newUser.getUserRole().name());
@@ -228,18 +235,13 @@ public class AuthService implements IAuthService {
         if (!passwordEncoder.matches(changePasswordCmd.oldPassword(), currUser.getPassword())) {
             throw new BadCredentialsException("User provided the wrong password");
         }
+
         if (passwordEncoder.matches(changePasswordCmd.newPassword(), currUser.getPassword())) {
             throw new BadCredentialsException("User provided the same password");
         }
         currUser.setPassword(passwordEncoder.encode(changePasswordCmd.newPassword()));
         appUserRepository.save(currUser);
     }
-
-    /*
-     * public ForgotPasswordResponse forgotPassword(ForgotPasswordCmd cmd){
-     * 
-     * }
-     */
 
     @Override
     public TokenRefreshResponse refreshToken(TokenRefreshRequest request) {

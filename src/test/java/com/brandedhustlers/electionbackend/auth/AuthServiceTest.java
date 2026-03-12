@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.auth;
 import com.brandedhustlers.electionbackend.auth.controller.AuthController;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
 import com.brandedhustlers.electionbackend.auth.dto.*;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserAlreadyExists;
@@ -31,7 +32,10 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -89,16 +93,27 @@ class AuthServiceTest {
                 testOrg.setOrganizationId(orgId);
                 testOrg.setOrganizationName("Test Org");
 
+
                 testUser = AppUser.builder()
-                                .appUserId(userId)
-                                .firstName("John")
-                                .lastName("Doe")
-                                .appUserEmail("john@test.com")
-                                .username("johndoe")
-                                .password("encodedPassword123")
-                                .userRole(UserRole.ORG_ADMIN)
-                                .appUserOrganization(testOrg)
-                                .build();
+                        .appUserId(userId)
+                        .firstName("John")
+                        .lastName("Doe")
+                        .appUserEmail("john@test.com")
+                        .username("johndoe")
+                        .password("encodedPassword123")
+                        .userRole(UserRole.ORG_ADMIN)
+                        .build();
+
+                UserOrganization userOrganization = UserOrganization.builder()
+                        .id(UUID.randomUUID())
+                        .appUser((testUser))
+                        .organization(testOrg)
+                        .roleInOrg("ADMIN")
+                        .activeOrg(true)
+                        .joinedAt(Timestamp.from(Instant.now()))
+                        .build();
+
+                testUser.setUserOrganizations(Set.of(userOrganization));
         }
 
         @Test
@@ -121,7 +136,6 @@ class AuthServiceTest {
                         return u;
                 });
                 when(organizationService.createOrganization(any(), any())).thenReturn(orgDto);
-                when(organizationMapper.dtoToEntity(orgDto)).thenReturn(testOrg);
 
                 // Act
                 RegistrationResponse result = authService.register(request);
@@ -131,8 +145,8 @@ class AuthServiceTest {
                 assertTrue(result.success());
                 assertEquals("ORG_ADMIN", result.userType());
 
-                verify(appUserRepository, times(2)).save(any(AppUser.class));
-                verify(organizationRepository, times(1)).save(testOrg);
+                verify(appUserRepository).save(any(AppUser.class));
+                verify(organizationService).createOrganization(any(), any());
         }
 
         @Test

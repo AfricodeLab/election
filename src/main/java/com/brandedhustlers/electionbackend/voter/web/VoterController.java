@@ -105,7 +105,8 @@ public class VoterController {
                     Files.createDirectories(uploadPath);
                 }
 
-                String uniqueFileName = UUID.randomUUID() + "_" + fileName;
+                String uniqueFileName = UUID.
+                        randomUUID() + "_" + fileName;
                 Path filePath = uploadPath.resolve(uniqueFileName);
                 Files.copy(file.getInputStream(),
                         filePath,

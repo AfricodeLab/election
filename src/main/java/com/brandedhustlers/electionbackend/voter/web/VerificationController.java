@@ -69,7 +69,7 @@ public class VerificationController {
             EligibilityPolicy policy = election.getEligibilityPolicy();
 
             // Get all voters in org
-            List<Voter> voters = voterRepository.findByOrgId((admin.getAppUserOrganization().getOrganizationId()));
+            List<Voter> voters = voterRepository.findByOrgId((admin.getActiveOrganization().getOrganizationId()));
 
             int total = voters.size();
             int complete = 0;
