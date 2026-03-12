@@ -56,7 +56,7 @@ public class JWTService {
         claims.put("voterId", voter.getVoterId().toString());
         claims.put("role", UserRole.VOTER.getName());
         claims.put("stepUpVerifiedAt", Instant.now().toEpochMilli());
-        claims.put("iss", "brandedhuslters_backend");
+        claims.put("iss", "brandedhustlers_backend");
         claims.put("aud", "election_client");
 
         return Jwts.builder()
@@ -120,10 +120,10 @@ public class JWTService {
         claims.put("userID", userId);
         claims.put("username", username);
         claims.put("userEmail", appUserEmail);
-        claims.put("userOrgId",
-                user.getAppUserOrganization() == null ? null : user.getAppUserOrganization().getOrganizationId());
+        claims.put("activeOrgId",
+                user.getActiveOrganization() == null ? null : user.getActiveOrganization().getOrganizationId());
         claims.put("role", user.getUserRole());
-        claims.put("iss", "brandedhuslters_backend");
+        claims.put("iss", "brandedhustlers_backend");
         claims.put("aud", "election_client");
 
         return Jwts.builder()
@@ -211,10 +211,10 @@ public class JWTService {
         return null;
     }
 
-    public UUID extractOrgId(String token) {
+    public UUID extractActiveOrgId(String token) {
         Claims claims = extractAllClaim(token);
-        if (claims.containsKey("userOrgId")) {
-            return UUID.fromString(claims.get("userOrgId", String.class));
+        if (claims.containsKey("activeOrgId")) {
+            return UUID.fromString(claims.get("activeOrgId", String.class));
         }
         return null;
     }

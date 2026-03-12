@@ -32,8 +32,8 @@ public class UserPrincipal implements UserDetails {
         );
     }
 
-    public Organization getUserOrganization(){
-        return appUser.getAppUserOrganization();
+    public Organization getActiveOrganization(){
+        return appUser.getActiveOrganization();
     }
 
     @Override

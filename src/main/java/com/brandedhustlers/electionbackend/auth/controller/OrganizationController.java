@@ -3,10 +3,8 @@ package com.brandedhustlers.electionbackend.auth.controller;
 import com.brandedhustlers.electionbackend.auth.dto.AddUserToOrg;
 import com.brandedhustlers.electionbackend.auth.dto.CreateOrganizationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.OrganizationDTO;
-import com.brandedhustlers.electionbackend.auth.service.IOrganizationService;
-import com.brandedhustlers.electionbackend.common.config.security.JWTService;
+import com.brandedhustlers.electionbackend.auth.service.OrganizationService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
-import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,17 +15,12 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/organization")
 public class OrganizationController {
-    private final IOrganizationService organizationService;
-    private final HttpServletRequest httpServletRequest;
-    private final JWTService jwtService;
+    private final OrganizationService organizationService;
     private final GetUser getUser;
 
-    public OrganizationController(IOrganizationService organizationService,
-                                  HttpServletRequest httpServletRequest,
-                                  JWTService jwtService, GetUser getUser) {
+    public OrganizationController(OrganizationService organizationService,
+                                  GetUser getUser) {
         this.organizationService = organizationService;
-        this.httpServletRequest = httpServletRequest;
-        this.jwtService = jwtService;
         this.getUser = getUser;
     }
 
@@ -64,6 +57,17 @@ public class OrganizationController {
             @PathVariable UUID orgId
     ) {
         organizationService.deactivateOrganization(orgId);
-        return new ResponseEntity<>("Deactivated.",HttpStatus.OK);
+        return new ResponseEntity<>("Deactivated.", HttpStatus.OK);
+    }
+
+    @PutMapping("/switch/{orgId}")
+    public ResponseEntity<?> switchActiveOrg(@PathVariable UUID orgId) {
+        organizationService.switchActiveOrg(getUser.getCurrentAuthenticatedUserId(), orgId);
+        return new ResponseEntity<>("Active organization switched", HttpStatus.OK);
+    }
+
+    @GetMapping("/my-orgs")
+    public ResponseEntity<?> myOrganizations() {
+        return new ResponseEntity<>(organizationService.getUserOrganizations(getUser.getCurrentAuthenticatedUserId()), HttpStatus.OK);
     }
 }

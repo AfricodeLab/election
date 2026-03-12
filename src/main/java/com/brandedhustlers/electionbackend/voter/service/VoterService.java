@@ -1,14 +1,11 @@
 package com.brandedhustlers.electionbackend.voter.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.domain.Permission;
-import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
-import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
-import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.VoterDTO;
@@ -26,29 +23,27 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class VoterService implements IVoterService {
 
-    private final AppUserRepository appUserRepository;
     private final VoterMapper voterMapper;
     private final VoterRepository voterRepository;
     private final AuditEmitter auditEmitter;
     private final AttributeExtractor attributeExtractor;
     private final GetUser getUser;
+    private final Util util;
 
 
-    public VoterService(AppUserRepository appUserRepository,
-                        VoterMapper voterMapper,
-                        VoterRepository voterRepository,
-                        AuditEmitter auditEmitter,
-                        AttributeExtractor attributeExtractor,
-                        GetUser getUser) {
-        this.appUserRepository = appUserRepository;
+    public VoterService(
+            VoterMapper voterMapper,
+            VoterRepository voterRepository,
+            AuditEmitter auditEmitter,
+            AttributeExtractor attributeExtractor,
+            GetUser getUser, Util util) {
+        this.util = util;
         this.voterMapper = voterMapper;
         this.voterRepository = voterRepository;
         this.auditEmitter = auditEmitter;
@@ -62,11 +57,13 @@ public class VoterService implements IVoterService {
     public VoterDTO create(UUID orgId, CreateVoterCmd cmd) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
 
-        if (!(authorizeUser(actor, UserRole.ADMIN) || authorizeUser(actor, UserRole.SUPER_ADMIN))) {
+        if (!(util.authorizeUser(actor, UserRole.ADMIN)
+                || util.authorizeUser(actor, UserRole.SUPER_ADMIN)
+                || util.authorizeUser(actor, UserRole.ORG_ADMIN))) {
             throw new AccessDeniedException("You do not have authority to create a voter");
         }
 
-        if (actor.getAppUserOrganization() == null) {
+        if (actor.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create a voter");
         }
 
@@ -89,7 +86,7 @@ public class VoterService implements IVoterService {
                 .name(cmd.name())
                 .phone(cmd.phone())
                 .email(cmd.email())
-                .organization(actor.getAppUserOrganization())
+                .organization(actor.getActiveOrganization())
                 .nationalId(cmd.nationalId())
                 .voterStatus(VoterStatus.ACTIVE)
                 .createdBy(actor)
@@ -132,7 +129,7 @@ public class VoterService implements IVoterService {
         return voterMapper.entityToDto(newVoter);
     }
 
-    public Page<VoterDTO> getOrgVoters(Pageable pageable){
+    public Page<VoterDTO> getOrgVoters(Pageable pageable) {
         UUID voterOrg = getUser.getCurrentAuthenticatedUserOrgId();
 
         List<VoterDTO> orgVoters = voterRepository.findByOrgId(voterOrg)
@@ -158,7 +155,7 @@ public class VoterService implements IVoterService {
             throw new AccessDeniedException("You do not have authority to assign voters");
         }
 
-        UUID actorOrgId = Optional.ofNullable(actor.getAppUserOrganization())
+        UUID actorOrgId = Optional.ofNullable(actor.getActiveOrganization())
                 .orElseThrow(() -> new AccessDeniedException("You must belong to an organization"))
                 .getOrganizationId();
 
@@ -234,29 +231,4 @@ public class VoterService implements IVoterService {
         );
     }
 */
-
-    private boolean authorityCheck(UUID appUserId, PermissionType allowedPermission) {
-        AppUser updatingUser = appUserRepository.findById(appUserId)
-                .orElseThrow(() -> new UserNotFound("User not found"));
-
-        Set<PermissionType> userPermissions = updatingUser.getRoles()
-                .stream()
-                .flatMap(role -> role.getRolePermissions().stream())
-                .map(Permission::getPermissionType)
-                .collect(Collectors.toSet());
-
-        return userPermissions.contains(allowedPermission);
-    }
-
-    private boolean authorizeUser(AppUser user, UserRole userType) {
-        return user.getUserRole().equals(userType);
-    }
-
-    private void requireAdminOrPermission(AppUser user, PermissionType permission) {
-        boolean hasRole = authorizeUser(user, UserRole.ADMIN) || authorizeUser(user, UserRole.SUPER_ADMIN);
-        boolean hasPermission = authorityCheck(user.getAppUserId(), permission);
-
-        if (!hasRole && !hasPermission)
-            throw new AccessDeniedException("You lack sufficient privileges for this action");
-    }
 }

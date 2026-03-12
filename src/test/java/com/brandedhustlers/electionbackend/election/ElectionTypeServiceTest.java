@@ -2,11 +2,13 @@ package com.brandedhustlers.electionbackend.election;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.ElectionTypeEntity;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionTypeRequest;
 import com.brandedhustlers.electionbackend.election.dto.ElectionTypeDTO;
@@ -20,8 +22,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,6 +40,8 @@ class ElectionTypeServiceTest {
         ElectionTypeRepository electionTypeRepository;
         @Mock
         GetUser getUser;
+        @Mock
+        Util util;
         @InjectMocks
         ElectionTypeService service;
 
@@ -53,13 +59,19 @@ class ElectionTypeServiceTest {
                 adminUser.setAppUserId(UUID.randomUUID());
                 adminUser.setFirstName("Admin");
                 adminUser.setUserRole(UserRole.ADMIN);
-                adminUser.setAppUserOrganization(org);
+                UserOrganization adminUo = UserOrganization.builder()
+                        .id(UUID.randomUUID()).appUser(adminUser).organization(org)
+                        .roleInOrg("ADMIN").activeOrg(true).build();
+                adminUser.setUserOrganizations(new HashSet<>(Set.of(adminUo)));
 
                 regularUser = new AppUser();
                 regularUser.setAppUserId(UUID.randomUUID());
                 regularUser.setFirstName("Voter");
                 regularUser.setUserRole(UserRole.VOTER);
-                regularUser.setAppUserOrganization(org);
+                UserOrganization regularUo = UserOrganization.builder()
+                        .id(UUID.randomUUID()).appUser(regularUser).organization(org)
+                        .roleInOrg("VOTER").activeOrg(true).build();
+                regularUser.setUserOrganizations(new HashSet<>(Set.of(regularUo)));
         }
 
         // ─── createCustomType ─────────────────────────────────────────────────────
@@ -96,6 +108,8 @@ class ElectionTypeServiceTest {
                 @Test
                 void throwsAccessDeniedForNonAdmin() {
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(regularUser);
+                        doThrow(new AccessDeniedException("Only admins can manage election types"))
+                                        .when(util).requireAdmin(regularUser);
 
                         assertThatThrownBy(() -> service.createCustomType(new CreateElectionTypeRequest("X", null)))
                                         .isInstanceOf(AccessDeniedException.class)
@@ -104,7 +118,7 @@ class ElectionTypeServiceTest {
 
                 @Test
                 void throwsAccessDeniedWhenNoOrg() {
-                        adminUser.setAppUserOrganization(null);
+                        adminUser.setUserOrganizations(new HashSet<>());
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
 
                         assertThatThrownBy(() -> service.createCustomType(new CreateElectionTypeRequest("X", null)))
@@ -113,13 +127,13 @@ class ElectionTypeServiceTest {
                 }
 
                 @Test
-                void throwsInvalidUpdateForDuplicateName() {
+                void throwsConflictForDuplicateName() {
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
                         when(electionTypeRepository.existsByNameAndOrganization("Duplicate", org)).thenReturn(true);
 
                         assertThatThrownBy(() -> service
                                         .createCustomType(new CreateElectionTypeRequest("Duplicate", null)))
-                                        .isInstanceOf(InvalidUpdate.class)
+                                        .isInstanceOf(com.brandedhustlers.electionbackend.common.exceptions.ConflictAction.class)
                                         .hasMessageContaining("already exists");
                 }
         }
@@ -151,7 +165,7 @@ class ElectionTypeServiceTest {
 
                 @Test
                 void returnsOnlySystemTypesWhenUserHasNoOrg() {
-                        adminUser.setAppUserOrganization(null);
+                        adminUser.setUserOrganizations(new HashSet<>());
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
 
                         ElectionTypeEntity systemType = ElectionTypeEntity.builder()

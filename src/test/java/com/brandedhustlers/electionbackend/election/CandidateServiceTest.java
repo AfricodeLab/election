@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.election;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
@@ -22,6 +23,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -61,7 +63,14 @@ class CandidateServiceTest {
         // if SAME org)
         Organization adminOrg = new Organization();
         adminOrg.setOrganizationId(UUID.randomUUID());
-        admin.setAppUserOrganization(adminOrg);
+        UserOrganization uo = UserOrganization.builder()
+                .id(UUID.randomUUID())
+                .appUser(admin)
+                .organization(adminOrg)
+                .roleInOrg("ADMIN")
+                .activeOrg(true)
+                .build();
+        admin.setUserOrganizations(Set.of(uo));
 
         election = new Election();
         election.setElectionId(UUID.randomUUID());

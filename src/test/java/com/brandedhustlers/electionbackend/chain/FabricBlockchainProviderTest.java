@@ -1,8 +1,10 @@
+
 package com.brandedhustlers.electionbackend.chain;
 
 import com.brandedhustlers.electionbackend.chain.service.FabricBlockchainProvider;
 import org.hyperledger.fabric.gateway.Contract;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -19,9 +21,12 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+
 /**
  * Unit tests for BlockchainService - Hyperledger Fabric integration.
  */
+
+@Disabled("Chain framework moved to different project")
 @ExtendWith(MockitoExtension.class)
 class FabricBlockchainProviderTest {
 
@@ -291,3 +296,4 @@ class FabricBlockchainProviderTest {
                 assertEquals("[]", result);
         }
 }
+

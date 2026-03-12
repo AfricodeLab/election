@@ -2,6 +2,8 @@ package com.brandedhustlers.electionbackend.election.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
@@ -28,18 +30,21 @@ public class CandidateService {
     private final ConfigSnapshotService snapshotService;
     private final AlertService alertService;
     private final CandidateMapper candidateMapper;
+    private final Util util;
 
     public CandidateService(
             CandidateRepository candidateRepo,
             ElectionRepository electionRepo,
             ConfigSnapshotService snapshotService,
             AlertService alertService,
-            CandidateMapper candidateMapper) {
+            CandidateMapper candidateMapper,
+            Util util) {
         this.candidateRepo = candidateRepo;
         this.electionRepo = electionRepo;
         this.snapshotService = snapshotService;
         this.alertService = alertService;
         this.candidateMapper = candidateMapper;
+        this.util = util;
     }
 
     /**
@@ -53,8 +58,12 @@ public class CandidateService {
         Election election = candidate.getElection();
 
         Organization organization = election.getOrganization();
-        if (admin.getAppUserOrganization().equals(organization)){
-            throw new IllegalArgumentException("Admin with ID: " + admin.getAppUserId() + " is not a member of this org.");
+        Organization adminOrg = admin.getActiveOrganization();
+        if (adminOrg == null) {
+            throw new AccessDeniedException("Admin has no active organization");
+        }
+        if (adminOrg.equals(organization)){
+            throw new AccessDeniedException("Admin with ID: " + admin.getAppUserId() + " is not a member of this org.");
         }
 
         /**

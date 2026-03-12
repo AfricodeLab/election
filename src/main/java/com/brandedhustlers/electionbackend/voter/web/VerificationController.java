@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.voter.web;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.Election;
@@ -69,7 +70,11 @@ public class VerificationController {
             EligibilityPolicy policy = election.getEligibilityPolicy();
 
             // Get all voters in org
-            List<Voter> voters = voterRepository.findByOrgId((admin.getAppUserOrganization().getOrganizationId()));
+            Organization adminOrg = admin.getActiveOrganization();
+            if (adminOrg == null) {
+                return ResponseEntity.status(403).body("No active organization");
+            }
+            List<Voter> voters = voterRepository.findByOrgId(adminOrg.getOrganizationId());
 
             int total = voters.size();
             int complete = 0;

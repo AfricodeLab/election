@@ -1,6 +1,5 @@
 package com.brandedhustlers.electionbackend.ops.web;
 
-import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.ops.dto.CreateLaunchCmd;
 import com.brandedhustlers.electionbackend.ops.enums.LaunchStatus;
@@ -21,57 +20,47 @@ import java.util.UUID;
 @RequestMapping("/api/v1/launches")
 public class LaunchController {
     private final LaunchService svc;
-    private final JWTService jwtService;
     private final GetUser getUser;
 
     public LaunchController(LaunchService svc,
-                            JWTService jwtService,
                             GetUser getUser) {
         this.svc = svc;
-        this.jwtService = jwtService;
         this.getUser = getUser;
     }
 
     @PostMapping
     public ResponseEntity<?> create(@RequestBody CreateLaunchCmd createLaunchCmd) {
-        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        return new ResponseEntity<>(svc.create(orgId, createLaunchCmd.name(), createLaunchCmd.description(), createLaunchCmd.startAt(), createLaunchCmd.endAt()), HttpStatus.CREATED);
+        return new ResponseEntity<>(svc.create(getUser.getCurrentAuthenticatedUserOrgId(), createLaunchCmd.name(), createLaunchCmd.description(), createLaunchCmd.startAt(), createLaunchCmd.endAt()), HttpStatus.CREATED);
     }
 
     @GetMapping("/get-launch/{launchId}")
     public ResponseEntity<?> getLaunch(@PathVariable UUID launchId) {
-        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        return new ResponseEntity<>(svc.get(orgId, launchId), HttpStatus.OK);
+        return new ResponseEntity<>(svc.get(getUser.getCurrentAuthenticatedUserOrgId(), launchId), HttpStatus.OK);
     }
 
     @GetMapping
     public ResponseEntity<?> list(@RequestParam(required = false) LaunchStatus status,
-                                  Pageable pageable
-    ) {
-        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        return new ResponseEntity<>(svc.list(orgId, status, pageable), HttpStatus.OK);
+                                  Pageable pageable) {
+        return new ResponseEntity<>(svc.list(getUser.getCurrentAuthenticatedUserOrgId(), status, pageable), HttpStatus.OK);
     }
 
     @PostMapping("/{launchId}/attach-elections")
     public ResponseEntity<?> attach(@PathVariable UUID launchId,
                                     @RequestBody List<UUID> electionIds) {
-        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        svc.attachElections(orgId, launchId, electionIds);
+        svc.attachElections(getUser.getCurrentAuthenticatedUserOrgId(), launchId, electionIds);
         return new ResponseEntity<>("Elections attached successfully", HttpStatus.ACCEPTED);
     }
 
     @DeleteMapping("/{launchId}/detach-elections")
     public ResponseEntity<?> detach(@PathVariable UUID launchId,
                                     @RequestBody List<UUID> electionIds) {
-        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        svc.detachElections(orgId, launchId, electionIds);
+        svc.detachElections(getUser.getCurrentAuthenticatedUserOrgId(), launchId, electionIds);
         return new ResponseEntity<>("Election(s) detached successfully", HttpStatus.ACCEPTED);
     }
 
     @PutMapping("/{launchId}/status")
     public ResponseEntity<?> transition(@PathVariable UUID launchId,
                                         @RequestParam LaunchStatus status) {
-        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        return new ResponseEntity<>(svc.transitionStatus(orgId, launchId, status), HttpStatus.OK);
+        return new ResponseEntity<>(svc.transitionStatus(getUser.getCurrentAuthenticatedUserOrgId(), launchId, status), HttpStatus.OK);
     }
 }

@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.common.util;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
+import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.config.security.VoterAuthToken;
 import com.brandedhustlers.electionbackend.common.exceptions.NoAuthenticatedUser;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
@@ -41,7 +42,11 @@ public class GetUser {
     }
 
     public Organization getCurrentAuthenticatedUserOrg(){
-        return getCurrentAuthenticatedUser().getAppUserOrganization();
+        Organization org = getCurrentAuthenticatedUser().getActiveOrganization();
+        if (org == null) {
+            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
+        }
+        return org;
     }
 
     public UUID getCurrentAuthenticatedUserOrgId(){

@@ -2,11 +2,13 @@ package com.brandedhustlers.electionbackend.voter;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.VoterDTO;
@@ -24,8 +26,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,6 +52,8 @@ class VoterServiceTest {
     AttributeExtractor attributeExtractor;
     @Mock
     GetUser getUser;
+    @Mock
+    Util util;
     @InjectMocks
     VoterService voterService;
 
@@ -65,12 +71,18 @@ class VoterServiceTest {
         adminUser.setAppUserId(UUID.randomUUID());
         adminUser.setFirstName("Admin");
         adminUser.setUserRole(UserRole.ADMIN);
-        adminUser.setAppUserOrganization(org);
+        UserOrganization adminUo = UserOrganization.builder()
+                .id(UUID.randomUUID()).appUser(adminUser).organization(org)
+                .roleInOrg("ADMIN").activeOrg(true).build();
+        adminUser.setUserOrganizations(new HashSet<>(Set.of(adminUo)));
 
         regularUser = new AppUser();
         regularUser.setAppUserId(UUID.randomUUID());
         regularUser.setUserRole(UserRole.VOTER);
-        regularUser.setAppUserOrganization(org);
+        UserOrganization regularUo = UserOrganization.builder()
+                .id(UUID.randomUUID()).appUser(regularUser).organization(org)
+                .roleInOrg("VOTER").activeOrg(true).build();
+        regularUser.setUserOrganizations(new HashSet<>(Set.of(regularUo)));
     }
 
     // ─── create ───────────────────────────────────────────────────────────────
@@ -86,6 +98,7 @@ class VoterServiceTest {
         @Test
         void createsVoterForAdmin() {
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
+            when(util.authorizeUser(adminUser, UserRole.ADMIN)).thenReturn(true);
             when(attributeExtractor.extractAttributes(any(), any(), any(), any()))
                     .thenReturn(Map.of("age", 34, "citizen", true));
 
@@ -119,8 +132,9 @@ class VoterServiceTest {
 
         @Test
         void throwsWhenCallerHasNoOrg() {
-            adminUser.setAppUserOrganization(null);
+            adminUser.setUserOrganizations(new HashSet<>());
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
+            when(util.authorizeUser(adminUser, UserRole.ADMIN)).thenReturn(true);
 
             assertThatThrownBy(() -> voterService.create(org.getOrganizationId(), cmd))
                     .isInstanceOf(AccessDeniedException.class)

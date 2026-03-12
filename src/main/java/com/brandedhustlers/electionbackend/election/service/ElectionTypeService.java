@@ -1,11 +1,13 @@
 package com.brandedhustlers.electionbackend.election.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
-import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
+import com.brandedhustlers.electionbackend.common.exceptions.ConflictAction;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.ElectionTypeEntity;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionTypeRequest;
 import com.brandedhustlers.electionbackend.election.dto.ElectionTypeDTO;
@@ -25,6 +27,7 @@ public class ElectionTypeService {
 
     private final ElectionTypeRepository electionTypeRepository;
     private final GetUser getUser;
+    private final Util util;
 
     /**
      * Create a new custom election type for the caller's organization.
@@ -32,23 +35,23 @@ public class ElectionTypeService {
      */
     public ElectionTypeDTO createCustomType(CreateElectionTypeRequest request) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        requireAdmin(caller);
+        util.requireAdmin(caller);
 
-        if (caller.getAppUserOrganization() == null) {
+        if (caller.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create election types");
         }
 
         // Prevent duplicate name within same org
         if (electionTypeRepository.existsByNameAndOrganization(
-                request.name(), caller.getAppUserOrganization())) {
-            throw new InvalidUpdate("An election type with this name already exists in your organization");
+                request.name(), caller.getActiveOrganization())) {
+            throw new ConflictAction("An election type with this name already exists in your organization");
         }
 
         ElectionTypeEntity entity = ElectionTypeEntity.builder()
                 .name(request.name())
                 .description(request.description())
                 .isSystem(false)
-                .organization(caller.getAppUserOrganization())
+                .organization(caller.getActiveOrganization())
                 .createdBy(caller)
                 .deleteYn(DeleteYn.N)
                 .build();
@@ -66,7 +69,7 @@ public class ElectionTypeService {
     public List<ElectionTypeDTO> getVisibleTypes() {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
 
-        if (caller.getAppUserOrganization() == null) {
+        if (caller.getActiveOrganization() == null) {
             // Super admins without an org: return system types only
             return electionTypeRepository
                     .findAllByIsSystemTrueAndDeleteYn(DeleteYn.N)
@@ -76,7 +79,7 @@ public class ElectionTypeService {
         }
 
         return electionTypeRepository
-                .findVisibleToOrg(caller.getAppUserOrganization().getOrganizationId())
+                .findVisibleToOrg(caller.getActiveOrganization().getOrganizationId())
                 .stream()
                 .map(this::toDTO)
                 .toList();
@@ -87,7 +90,7 @@ public class ElectionTypeService {
      */
     public void deleteType(UUID typeId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        requireAdmin(caller);
+        util.requireAdmin(caller);
 
         ElectionTypeEntity type = electionTypeRepository.findByElectionTypeId(typeId)
                 .orElseThrow(() -> new InvalidUpdate("Election type not found: " + typeId));
@@ -97,9 +100,10 @@ public class ElectionTypeService {
         }
 
         // Org scoping check
-        if (type.getOrganization() == null ||
+        Organization callerOrg = caller.getActiveOrganization();
+        if (callerOrg == null || type.getOrganization() == null ||
                 !type.getOrganization().getOrganizationId()
-                        .equals(caller.getAppUserOrganization().getOrganizationId())) {
+                        .equals(callerOrg.getOrganizationId())) {
             throw new AccessDeniedException("You can only delete election types from your own organization");
         }
 
@@ -110,10 +114,14 @@ public class ElectionTypeService {
     }
 
     public List<ElectionTypeOptionDto> getElectionTypeOptions(){
+        AppUser caller = getUser.getCurrentAuthenticatedUser();
+        util.requireAdmin(caller);
         return electionTypeRepository.getElectionTypeOption();
     }
 
     public List<ElectionTypeOptionDto> getElectionTypeOptionsByOrg(){
+        AppUser caller = getUser.getCurrentAuthenticatedUser();
+        util.requireAdmin(caller);
         return electionTypeRepository.getElectionTypeOptionByOrg(getUser.getCurrentAuthenticatedUserOrgId());
     }
 
@@ -127,13 +135,6 @@ public class ElectionTypeService {
                 e.isSystem(),
                 e.getOrganization() != null ? e.getOrganization().getOrganizationId() : null,
                 e.getCreatedAt());
-    }
-
-    private void requireAdmin(AppUser user) {
-        if (!user.getUserRole().equals(UserRole.ADMIN)
-                && !user.getUserRole().equals(UserRole.SUPER_ADMIN)) {
-            throw new AccessDeniedException("Only admins can manage election types");
-        }
     }
 
 }

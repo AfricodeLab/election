@@ -92,7 +92,11 @@ public class ElectionController {
         AppUser launchCreator = appUserRepository.findById(getUser.getCurrentAuthenticatedUserId())
                 .orElseThrow(() -> new UserNotFound("User not found."));
 
-        Organization creatorOrg = launchCreator.getAppUserOrganization();
+        Organization creatorOrg = launchCreator.getActiveOrganization();
+        if (creatorOrg == null) {
+            return ResponseEntity.status(403).body(Map.of("status", "forbidden",
+                    "message", "No active organization. Please join or switch to an organization first."));
+        }
         return new ResponseEntity<>(electionService.getElectionsByOrg(creatorOrg.getOrganizationId(), pageable), HttpStatus.OK);
     }
 
@@ -129,12 +133,20 @@ public class ElectionController {
 
             // Verify org access (admin must belong to election's org)
             Organization electionOrg = electionRepository.getElectionOrganization(electionId);
+            Organization userOrg = user.getActiveOrganization();
 
-            log.info(String.valueOf(electionOrg.equals(user.getAppUserOrganization())));
+            if (userOrg == null) {
+                return ResponseEntity.status(403).body(Map.of(
+                        "status", "forbidden",
+                        "message", "No active organization. Please join or switch to an organization first."
+                ));
+            }
+
+            log.info(String.valueOf(electionOrg.equals(userOrg)));
             log.info("election org: {}", electionOrg.toString());
-            log.info("user org: {}", user.getAppUserOrganization().toString());
+            log.info("user org: {}", userOrg.toString());
 
-            if (!(user.getAppUserOrganization().getOrganizationId().equals(electionOrg.getOrganizationId()))) {
+            if (!(userOrg.getOrganizationId().equals(electionOrg.getOrganizationId()))) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
                         "message","You cannot manage elections from other organizations"

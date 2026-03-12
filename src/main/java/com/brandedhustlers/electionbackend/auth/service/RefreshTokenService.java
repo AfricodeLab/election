@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.auth.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.RefreshToken;
+import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RefreshTokenRepository;
 import org.springframework.stereotype.Service;
@@ -30,7 +31,8 @@ public class RefreshTokenService {
 
     @Transactional
     public RefreshToken createRefreshToken(UUID userId) {
-        AppUser user = appUserRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        AppUser user = appUserRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User not found"));
 
         // Invalidate old tokens for this user
         refreshTokenRepository.deleteByUser(user);

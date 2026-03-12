@@ -152,7 +152,7 @@ public class VoterImportService implements IVoterImportService {
             throw new RuntimeException("User not found: " + userId);
         }
 
-        if (currentUser.getAppUserOrganization() == null) {
+        if (currentUser.getActiveOrganization() == null) {
             throw new RuntimeException("User has no organization: " + userId);
         }
 
@@ -208,7 +208,7 @@ public class VoterImportService implements IVoterImportService {
                 }
 
                 Voter voter = Voter.builder()
-                        .organization(currentUser.getAppUserOrganization())
+                        .organization(currentUser.getActiveOrganization())
                         .name(cmd.name())
                         .phone(cmd.phone())
                         .email(cmd.email())

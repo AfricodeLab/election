@@ -4,12 +4,8 @@ import com.brandedhustlers.electionbackend.auth.dto.CreateUserRequest;
 import com.brandedhustlers.electionbackend.auth.dto.LoginRequest;
 import com.brandedhustlers.electionbackend.auth.dto.RegistrationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshRequest;
-import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshResponse;
-import com.brandedhustlers.electionbackend.auth.mapper.AppUserMapper;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
-import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
@@ -24,21 +20,14 @@ import java.util.UUID;
 public class AuthController {
     private final AuthService authService;
     private final HttpServletResponse servletResponse;
-    private final ObjectMapper objectMapper;
     private final GetUser getUser;
-    private final AppUserMapper appUserMapper;
-    private final CloudinaryService cloudinaryService;
 
     public AuthController(AuthService authService,
-            HttpServletResponse response,
-            ObjectMapper objectMapper, GetUser getUser,
-            AppUserMapper appUserMapper, CloudinaryService cloudinaryService) {
+                          HttpServletResponse response,
+                          GetUser getUser) {
         this.authService = authService;
         this.servletResponse = response;
-        this.objectMapper = objectMapper;
         this.getUser = getUser;
-        this.appUserMapper = appUserMapper;
-        this.cloudinaryService = cloudinaryService;
     }
 
     @PostMapping("/register-user")
@@ -105,6 +94,6 @@ public class AuthController {
     record ChangePasswordResponse(boolean success, String message) {
     } // for anyone going through this codebase, I put the records here because I
       // really didn't see why I should create a different file for them...since
-      // they'd only ever be use here...although the first one was use in the
+      // they'd only ever be use here...although the first one was used in the
       // service...but yeah, you get me
 }

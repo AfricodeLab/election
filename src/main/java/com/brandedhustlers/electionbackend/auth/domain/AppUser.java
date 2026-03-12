@@ -74,12 +74,21 @@ public class AppUser {
 
     private String userProfilePicture;
 
-    @ManyToOne
-    @JoinColumn(name = "organization_id")
-    private Organization appUserOrganization;
+    @OneToMany(mappedBy = "appUser", fetch = FetchType.LAZY)
+    @Builder.Default
+    private Set<UserOrganization> userOrganizations = new HashSet<>();
 
-    public String getOrganizationName(){
-        return appUserOrganization == null ? null : appUserOrganization.getOrganizationName();
+    public Organization getActiveOrganization() {
+        return userOrganizations.stream()
+                .filter(UserOrganization::isActiveOrg)
+                .map(UserOrganization::getOrganization)
+                .findFirst()
+                .orElse(null);
+    }
+
+    public String getOrganizationName() {
+        Organization active = getActiveOrganization();
+        return active == null ? null : active.getOrganizationName();
     }
 
 }
