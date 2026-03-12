@@ -23,8 +23,8 @@ public class Util {
 
     public void requireAdmin(AppUser user) {
         if (!user.getUserRole().equals(UserRole.ADMIN)
-                &&!user.getUserRole().equals(UserRole.SUPER_ADMIN)
-                &&!user.getUserRole().equals(UserRole.ORG_ADMIN)
+                && !user.getUserRole().equals(UserRole.SUPER_ADMIN)
+                && !user.getUserRole().equals(UserRole.ORG_ADMIN)
         ) {
             throw new AccessDeniedException("Only admins can manage election types");
         }

@@ -123,7 +123,7 @@ public class JWTService {
         claims.put("activeOrgId",
                 user.getActiveOrganization() == null ? null : user.getActiveOrganization().getOrganizationId());
         claims.put("role", user.getUserRole());
-        claims.put("iss", "brandedhuslters_backend");
+        claims.put("iss", "brandedhustlers_backend");
         claims.put("aud", "election_client");
 
         return Jwts.builder()

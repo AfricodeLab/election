@@ -1,20 +1,19 @@
-/*
+
 package com.brandedhustlers.electionbackend.chain;
 
 import com.brandedhustlers.electionbackend.chain.service.MockBlockchainProvider;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
-*/
 /**
  * Unit tests for MockBlockchainProvider.
- *//*
+ */
 
+@Disabled("Chain framework moved to different project")
 class MockBlockchainProviderTest {
 
     private MockBlockchainProvider mockProvider;
@@ -32,7 +31,7 @@ class MockBlockchainProviderTest {
     @DisplayName("Mock anchor batch generates UUID")
     void testAnchorBatch() {
         String result = mockProvider.anchorBatch(electionId, orgId, "merkle123", "2024-01-21T12:00:00Z");
-        assertNotNull(result);
+        Assertions.assertNotNull(result);
         assertDoesNotThrow(() -> UUID.fromString(result));
     }
 
@@ -40,7 +39,7 @@ class MockBlockchainProviderTest {
     @DisplayName("Mock anchor config generates UUID")
     void testAnchorConfig() {
         String result = mockProvider.anchorConfig(electionId, orgId, "hash123", "2024-01-21T12:00:00Z");
-        assertNotNull(result);
+        Assertions.assertNotNull(result);
         assertDoesNotThrow(() -> UUID.fromString(result));
     }
 
@@ -49,7 +48,7 @@ class MockBlockchainProviderTest {
     void testAnchorResults() {
         String result = mockProvider.anchorResults(electionId, orgId, "hash123", 0, false, "admin",
                 "2024-01-21T12:00:00Z");
-        assertNotNull(result);
+        Assertions.assertNotNull(result);
         assertDoesNotThrow(() -> UUID.fromString(result));
     }
 
@@ -62,19 +61,19 @@ class MockBlockchainProviderTest {
     @Test
     @DisplayName("Mock get config returns null")
     void testGetConfig() {
-        assertNull(mockProvider.getConfig(electionId));
+        Assertions.assertNull(mockProvider.getConfig(electionId));
     }
 
     @Test
     @DisplayName("Mock get results returns null")
     void testGetResults() {
-        assertNull(mockProvider.getResults(electionId));
+        Assertions.assertNull(mockProvider.getResults(electionId));
     }
 
     @Test
     @DisplayName("Mock list batches returns empty array string")
     void testListBatches() {
-        assertEquals("[]", mockProvider.listBatches(electionId));
+        Assertions.assertEquals("[]", mockProvider.listBatches(electionId));
     }
 }
-*/
+

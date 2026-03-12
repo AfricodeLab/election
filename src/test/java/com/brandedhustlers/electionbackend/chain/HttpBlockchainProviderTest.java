@@ -1,8 +1,9 @@
-/*
+
 package com.brandedhustlers.electionbackend.chain;
 
 import com.brandedhustlers.electionbackend.chain.service.HttpBlockchainProvider;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -20,11 +21,12 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-*/
+
 /**
  * Unit tests for HttpBlockchainProvider.
- *//*
+ */
 
+@Disabled("Chain framework moved to different project")
 @ExtendWith(MockitoExtension.class)
 class HttpBlockchainProviderTest {
 
@@ -98,4 +100,4 @@ class HttpBlockchainProviderTest {
         assertEquals(jsonResult, result);
     }
 }
-*/
+
