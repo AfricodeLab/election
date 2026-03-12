@@ -2,11 +2,13 @@ package com.brandedhustlers.electionbackend.election;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.ElectionPreset;
 import com.brandedhustlers.electionbackend.election.domain.ElectionTypeEntity;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionPresetRequest;
@@ -22,8 +24,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +44,8 @@ class ElectionPresetServiceTest {
         ElectionTypeRepository electionTypeRepository;
         @Mock
         GetUser getUser;
+        @Mock
+        Util util;
         @InjectMocks
         ElectionPresetService service;
 
@@ -58,12 +64,18 @@ class ElectionPresetServiceTest {
                 adminUser.setAppUserId(UUID.randomUUID());
                 adminUser.setFirstName("Admin");
                 adminUser.setUserRole(UserRole.ADMIN);
-                adminUser.setAppUserOrganization(org);
+                UserOrganization adminUo = UserOrganization.builder()
+                        .id(UUID.randomUUID()).appUser(adminUser).organization(org)
+                        .roleInOrg("ADMIN").activeOrg(true).build();
+                adminUser.setUserOrganizations(new HashSet<>(Set.of(adminUo)));
 
                 regularUser = new AppUser();
                 regularUser.setAppUserId(UUID.randomUUID());
                 regularUser.setUserRole(UserRole.VOTER);
-                regularUser.setAppUserOrganization(org);
+                UserOrganization regularUo = UserOrganization.builder()
+                        .id(UUID.randomUUID()).appUser(regularUser).organization(org)
+                        .roleInOrg("VOTER").activeOrg(true).build();
+                regularUser.setUserOrganizations(new HashSet<>(Set.of(regularUo)));
 
                 electionType = ElectionTypeEntity.builder()
                                 .typeId(UUID.randomUUID())
@@ -111,6 +123,8 @@ class ElectionPresetServiceTest {
                 @Test
                 void throwsForNonAdmin() {
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(regularUser);
+                        doThrow(new AccessDeniedException("Only admins can manage election types"))
+                                        .when(util).requireAdmin(regularUser);
 
                         assertThatThrownBy(() -> service.createPreset(
                                         new CreateElectionPresetRequest("X", null, UUID.randomUUID(), null, null,
@@ -133,7 +147,7 @@ class ElectionPresetServiceTest {
 
                 @Test
                 void throwsWhenCallerHasNoOrg() {
-                        adminUser.setAppUserOrganization(null);
+                        adminUser.setUserOrganizations(new HashSet<>());
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
 
                         assertThatThrownBy(() -> service.createPreset(
@@ -185,7 +199,7 @@ class ElectionPresetServiceTest {
 
                 @Test
                 void returnsEmptyListWhenNoOrg() {
-                        adminUser.setAppUserOrganization(null);
+                        adminUser.setUserOrganizations(new HashSet<>());
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
 
                         List<ElectionPresetDTO> result = service.getPresetsForOrg(null);

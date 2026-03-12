@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.controller.AuthController;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
+import com.brandedhustlers.electionbackend.auth.domain.RefreshToken;
 import com.brandedhustlers.electionbackend.auth.dto.*;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserAlreadyExists;
@@ -12,6 +13,8 @@ import com.brandedhustlers.electionbackend.auth.mapper.OrganizationMapper;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
+import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepository;
+import com.brandedhustlers.electionbackend.auth.service.RefreshTokenService;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
 import com.brandedhustlers.electionbackend.auth.service.OrganizationService;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
@@ -73,6 +76,10 @@ class AuthServiceTest {
         private AppUserMapper appUserMapper;
         @Mock
         private OrganizationRepository organizationRepository;
+        @Mock
+        private RefreshTokenService refreshTokenService;
+        @Mock
+        private UserOrganizationRepository userOrganizationRepository;
         @Mock
         private HttpServletResponse response;
 
@@ -212,8 +219,10 @@ class AuthServiceTest {
 
                 when(authenticationManager.authenticate(any())).thenReturn(authToken);
                 when(appUserRepository.findById(userId)).thenReturn(Optional.of(testUser));
-                when(jwtService.generateToken(anyString(), anyLong(), any(), anyString()))
+                when(jwtService.generateAccessToken(anyString(), any(), anyString()))
                                 .thenReturn("jwt-token-123");
+                when(refreshTokenService.createRefreshToken(any()))
+                                .thenReturn(RefreshToken.builder().token("refresh-token-123").build());
 
                 // Act
                 LoginResponse result = authService.login(loginRequest, response);

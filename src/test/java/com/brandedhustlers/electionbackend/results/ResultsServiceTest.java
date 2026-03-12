@@ -7,6 +7,7 @@ import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
@@ -30,13 +31,12 @@ import org.springframework.data.domain.Pageable;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,6 +54,8 @@ class ResultsServiceTest {
     ElectionRepository electionRepository;
     @Mock
     GetUser getUser;
+    @Mock
+    Util util;
     @InjectMocks
     ResultsService resultsService;
 
@@ -84,8 +86,6 @@ class ResultsServiceTest {
         @Test
         void returnsPagedTalliesForAdmin() {
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
-            // authorityCheck always runs (no role-based short-circuit in the service)
-            when(appUserRepository.findById(adminUser.getAppUserId())).thenReturn(Optional.of(adminUser));
 
             UUID candidateId = UUID.randomUUID();
             TallyId tallyId = new TallyId(electionId, candidateId);
@@ -111,8 +111,6 @@ class ResultsServiceTest {
         @Test
         void returnsEmptyPageWhenNoTalliesExist() {
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
-            // authorityCheck always runs — must stub findById even for admins
-            when(appUserRepository.findById(adminUser.getAppUserId())).thenReturn(Optional.of(adminUser));
             when(tallyRepository.findByIdElectionId(electionId)).thenReturn(List.of());
             when(electionRepository.getElectionTitleById(electionId)).thenReturn("Empty Election");
             when(candidateRepository.findAllById(anyCollection())).thenReturn(List.of());
@@ -126,9 +124,8 @@ class ResultsServiceTest {
         @Test
         void throwsAccessDeniedForVoterWithNoPermission() {
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(voterUser);
-            // appUserRepository is called inside authorityCheck
-            when(appUserRepository.findById(voterUser.getAppUserId()))
-                    .thenReturn(Optional.of(voterUser));
+            doThrow(new AccessDeniedException("You lack sufficient privileges for this action"))
+                    .when(util).requireAdminOrPermission(eq(voterUser), any());
 
             Pageable pageable = PageRequest.of(0, 10);
 
@@ -149,8 +146,6 @@ class ResultsServiceTest {
             voterUser.setRoles(Set.of(role));
 
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(voterUser);
-            when(appUserRepository.findById(voterUser.getAppUserId()))
-                    .thenReturn(Optional.of(voterUser));
             when(tallyRepository.findByIdElectionId(electionId)).thenReturn(List.of());
             when(electionRepository.getElectionTitleById(electionId)).thenReturn("Open Election");
             when(candidateRepository.findAllById(anyCollection())).thenReturn(List.of());

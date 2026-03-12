@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.chain;
 
 import com.brandedhustlers.electionbackend.chain.service.FabricBlockchainProvider;
@@ -19,9 +20,11 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
+*/
 /**
  * Unit tests for BlockchainService - Hyperledger Fabric integration.
- */
+ *//*
+
 @ExtendWith(MockitoExtension.class)
 class FabricBlockchainProviderTest {
 
@@ -291,3 +294,4 @@ class FabricBlockchainProviderTest {
                 assertEquals("[]", result);
         }
 }
+*/

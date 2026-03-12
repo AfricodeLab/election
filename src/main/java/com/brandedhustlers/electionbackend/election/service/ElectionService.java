@@ -217,8 +217,14 @@ public class ElectionService implements IElectionService {
         Election electionToUpdate = electionRepository.findById(electionID)
                 .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionID + " does not exist"));
 
+        Organization updaterOrg = updater.getActiveOrganization();
+
+        if (updaterOrg == null) {
+            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
+        }
+
         if (!electionToUpdate.getOrganization().getOrganizationId()
-                .equals(updater.getActiveOrganization().getOrganizationId())) {
+                .equals(updaterOrg.getOrganizationId())) {
             throw new AccessDeniedException("You cannot manage elections outside your organization");
         }
 
@@ -249,7 +255,7 @@ public class ElectionService implements IElectionService {
                 null,
                 "election.election_updated",
                 null,
-                updater.getActiveOrganization().getOrganizationId(),
+                updaterOrg.getOrganizationId(),
                 "Election details updated",
                 actorId,
                 actorName,
@@ -279,8 +285,13 @@ public class ElectionService implements IElectionService {
 
         ElectionStatus currStatus = statusChange.getElectionStatus();
 
+        Organization updaterOrg = updater.getActiveOrganization();
+        if (updaterOrg == null) {
+            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
+        }
+
         if (!statusChange.getOrganization().getOrganizationId()
-                .equals(updater.getActiveOrganization().getOrganizationId())) {
+                .equals(updaterOrg.getOrganizationId())) {
             throw new AccessDeniedException("You cannot manage elections outside your organization");
         }
 
@@ -310,7 +321,7 @@ public class ElectionService implements IElectionService {
                 null,
                 "election.status_change",
                 null,
-                updater.getActiveOrganization().getOrganizationId(),
+                updaterOrg.getOrganizationId(),
                 "Election status updated from " + currStatus + " to: " + statChange.getElectionStatus(),
                 actorId,
                 actorName,
@@ -373,11 +384,12 @@ public class ElectionService implements IElectionService {
         String ip = null;
         String ua = null;
 
+        Organization creatorOrg = creator.getActiveOrganization();
         auditEmitter.emit(
                 null,
                 "election.election_updated",
                 null,
-                creator.getActiveOrganization().getOrganizationId(),
+                creatorOrg != null ? creatorOrg.getOrganizationId() : null,
                 "Election details updated",
                 actorId,
                 actorName,

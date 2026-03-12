@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.election.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.ConflictAction;
@@ -99,9 +100,10 @@ public class ElectionTypeService {
         }
 
         // Org scoping check
-        if (type.getOrganization() == null ||
+        Organization callerOrg = caller.getActiveOrganization();
+        if (callerOrg == null || type.getOrganization() == null ||
                 !type.getOrganization().getOrganizationId()
-                        .equals(caller.getActiveOrganization().getOrganizationId())) {
+                        .equals(callerOrg.getOrganizationId())) {
             throw new AccessDeniedException("You can only delete election types from your own organization");
         }
 

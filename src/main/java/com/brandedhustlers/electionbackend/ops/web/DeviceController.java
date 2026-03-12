@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.ops.web;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
@@ -35,6 +36,14 @@ public class DeviceController {
         this.httpServletRequest = httpServletRequest;
     }
 
+    private Organization requireActiveOrg(AppUser user) {
+        Organization org = user.getActiveOrganization();
+        if (org == null) {
+            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
+        }
+        return org;
+    }
+
     private UUID getAppUserId(HttpServletRequest request) {
         return jwtService.extractAppUserId(request);
     }
@@ -44,7 +53,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getActiveOrganization();
+        Organization creatorOrg = requireActiveOrg(launchCreator);
 
         return new ResponseEntity<>(svc.enrollDevice(creatorOrg.getOrganizationId(),enrolDevice), HttpStatus.OK);
     }
@@ -54,7 +63,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getActiveOrganization();
+        Organization creatorOrg = requireActiveOrg(launchCreator);
 
         return new ResponseEntity<>(svc.get(creatorOrg.getOrganizationId(), deviceId), HttpStatus.OK);
     }
@@ -65,7 +74,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getActiveOrganization();
+        Organization creatorOrg = requireActiveOrg(launchCreator);
 
         return new ResponseEntity<>(svc.listDevices(creatorOrg.getOrganizationId(), stationId, status, pageable), HttpStatus.OK);
     }
@@ -76,7 +85,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getActiveOrganization();
+        Organization creatorOrg = requireActiveOrg(launchCreator);
 
         return new ResponseEntity<>(svc.rebind(creatorOrg.getOrganizationId(), deviceId, newStationId), HttpStatus.OK);
     }
@@ -89,7 +98,7 @@ public class DeviceController {
 
         AppUser launchCreator = appUserRepository.findById(getAppUserId(httpServletRequest))
                 .orElseThrow(() -> new UserNotFound("User not found."));
-        Organization creatorOrg = launchCreator.getActiveOrganization();
+        Organization creatorOrg = requireActiveOrg(launchCreator);
 
         // Note: in production this endpoint must authenticate device credentials, not user JWTs. Header kept for org scoping.
         return new ResponseEntity<>(svc.recordHeartbeat(creatorOrg.getOrganizationId(), deviceId, latencyMs, appVersion, deviceTime), HttpStatus.OK);

@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.election.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
@@ -89,8 +90,12 @@ public class ElectionPresetService {
         ElectionPreset preset = electionPresetRepository.findByPresetIdAndDeleteYn(presetId, DeleteYn.N)
                 .orElseThrow(() -> new InvalidUpdate("Preset not found: " + presetId));
 
+        Organization callerOrg = caller.getActiveOrganization();
+        if (callerOrg == null) {
+            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
+        }
         if (!preset.getOrganization().getOrganizationId()
-                .equals(caller.getActiveOrganization().getOrganizationId())) {
+                .equals(callerOrg.getOrganizationId())) {
             throw new AccessDeniedException("You can only delete presets from your own organization");
         }
 
@@ -110,6 +115,7 @@ public class ElectionPresetService {
                 t.isSystem(),
                 t.getOrganization() != null ? t.getOrganization().getOrganizationId() : null,
                 t.getCreatedAt());
+
         return new ElectionPresetDTO(
                 p.getPresetId(),
                 p.getName(),

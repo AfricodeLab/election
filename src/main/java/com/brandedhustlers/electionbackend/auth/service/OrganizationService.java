@@ -150,7 +150,8 @@ public class OrganizationService implements IOrganizationService {
 
         UserOrganization membership = userOrganizationRepository
                 .findByAppUser_AppUserIdAndOrganization_OrganizationId(userId, orgId)
-                .get();
+                .orElseThrow(() -> new OrganizationNotFound("You are not a member of this organization"));
+
         membership.setActiveOrg(true);
         userOrganizationRepository.save(membership);
     }

@@ -75,6 +75,7 @@ public class AppUser {
     private String userProfilePicture;
 
     @OneToMany(mappedBy = "appUser", fetch = FetchType.LAZY)
+    @Builder.Default
     private Set<UserOrganization> userOrganizations = new HashSet<>();
 
     public Organization getActiveOrganization() {
