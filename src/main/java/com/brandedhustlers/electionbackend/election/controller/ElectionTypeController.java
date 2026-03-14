@@ -4,8 +4,10 @@ import com.brandedhustlers.electionbackend.election.dto.CreateElectionPresetRequ
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionTypeRequest;
 import com.brandedhustlers.electionbackend.election.dto.ElectionPresetDTO;
 import com.brandedhustlers.electionbackend.election.dto.ElectionTypeDTO;
+import com.brandedhustlers.electionbackend.election.dto.UpdateElectionPresetRequest;
 import com.brandedhustlers.electionbackend.election.service.ElectionPresetService;
 import com.brandedhustlers.electionbackend.election.service.ElectionTypeService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -43,7 +45,7 @@ public class ElectionTypeController {
      */
     @PostMapping
     public ResponseEntity<ElectionTypeDTO> createType(
-            @RequestBody CreateElectionTypeRequest request) {
+            @Valid @RequestBody CreateElectionTypeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(electionTypeService.createCustomType(request));
     }
@@ -79,7 +81,7 @@ public class ElectionTypeController {
      */
     @PostMapping("/presets")
     public ResponseEntity<ElectionPresetDTO> createPreset(
-            @RequestBody CreateElectionPresetRequest request) {
+            @Valid @RequestBody CreateElectionPresetRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(electionPresetService.createPreset(request));
     }
@@ -96,6 +98,21 @@ public class ElectionTypeController {
     }
 
     /**
+     * Update an existing election preset.
+     * Only non-null fields in the request body are applied.
+     *
+     * @param presetId UUID of the preset to update
+     * @param request  fields to update
+     * @return the updated {@link ElectionPresetDTO}
+     */
+    @PutMapping("/presets/{presetId}")
+    public ResponseEntity<ElectionPresetDTO> updatePreset(
+            @PathVariable UUID presetId,
+            @Valid @RequestBody UpdateElectionPresetRequest request) {
+        return ResponseEntity.ok(electionPresetService.updatePreset(presetId, request));
+    }
+
+    /**
      * Soft-delete an election preset.
      *
      * @param presetId UUID of the preset to delete
@@ -107,12 +124,12 @@ public class ElectionTypeController {
     }
 
     @GetMapping("/type")
-    public ResponseEntity<?> getElectionTypeOptions(){
+    public ResponseEntity<?> getElectionTypeOptions() {
         return new ResponseEntity<>(electionTypeService.getElectionTypeOptions(), HttpStatus.OK);
     }
 
     @GetMapping("/type/org")
-    public ResponseEntity<?> getElectionTypeOptionForOrg(){
+    public ResponseEntity<?> getElectionTypeOptionForOrg() {
         return new ResponseEntity<>(electionTypeService.getElectionTypeOptionsByOrg(), HttpStatus.OK);
     }
 }

@@ -7,6 +7,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import com.brandedhustlers.electionbackend.ops.exception.*;
 import jakarta.servlet.http.HttpServletRequest;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +18,7 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.NoSuchElementException;
 
+@Slf4j
 @ControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -27,10 +29,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
@@ -41,10 +41,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
@@ -55,11 +53,9 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.UNAUTHORIZED,
                         "User is not authenticated or JWT was not provided. Please login again.",
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
-        e.printStackTrace();
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
+        log.warn("Unauthenticated access attempt", e);
         return new ResponseEntity<>(apiException, HttpStatus.UNAUTHORIZED);
     }
 
@@ -70,10 +66,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
@@ -84,43 +78,37 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
-
     @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<?> handleIllegalArgumentException(IllegalArgumentException e, HttpServletRequest request) {
+    public ResponseEntity<?> handleIllegalArgumentException(IllegalArgumentException e,
+                                                            HttpServletRequest request) {
         APIException apiException = new APIException(
                 HttpStatus.BAD_REQUEST.value(),
                 new APIException.APIError(
                         HttpStatus.BAD_REQUEST,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
-        e.printStackTrace();
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
+        log.warn("Illegal argument: {}", e.getMessage(), e);
         return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
     }
 
     @ExceptionHandler(DataIntegrityViolationException.class)
-    public ResponseEntity<?> handleDataIntegrityViolationException(DataIntegrityViolationException e, HttpServletRequest request) {
+    public ResponseEntity<?> handleDataIntegrityViolationException(DataIntegrityViolationException e,
+                                                                   HttpServletRequest request) {
         APIException apiException = new APIException(
-                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                HttpStatus.CONFLICT.value(),
                 new APIException.APIError(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
-        return new ResponseEntity<>(apiException, HttpStatus.INTERNAL_SERVER_ERROR);
+                        HttpStatus.CONFLICT,
+                        "A data integrity constraint was violated. Please check your input and try again.",
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
+        return new ResponseEntity<>(apiException, HttpStatus.CONFLICT);
     }
-
 
     @ExceptionHandler(DisallowedAction.class)
     public ResponseEntity<?> handleDisallowedAction(DisallowedAction e, HttpServletRequest request) {
@@ -129,13 +117,10 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.BAD_REQUEST,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
     }
-
 
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<?> handleIllegalStateException(IllegalStateException e, HttpServletRequest request) {
@@ -144,13 +129,10 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.BAD_REQUEST,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
     }
-
 
     @ExceptionHandler(RequiredNull.class)
     public ResponseEntity<?> handleRequiredNull(RequiredNull e, HttpServletRequest request) {
@@ -159,10 +141,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.BAD_REQUEST,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
     }
 
@@ -173,10 +153,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
@@ -187,10 +165,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
@@ -201,10 +177,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
@@ -215,10 +189,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.CONFLICT,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.CONFLICT);
     }
 
@@ -229,10 +201,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
@@ -243,10 +213,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.NOT_FOUND,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.NOT_FOUND);
     }
 
@@ -257,10 +225,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.BAD_REQUEST,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.BAD_REQUEST);
     }
 
@@ -271,13 +237,10 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.CONFLICT,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.CONFLICT);
     }
-
 
     @ExceptionHandler(AccessDeniedException.class)
     public ResponseEntity<?> handleAccessDeniedException(AccessDeniedException e, HttpServletRequest request) {
@@ -286,10 +249,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.FORBIDDEN,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.FORBIDDEN);
     }
 
@@ -300,10 +261,8 @@ public class GlobalExceptionHandler {
                 new APIException.APIError(
                         HttpStatus.CONFLICT,
                         e.getMessage(),
-                        Timestamp.from(Instant.now())
-                ),
-                request.getRequestId()
-        );
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.CONFLICT);
     }
 }

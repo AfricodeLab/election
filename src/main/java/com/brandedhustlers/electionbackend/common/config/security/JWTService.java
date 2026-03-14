@@ -37,7 +37,7 @@ public class JWTService {
     }
 
     public String generateRefreshToken(String username, UUID userID, String appUserEmail) {
-        long refreshTokenExp = 15552000000L;
+        long refreshTokenExp = 604800000L; // 7 days
         return generateToken(username, refreshTokenExp, userID, appUserEmail);
     }
 

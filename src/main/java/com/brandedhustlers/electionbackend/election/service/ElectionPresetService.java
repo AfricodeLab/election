@@ -12,6 +12,7 @@ import com.brandedhustlers.electionbackend.election.domain.ElectionTypeEntity;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionPresetRequest;
 import com.brandedhustlers.electionbackend.election.dto.ElectionPresetDTO;
 import com.brandedhustlers.electionbackend.election.dto.ElectionTypeDTO;
+import com.brandedhustlers.electionbackend.election.dto.UpdateElectionPresetRequest;
 import com.brandedhustlers.electionbackend.election.repository.ElectionPresetRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionTypeRepository;
 import lombok.RequiredArgsConstructor;
@@ -78,6 +79,50 @@ public class ElectionPresetService {
                 : electionPresetRepository.findByOrgId(orgId);
 
         return presets.stream().map(this::toDTO).toList();
+    }
+
+    /**
+     * Update an existing preset. Only non-null fields in the request are applied.
+     */
+    public ElectionPresetDTO updatePreset(UUID presetId, UpdateElectionPresetRequest request) {
+        AppUser caller = getUser.getCurrentAuthenticatedUser();
+        util.requireAdmin(caller);
+
+        ElectionPreset preset = electionPresetRepository.findByPresetIdAndDeleteYn(presetId, DeleteYn.N)
+                .orElseThrow(() -> new InvalidUpdate("Preset not found: " + presetId));
+
+        Organization callerOrg = caller.getActiveOrganization();
+        if (callerOrg == null) {
+            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
+        }
+        if (!preset.getOrganization().getOrganizationId().equals(callerOrg.getOrganizationId())) {
+            throw new AccessDeniedException("You can only edit presets from your own organization");
+        }
+
+        if (request.name() != null) {
+            preset.setName(request.name());
+        }
+        if (request.description() != null) {
+            preset.setDescription(request.description());
+        }
+        if (request.typeId() != null) {
+            ElectionTypeEntity type = electionTypeRepository.findByElectionTypeId(request.typeId())
+                    .orElseThrow(() -> new InvalidUpdate("Election type not found: " + request.typeId()));
+            preset.setElectionType(type);
+        }
+        if (request.defaultEligibilityPolicy() != null) {
+            preset.setDefaultEligibilityPolicy(request.defaultEligibilityPolicy());
+        }
+        if (request.defaultExpectedVoterCount() != null) {
+            preset.setDefaultExpectedVoterCount(request.defaultExpectedVoterCount());
+        }
+        if (request.defaultShouldEndAutomatically() != null) {
+            preset.setDefaultShouldEndAutomatically(request.defaultShouldEndAutomatically());
+        }
+
+        ElectionPreset saved = electionPresetRepository.save(preset);
+        log.info("Admin {} updated preset '{}' (id={})", caller.getAppUserId(), saved.getName(), presetId);
+        return toDTO(saved);
     }
 
     /**
