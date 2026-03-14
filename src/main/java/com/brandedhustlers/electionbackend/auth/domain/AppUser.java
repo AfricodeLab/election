@@ -42,6 +42,7 @@ public class AppUser {
     private String username;
 
     @Column(nullable = false)
+    @ToString.Exclude
     private String password;
 
     @Enumerated(EnumType.STRING)
@@ -68,13 +69,13 @@ public class AppUser {
     @UpdateTimestamp
     private Timestamp updatedAt;
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 
     private String userProfilePicture;
 
-    @OneToMany(mappedBy = "appUser", fetch = FetchType.LAZY)
+    @OneToMany(mappedBy = "appUser", fetch = FetchType.EAGER)
     @Builder.Default
     private Set<UserOrganization> userOrganizations = new HashSet<>();
 

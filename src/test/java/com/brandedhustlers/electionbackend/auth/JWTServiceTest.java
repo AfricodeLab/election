@@ -27,7 +27,6 @@ import javax.crypto.SecretKey;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Collections;
-import java.util.Date;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -109,7 +108,7 @@ class JWTServiceTest {
         assertEquals("john@test.com", claims.get("userEmail"));
         assertEquals(orgId.toString(), claims.get("activeOrgId").toString());
         assertEquals("ORG_ADMIN", claims.get("role").toString());
-        assertEquals("brandedhuslters_backend", claims.get("iss"));
+        assertEquals("brandedhustlers_backend", claims.get("iss"));
         assertEquals("election_client", claims.getAudience().iterator().next());
     }
 

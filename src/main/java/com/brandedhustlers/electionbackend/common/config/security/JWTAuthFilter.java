@@ -6,6 +6,8 @@ import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -29,15 +31,15 @@ public class JWTAuthFilter extends OncePerRequestFilter {
     private final CustomUserDetailsService customUserDetailsService;
 
     public JWTAuthFilter(JWTService jwtService,
-                         CustomUserDetailsService customUserDetailsService) {
+            CustomUserDetailsService customUserDetailsService) {
         this.jwtService = jwtService;
         this.customUserDetailsService = customUserDetailsService;
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-                                    HttpServletResponse response,
-                                    FilterChain chain) throws ServletException, IOException {
+            HttpServletResponse response,
+            FilterChain chain) throws ServletException, IOException {
 
         if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {
             chain.doFilter(request, response);
@@ -66,7 +68,6 @@ public class JWTAuthFilter extends OncePerRequestFilter {
                 chain.doFilter(request, response);
                 return;
             }
-
 
             if ("VOTER".equalsIgnoreCase(role)) {
                 if (!jwtService.validateToken(token)) {
@@ -112,18 +113,20 @@ public class JWTAuthFilter extends OncePerRequestFilter {
                 return;
             }
 
-            var authorities = Collections.singletonList(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(Locale.ROOT)));
-            UsernamePasswordAuthenticationToken authToken =
-                    new UsernamePasswordAuthenticationToken(userDetails, null, authorities);
+            var authorities = Collections
+                    .singletonList(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(Locale.ROOT)));
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userDetails, null,
+                    authorities);
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authToken);
 
             chain.doFilter(request, response);
 
         } catch (Exception e) {
-            e.printStackTrace();
-            log.error("error occurred in authentication ", e);
-            chain.doFilter(request, response);
+            log.error("JWT authentication failed: {}", e.getMessage(), e);
+            response.setStatus(HttpStatus.UNAUTHORIZED.value());
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            response.getWriter().write("{\"error\":\"Invalid or expired token\"}");
         }
     }
 

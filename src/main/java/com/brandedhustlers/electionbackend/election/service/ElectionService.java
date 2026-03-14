@@ -95,8 +95,8 @@ public class ElectionService implements IElectionService {
         AppUser creator = getUser.getCurrentAuthenticatedUser();
 
         if (!(util.authorizeUser(creator, UserRole.ADMIN)
-                || !util.authorizeUser(creator, UserRole.SUPER_ADMIN)
-                || !util.authorizeUser(creator, UserRole.ORG_ADMIN))) {
+                || util.authorizeUser(creator, UserRole.SUPER_ADMIN)
+                || util.authorizeUser(creator, UserRole.ORG_ADMIN))) {
             throw new AccessDeniedException("You do not have authority to create an election");
         }
 

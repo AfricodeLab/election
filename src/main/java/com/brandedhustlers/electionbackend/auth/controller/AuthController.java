@@ -6,6 +6,7 @@ import com.brandedhustlers.electionbackend.auth.dto.RegistrationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshRequest;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
@@ -23,20 +24,22 @@ public class AuthController {
     private final GetUser getUser;
 
     public AuthController(AuthService authService,
-                          HttpServletResponse response,
-                          GetUser getUser) {
+            HttpServletResponse response,
+            GetUser getUser) {
         this.authService = authService;
         this.servletResponse = response;
         this.getUser = getUser;
     }
 
     @PostMapping("/register-user")
+    @RateLimiter(name = "auth_paths")
     public ResponseEntity<?> registerUser(
             @Valid @RequestBody RegistrationRequest registrationRequest) {
         return new ResponseEntity<>(authService.register(registrationRequest), HttpStatus.CREATED);
     }
 
     @PostMapping("/login")
+    @RateLimiter(name = "auth_paths")
     public ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest request) {
         return new ResponseEntity<>(authService.login(request, servletResponse), HttpStatus.OK);
@@ -49,6 +52,7 @@ public class AuthController {
     }
 
     @PostMapping("/refresh")
+    @RateLimiter(name = "auth_paths")
     public ResponseEntity<?> refreshToken(@Valid @RequestBody TokenRefreshRequest request) {
         return new ResponseEntity<>(authService.refreshToken(request), HttpStatus.OK);
     }
@@ -74,7 +78,7 @@ public class AuthController {
     }
 
     @PatchMapping("/password/change")
-    public ResponseEntity<?> changePassword(@RequestBody ChangePasswordCmd changePasswordCmd) {
+    public ResponseEntity<?> changePassword(@Valid @RequestBody ChangePasswordCmd changePasswordCmd) {
         authService.changePassword(changePasswordCmd);
         return new ResponseEntity<>(new ChangePasswordResponse(true, "Password changed successfully"), HttpStatus.OK);
     }

@@ -153,7 +153,10 @@ public class AuthService implements IAuthService {
         return new LoginResponse(
                 true,
                 token,
-                refreshToken);
+                refreshToken,
+                authenticatedUser.getUsername(),
+                authenticatedUser.getAppUserEmail()
+                );
     }
 
     @Override

@@ -39,8 +39,9 @@ public class ElectionController {
     private final ElectionRepository electionRepository;
 
     public ElectionController(ElectionService electionService,
-                              ObjectMapper objectMapper,
-                              AppUserRepository appUserRepository, GetUser getUser, CandidateService candidateService, ElectionRepository electionRepository) {
+            ObjectMapper objectMapper,
+            AppUserRepository appUserRepository, GetUser getUser, CandidateService candidateService,
+            ElectionRepository electionRepository) {
         this.electionService = electionService;
         this.objectMapper = objectMapper;
         this.appUserRepository = appUserRepository;
@@ -49,27 +50,23 @@ public class ElectionController {
         this.electionRepository = electionRepository;
     }
 
-
     @PostMapping("/create")
     public ResponseEntity<?> createElection(
-            @RequestBody @Valid CreateElectionRequest request
-    ) {
+            @RequestBody @Valid CreateElectionRequest request) {
         return new ResponseEntity<>(electionService.createElection(request), HttpStatus.CREATED);
     }
 
     @PutMapping("/update/{electionId}")
     public ResponseEntity<?> updateElection(
-            @RequestBody UpdateElection election,
-            @PathVariable UUID electionId
-    ) {
+            @Valid @RequestBody UpdateElection election,
+            @PathVariable UUID electionId) {
         return new ResponseEntity<>(electionService.updateElection(electionId, election), HttpStatus.OK);
     }
 
     @PutMapping("/update-status/{electionId}")
     public ResponseEntity<?> changeStatus(
             @PathVariable UUID electionId,
-            @RequestParam ElectionStatus electionStatus
-    ) {
+            @RequestParam ElectionStatus electionStatus) {
         return new ResponseEntity<>(electionService.changeElectionStatus(electionId, electionStatus), HttpStatus.OK);
     }
 
@@ -77,8 +74,7 @@ public class ElectionController {
     public ResponseEntity<?> addCandidate(
             @PathVariable UUID electionId,
             @RequestPart(name = "candidate") String candidate,
-            @RequestPart(name = "candidateImage", required = false) MultipartFile candidateImage
-    ) throws IOException {
+            @RequestPart(name = "candidateImage", required = false) MultipartFile candidateImage) throws IOException {
         CandidateDTO candidateDTO = objectMapper.readValue(candidate, CandidateDTO.class);
         return new ResponseEntity<>(
                 electionService.addCandidate(electionId,
@@ -97,7 +93,8 @@ public class ElectionController {
             return ResponseEntity.status(403).body(Map.of("status", "forbidden",
                     "message", "No active organization. Please join or switch to an organization first."));
         }
-        return new ResponseEntity<>(electionService.getElectionsByOrg(creatorOrg.getOrganizationId(), pageable), HttpStatus.OK);
+        return new ResponseEntity<>(electionService.getElectionsByOrg(creatorOrg.getOrganizationId(), pageable),
+                HttpStatus.OK);
     }
 
     @GetMapping("/live")
@@ -107,14 +104,13 @@ public class ElectionController {
 
     @PutMapping("/update-candidate/{candidateId}")
     public ResponseEntity<?> updateCandidateDuringLiveElection(@RequestBody UpdateCandidateCmd updateCandidateCmd,
-                                                               @PathVariable UUID candidateId){
+            @PathVariable UUID candidateId) {
         AppUser admin = appUserRepository.findById(getUser.getCurrentAuthenticatedUserId())
                 .orElseThrow(() -> new UserNotFound("Invalid org admin not found."));
         return new ResponseEntity<>(candidateService.updateCandidate(
                 candidateId,
                 updateCandidateCmd,
-                admin
-        ), HttpStatus.OK);
+                admin), HttpStatus.OK);
     }
 
     @PostMapping("/live/{electionId}")
@@ -127,8 +123,7 @@ public class ElectionController {
             if (!user.getUserRole().equals(UserRole.ADMIN) && !user.getUserRole().equals(UserRole.SUPER_ADMIN)) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
-                        "message", "Only admins can bring elections live"
-                ));
+                        "message", "Only admins can bring elections live"));
             }
 
             // Verify org access (admin must belong to election's org)
@@ -138,8 +133,7 @@ public class ElectionController {
             if (userOrg == null) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
-                        "message", "No active organization. Please join or switch to an organization first."
-                ));
+                        "message", "No active organization. Please join or switch to an organization first."));
             }
 
             log.info(String.valueOf(electionOrg.equals(userOrg)));
@@ -149,8 +143,7 @@ public class ElectionController {
             if (!(userOrg.getOrganizationId().equals(electionOrg.getOrganizationId()))) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
-                        "message","You cannot manage elections from other organizations"
-                ));
+                        "message", "You cannot manage elections from other organizations"));
             }
 
             // Transition to live (anchors config to blockchain)
@@ -167,15 +160,13 @@ public class ElectionController {
             log.warn("Cannot bring election {} live: {}", electionId, e.getMessage());
             return ResponseEntity.status(400).body(Map.of(
                     "status", "error",
-                    "message", e.getMessage()
-            ));
+                    "message", e.getMessage()));
 
         } catch (Exception e) {
             log.error("Failed to bring election {} live", electionId, e);
             return ResponseEntity.status(500).body(Map.of(
                     "status", "error",
-                    "message", "Internal server error: " + e.getMessage()
-            ));
+                    "message", "Internal server error: " + e.getMessage()));
         }
     }
 }

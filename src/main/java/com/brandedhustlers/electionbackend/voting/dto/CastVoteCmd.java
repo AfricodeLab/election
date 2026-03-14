@@ -1,12 +1,13 @@
 package com.brandedhustlers.electionbackend.voting.dto;
 
+import jakarta.validation.constraints.NotNull;
+
 import java.util.UUID;
 
 public record CastVoteCmd(
-        UUID electionId,
-        UUID candidateId,
-        String voterToken,
-        UUID deviceId,
-        String idempotencyKey) {
-
+                @NotNull(message = "Election ID is required") UUID electionId,
+                @NotNull(message = "Candidate ID is required") UUID candidateId,
+                String voterToken,
+                UUID deviceId,
+                String idempotencyKey) {
 }

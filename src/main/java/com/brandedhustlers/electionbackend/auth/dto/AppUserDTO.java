@@ -16,7 +16,6 @@ public record AppUserDTO(
         String appUserEmail,
         String organizationName,
         String username,
-        String password,
         UserRole userRole,
         Map<String, String> userPreferences,
         Set<Role> roles,
