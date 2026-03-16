@@ -59,6 +59,7 @@ public class ElectionService implements IElectionService {
     private final Util util;
     private final ElectionTypeRepository electionTypeRepository;
     private final ElectionPresetRepository electionPresetRepository;
+    private final EligibilityService eligibilityService;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -74,7 +75,8 @@ public class ElectionService implements IElectionService {
                            HttpServletRequest httpServletRequest,
                            VoterRepository voterRepository, Util util,
                            ElectionTypeRepository electionTypeRepository,
-                           ElectionPresetRepository electionPresetRepository) {
+                           ElectionPresetRepository electionPresetRepository,
+                           EligibilityService eligibilityService) {
         this.electionRepository = electionRepository;
         this.util = util;
         this.electionMapper = electionMapper;
@@ -87,6 +89,7 @@ public class ElectionService implements IElectionService {
         this.configAnchorService = configAnchorService;
         this.electionTypeRepository = electionTypeRepository;
         this.electionPresetRepository = electionPresetRepository;
+        this.eligibilityService = eligibilityService;
     }
 
     @Override
@@ -425,15 +428,23 @@ public class ElectionService implements IElectionService {
         UUID voterOrgId = currentVoter.getOrganization().getOrganizationId();
         UUID voterId = currentVoter.getVoterId();
 
-        List<ElectionDTO> unvotedElections = electionRepository.findLiveByOrgAndNotVoted(
+        List<ElectionDTO> eligibleElections = electionRepository.findLiveByOrgAndNotVoted(
                 voterOrgId,
                 ElectionStatus.LIVE,
                 voterId)
                 .stream()
-                 .map(electionMapper::entityToDto)
+                .filter(election -> {
+                    if (election.getEligibilityPolicy() == null) {
+                        return true;
+                    }
+                    return eligibilityService
+                            .evaluate(currentVoter.getAttributes(), election.getEligibilityPolicy())
+                            .isAllowed();
+                })
+                .map(electionMapper::entityToDto)
                 .toList();
 
-        return new PageImpl<>(unvotedElections, pageable, unvotedElections.size());
+        return new PageImpl<>(eligibleElections, pageable, eligibleElections.size());
     }
 
     /**

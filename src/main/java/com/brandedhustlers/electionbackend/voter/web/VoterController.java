@@ -1,8 +1,6 @@
 package com.brandedhustlers.electionbackend.voter.web;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
-import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.ImportStatusDTO;
@@ -29,20 +27,15 @@ import java.util.UUID;
 public class VoterController {
     private final VoterService voterService;
     private final VoterImportService importService;
-    private final AppUserRepository appUserRepository;
-    private final JWTService jwtService;
     private final GetUser getUser;
 
     private static final String UPLOAD_DIR = "uploads/voter-imports/";
 
     public VoterController(VoterService voterService,
                            VoterImportService importService,
-                           AppUserRepository appUserRepository,
-                           JWTService jwtService, GetUser getUser) {
+                           GetUser getUser) {
         this.voterService = voterService;
         this.importService = importService;
-        this.appUserRepository = appUserRepository;
-        this.jwtService = jwtService;
         this.getUser = getUser;
     }
 
@@ -61,15 +54,7 @@ public class VoterController {
         return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
     }
 
-    @GetMapping
-    public ResponseEntity<?> search(@RequestParam String q,
-                                    @RequestParam(defaultValue = "20") int limit) {
-        UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
-        if (actorOrgId != null) {
-            return ResponseEntity.ok(voterService.search(actorOrgId, q, limit));
-        }
-        return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
-    }
+
 
 /*    @PostMapping("/assign")
     public ResponseEntity<?> assign(@Valid @RequestBody AssignVotersCmd cmd) {

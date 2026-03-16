@@ -9,17 +9,13 @@ import com.brandedhustlers.electionbackend.auth.exceptions.InvalidRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserAlreadyExists;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.mapper.AppUserMapper;
-import com.brandedhustlers.electionbackend.auth.mapper.OrganizationMapper;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
-import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
 import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
-import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
 import com.brandedhustlers.electionbackend.common.exceptions.RefreshTokenException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -43,40 +39,30 @@ public class AuthService implements IAuthService {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
-    private final CloudinaryService cloudinaryService;
-    private final HttpServletRequest request;
     private final RoleRepository roleRepository;
     private final GetUser getUser;
     private final OrganizationService organizationService;
-    private final OrganizationMapper organizationMapper;
     private final AppUserMapper appUserMapper;
-    private final OrganizationRepository organizationRepository;
     private final RefreshTokenService refreshTokenService;
     private final UserOrganizationRepository userOrganizationRepository;
 
     public AuthService(JWTService jwtService,
-            AppUserRepository appUserRepository,
-            PasswordEncoder passwordEncoder,
-            AuthenticationManager authenticationManager,
-            CloudinaryService cloudinaryService,
-            HttpServletRequest request,
-            RoleRepository roleRepository,
-            GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper,
-            OrganizationMapper organizationMapper1, AppUserMapper appUserMapper,
-            OrganizationRepository organizationRepository, RefreshTokenService refreshTokenService,
-            UserOrganizationRepository userOrganizationRepository) {
+                       AppUserRepository appUserRepository,
+                       PasswordEncoder passwordEncoder,
+                       AuthenticationManager authenticationManager,
+                       RoleRepository roleRepository,
+                       GetUser getUser, OrganizationService organizationService,
+                       AppUserMapper appUserMapper,
+                       RefreshTokenService refreshTokenService,
+                       UserOrganizationRepository userOrganizationRepository) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.authenticationManager = authenticationManager;
-        this.cloudinaryService = cloudinaryService;
-        this.request = request;
         this.roleRepository = roleRepository;
         this.getUser = getUser;
         this.organizationService = organizationService;
-        this.organizationMapper = organizationMapper1;
         this.appUserMapper = appUserMapper;
-        this.organizationRepository = organizationRepository;
         this.refreshTokenService = refreshTokenService;
         this.userOrganizationRepository = userOrganizationRepository;
     }
@@ -156,7 +142,7 @@ public class AuthService implements IAuthService {
                 refreshToken,
                 authenticatedUser.getUsername(),
                 authenticatedUser.getAppUserEmail()
-                );
+        );
     }
 
     @Override

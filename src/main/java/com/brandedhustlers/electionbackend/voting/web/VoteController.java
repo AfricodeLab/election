@@ -77,8 +77,17 @@ public class VoteController {
                     .body(new VoteAckDTO(null, "REJECTED", "Step up required, please verify again to vote."));
         }
 
-        return new ResponseEntity<>(
-                votingService.cast(auth.getVoterOrganizationId(), auth.getVoterId(), body, httpServletRequest),
-                HttpStatus.OK);
+        VoteAckDTO ack = votingService. cast(auth.getVoterOrganizationId(), auth.getVoterId(), body, httpServletRequest);
+
+        HttpStatus httpStatus = switch (ack.reason()) {
+            case "NEW_VOTE" -> HttpStatus.CREATED;
+            case "IDEMPOTENT" -> HttpStatus.OK;
+            case "ALREADY_VOTED" -> HttpStatus.CONFLICT;
+            default -> ack.reason().startsWith("INELIGIBLE")
+                    ? HttpStatus.FORBIDDEN
+                    : HttpStatus.BAD_REQUEST;
+        };
+
+        return new ResponseEntity<>(ack, httpStatus);
     }
 }

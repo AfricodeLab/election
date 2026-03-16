@@ -43,3 +43,4 @@ build/
 /src/main/resources/fabric
 
 /load_tests
+/.claude/
