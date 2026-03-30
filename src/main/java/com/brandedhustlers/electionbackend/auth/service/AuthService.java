@@ -19,9 +19,12 @@ import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
 import com.brandedhustlers.electionbackend.common.exceptions.RefreshTokenException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
+import jakarta.mail.MessagingException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -34,6 +37,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 
 @Slf4j
@@ -53,6 +58,11 @@ public class AuthService implements IAuthService {
     private final OrganizationRepository organizationRepository;
     private final RefreshTokenService refreshTokenService;
     private final UserOrganizationRepository userOrganizationRepository;
+    private final MessagingService messagingService;
+    private final MfaService mfaService;
+
+    @Value("${app.base-url}")
+    private String appBaseUrl;
 
     public AuthService(JWTService jwtService,
             AppUserRepository appUserRepository,
@@ -64,7 +74,9 @@ public class AuthService implements IAuthService {
             GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper,
             OrganizationMapper organizationMapper1, AppUserMapper appUserMapper,
             OrganizationRepository organizationRepository, RefreshTokenService refreshTokenService,
-            UserOrganizationRepository userOrganizationRepository) {
+            UserOrganizationRepository userOrganizationRepository,
+            MessagingService messagingService,
+            MfaService mfaService) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
@@ -79,6 +91,8 @@ public class AuthService implements IAuthService {
         this.organizationRepository = organizationRepository;
         this.refreshTokenService = refreshTokenService;
         this.userOrganizationRepository = userOrganizationRepository;
+        this.messagingService = messagingService;
+        this.mfaService = mfaService;
     }
 
     @Override
@@ -102,6 +116,9 @@ public class AuthService implements IAuthService {
             throw new UserAlreadyExists("Username already taken");
         }
 
+        // Generate email verification token
+        String verificationToken = UUID.randomUUID().toString();
+
         // Create user
         AppUser newUser = AppUser.builder()
                 .firstName(registrationRequest.firstName())
@@ -110,6 +127,9 @@ public class AuthService implements IAuthService {
                 .username(registrationRequest.username())
                 .password(passwordEncoder.encode(registrationRequest.password()))
                 .userRole(UserRole.ORG_ADMIN)
+                .emailVerified(false)
+                .emailVerificationToken(verificationToken)
+                .emailVerificationExpiry(Instant.now().plus(24, ChronoUnit.HOURS))
                 .build();
 
         appUserRepository.save(newUser);
@@ -119,9 +139,64 @@ public class AuthService implements IAuthService {
         organizationService.createOrganization(
                 registrationRequest.userOrg(), newUser.getAppUserId());
 
+        // Send verification email asynchronously (fire-and-forget; log on failure)
+        String verificationUrl = appBaseUrl + "/api/v1/auth/verify-email?token=" + verificationToken;
+        try {
+            messagingService.sendVerificationEmail(
+                    newUser.getAppUserEmail(),
+                    newUser.getFirstName(),
+                    verificationUrl);
+        } catch (MessagingException e) {
+            log.error("Failed to send verification email to {}: {}", newUser.getAppUserEmail(), e.getMessage());
+        }
+
         return new RegistrationResponse(
                 true,
                 newUser.getUserRole().name());
+    }
+
+    @Override
+    public void verifyEmail(String token) {
+        AppUser user = appUserRepository.findByEmailVerificationToken(token)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired verification token"));
+
+        if (user.getEmailVerificationExpiry() == null
+                || Instant.now().isAfter(user.getEmailVerificationExpiry())) {
+            throw new IllegalArgumentException("Verification token has expired. Please request a new one.");
+        }
+
+        user.setEmailVerified(true);
+        user.setEmailVerificationToken(null);
+        user.setEmailVerificationExpiry(null);
+        appUserRepository.save(user);
+        log.info("Email verified for user {}", user.getAppUserId());
+    }
+
+    @Override
+    public void resendVerificationEmail(String email) {
+        AppUser user = appUserRepository.findByAppUserEmail(email)
+                .orElseThrow(() -> new UserNotFound("No account found with that email address"));
+
+        if (user.isEmailVerified()) {
+            throw new IllegalStateException("Email address is already verified");
+        }
+
+        String verificationToken = UUID.randomUUID().toString();
+        user.setEmailVerificationToken(verificationToken);
+        user.setEmailVerificationExpiry(Instant.now().plus(24, ChronoUnit.HOURS));
+        appUserRepository.save(user);
+
+        String verificationUrl = appBaseUrl + "/api/v1/auth/verify-email?token=" + verificationToken;
+        try {
+            messagingService.sendVerificationEmail(
+                    user.getAppUserEmail(),
+                    user.getFirstName(),
+                    verificationUrl);
+        } catch (MessagingException e) {
+            log.error("Failed to resend verification email to {}: {}", user.getAppUserEmail(), e.getMessage());
+            throw new RuntimeException("Could not send verification email. Please try again later.");
+        }
+        log.info("Verification email resent to {}", email);
     }
 
     @Override
@@ -133,6 +208,13 @@ public class AuthService implements IAuthService {
 
         AppUser authenticatedUser = appUserRepository.findById(authenticationPrincipal.getAppUserId())
                 .orElseThrow(() -> new UserNotFound("user not found."));
+
+        // If MFA is enabled, issue a short-lived pending token and ask for OTP
+        if (authenticatedUser.isMfaEnabled()) {
+            String mfaToken = mfaService.initiateMfa(authenticatedUser.getAppUserId());
+            log.info("MFA challenge initiated for user {}", authenticatedUser.getAppUserId());
+            return LoginResponse.mfaChallenge(mfaToken);
+        }
 
         String token = jwtService.generateAccessToken(
                 authenticatedUser.getAppUserEmail(),
@@ -150,13 +232,12 @@ public class AuthService implements IAuthService {
                 .build();
         response.setHeader("Set-Cookie", jwtCookie.toString());
 
-        return new LoginResponse(
+        return LoginResponse.standard(
                 true,
                 token,
                 refreshToken,
                 authenticatedUser.getUsername(),
-                authenticatedUser.getAppUserEmail()
-                );
+                authenticatedUser.getAppUserEmail());
     }
 
     @Override
@@ -177,6 +258,8 @@ public class AuthService implements IAuthService {
                 .roles(userRole == null ? new HashSet<>() : Set.of(userRole))
                 .createdBy(creator)
                 .deleteYn(DeleteYn.N)
+                // Admin-provisioned accounts are pre-verified — the admin owns the email
+                .emailVerified(true)
                 .build();
 
         appUserRepository.save(newUser);
@@ -207,29 +290,19 @@ public class AuthService implements IAuthService {
     }
 
     public void deactivateUser(UUID userId) {
-        try {
-            AppUser user = appUserRepository.findById(userId)
-                    .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
-
-            user.setDeleteYn(DeleteYn.Y);
-            appUserRepository.save(user);
-        } catch (UserNotFound e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        }
+        AppUser user = appUserRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
+        user.setDeleteYn(DeleteYn.Y);
+        appUserRepository.save(user);
+        log.info("User {} deactivated", userId);
     }
 
     public void activateUser(UUID userId) {
-        try {
-            AppUser user = appUserRepository.findById(userId)
-                    .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
-
-            user.setDeleteYn(DeleteYn.N);
-            appUserRepository.save(user);
-        } catch (UserNotFound e) {
-            e.printStackTrace();
-            throw new RuntimeException(e);
-        }
+        AppUser user = appUserRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
+        user.setDeleteYn(DeleteYn.N);
+        appUserRepository.save(user);
+        log.info("User {} activated", userId);
     }
 
     public void changePassword(AuthController.ChangePasswordCmd changePasswordCmd) {
@@ -262,6 +335,12 @@ public class AuthService implements IAuthService {
     }
 
     private String getIdentity(LoginRequest request) {
-        return request.email() == null ? request.username() : request.email();
+        if (request.email() != null && !request.email().isBlank()) {
+            return request.email();
+        }
+        if (request.username() != null && !request.username().isBlank()) {
+            return request.username();
+        }
+        throw new IllegalArgumentException("Login requires either an email or a username.");
     }
 }

@@ -6,12 +6,19 @@ import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.common.util.Util;
+import com.brandedhustlers.electionbackend.election.domain.Election;
+import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.voter.domain.ElectionVoter;
+import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
+import com.brandedhustlers.electionbackend.voter.dto.AssignVotersCmd;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.VoterDTO;
 import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import com.brandedhustlers.electionbackend.voter.mapper.VoterMapper;
+import com.brandedhustlers.electionbackend.voter.repository.ElectionVoterRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -35,6 +42,8 @@ public class VoterService implements IVoterService {
     private final AttributeExtractor attributeExtractor;
     private final GetUser getUser;
     private final Util util;
+    private final ElectionRepository electionRepository;
+    private final ElectionVoterRepository electionVoterRepository;
 
 
     public VoterService(
@@ -42,13 +51,18 @@ public class VoterService implements IVoterService {
             VoterRepository voterRepository,
             AuditEmitter auditEmitter,
             AttributeExtractor attributeExtractor,
-            GetUser getUser, Util util) {
+            GetUser getUser,
+            Util util,
+            ElectionRepository electionRepository,
+            ElectionVoterRepository electionVoterRepository) {
         this.util = util;
         this.voterMapper = voterMapper;
         this.voterRepository = voterRepository;
         this.auditEmitter = auditEmitter;
         this.attributeExtractor = attributeExtractor;
         this.getUser = getUser;
+        this.electionRepository = electionRepository;
+        this.electionVoterRepository = electionVoterRepository;
     }
 
 
@@ -142,20 +156,28 @@ public class VoterService implements IVoterService {
 
     @Override
     public List<VoterDTO> search(UUID orgId, String q, int limit) {
-        return List.of();
+        if (q == null || q.isBlank()) {
+            return List.of();
+        }
+        return voterRepository.findByOrgIDAndNameContainingIgnoreCase(orgId, q.trim())
+                .stream()
+                .limit(limit > 0 ? limit : 20)
+                .map(voterMapper::entityToDto)
+                .toList();
     }
 
-   /* @Override
+    @Override
     @Transactional
     public void assignToElection(UUID orgId, AssignVotersCmd cmd) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
 
-        // Authorization
-        if (!authorizeUser(actor, UserRole.ADMIN) && !authorizeUser(actor, UserRole.SUPER_ADMIN)) {
+        if (!(util.authorizeUser(actor, UserRole.ADMIN)
+                || util.authorizeUser(actor, UserRole.SUPER_ADMIN)
+                || util.authorizeUser(actor, UserRole.ORG_ADMIN))) {
             throw new AccessDeniedException("You do not have authority to assign voters");
         }
 
-        UUID actorOrgId = Optional.ofNullable(actor.getActiveOrganization())
+        UUID actorOrgId = java.util.Optional.ofNullable(actor.getActiveOrganization())
                 .orElseThrow(() -> new AccessDeniedException("You must belong to an organization"))
                 .getOrganizationId();
 
@@ -163,64 +185,61 @@ public class VoterService implements IVoterService {
             throw new AccessDeniedException("Organization mismatch");
         }
 
-        // Validation
-        if (cmd.voterIds() == null || cmd.voterIds().isEmpty()) {
-            throw new IllegalArgumentException("Voter IDs cannot be empty");
+        Election election = electionRepository.findByElectionId(cmd.electionId())
+                .orElseThrow(() -> new EntityNotFoundException("Election not found"));
+
+        if (!election.getOrganization().getOrganizationId().equals(orgId)) {
+            throw new AccessDeniedException("Election does not belong to your organization");
         }
 
-        if (!electionRepository.existsByElectionIdAndOrganization_OrganizationId(cmd.electionId(), orgId)) {
-            throw new EntityNotFoundException("Election not found");
-        }
-
-        // Find existing voters
-        List<UUID> existingVoters = voterRepository.findAllByVoterIdIn(cmd.voterIds(), orgId);
+        // Resolve Voter entities that exist in this org from the supplied IDs
+        List<Voter> existingVoters = voterRepository.findAllByVoterIdIn(cmd.voterIds(), orgId);
 
         if (existingVoters.isEmpty()) {
             throw new IllegalArgumentException("None of the specified voters exist in this organization");
         }
 
-        // Check for already assigned voters
-        List<UUID> alreadyAssigned = electionVoterRepository
-                .findAssignedVoterIds(cmd.electionId(), existingVoters);
+        List<UUID> existingVoterIds = existingVoters.stream().map(Voter::getVoterId).toList();
 
-        List<UUID> votersToAssign = existingVoters.stream()
-                .filter(voterId -> !alreadyAssigned.contains(voterId))
+        // Skip voters who are already assigned
+        List<UUID> alreadyAssigned = electionVoterRepository
+                .findAssignedVoterIds(cmd.electionId(), existingVoterIds);
+
+        List<Voter> votersToAssign = existingVoters.stream()
+                .filter(v -> !alreadyAssigned.contains(v.getVoterId()))
                 .toList();
 
         if (votersToAssign.isEmpty()) {
             throw new IllegalArgumentException("All specified voters are already assigned to this election");
         }
 
-        // Create election voter assignments
-        List<ElectionVoter> voters = votersToAssign.stream()
-                .map(voterId -> {
-                    ElectionVoterId embeddedId = new ElectionVoterId();
-                    embeddedId.setElectionId(cmd.electionId());
-                    embeddedId.setVoterId(voterId);
-
-                    ElectionVoter voter = new ElectionVoter();
-                    voter.setId(embeddedId);
-                    voter.setStationId(null);
-                    voter.setVerifiedAt(null);
-                    voter.setHasVoted(false);
-                    return voter;
-                })
+        List<ElectionVoter> assignments = votersToAssign.stream()
+                .map(voter -> ElectionVoter.builder()
+                        .id(new ElectionVoterId(cmd.electionId(), voter.getVoterId()))
+                        .voter(voter)
+                        .election(election)
+                        .stationId(null)
+                        .verifiedAt(null)
+                        .votedAt(null)
+                        .hasVoted(false)
+                        .build())
                 .toList();
 
-        electionVoterRepository.saveAll(voters);
+        electionVoterRepository.saveAll(assignments);
+        log.info("Assigned {} voters to election {}", assignments.size(), cmd.electionId());
 
         auditEmitter.emit(
                 null,
                 "voters.voters_assigned_to_election",
                 null,
                 orgId,
-                String.format("Assigned %d voters to election", voters.size()),
+                String.format("Assigned %d voters to election", assignments.size()),
                 actor.getAppUserId(),
                 actor.getFirstName(),
                 actor.getUserRole().name(),
                 "USER",
                 "ElectionVoter",
-                null,
+                cmd.electionId(),
                 "Assigned voters to an election",
                 "WEB",
                 null,
@@ -230,5 +249,4 @@ public class VoterService implements IVoterService {
                 1
         );
     }
-*/
 }

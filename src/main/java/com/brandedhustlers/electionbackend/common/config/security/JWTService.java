@@ -41,6 +41,47 @@ public class JWTService {
         return generateToken(username, refreshTokenExp, userID, appUserEmail);
     }
 
+    /**
+     * Generates a short-lived (5 min) MFA-pending token.
+     * This token intentionally carries NO role claim so the JWTAuthFilter
+     * cannot use it to grant access to protected endpoints.
+     * It can only be exchanged for a full access token at /auth/mfa/verify.
+     */
+    public String generateMfaPendingToken(UUID userId, String email) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId.toString());
+        claims.put("userEmail", email);
+        claims.put("mfaPending", true);
+        claims.put("iss", "brandedhustlers_backend");
+        claims.put("aud", "election_client");
+
+        return Jwts.builder()
+                .claims()
+                .add(claims)
+                .subject(email)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + 300_000L)) // 5 min
+                .and()
+                .signWith(getKey())
+                .compact();
+    }
+
+    public UUID extractMfaPendingUserId(String token) {
+        Claims claims = extractAllClaim(token);
+        String id = claims.get("userId", String.class);
+        return id == null ? null : UUID.fromString(id);
+    }
+
+    public boolean isMfaPendingToken(String token) {
+        try {
+            Claims claims = extractAllClaim(token);
+            Object flag = claims.get("mfaPending");
+            return Boolean.TRUE.equals(flag);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     public String generateAccessToken(String username, UUID userId, String appUserEmail) {
         long accessTokenExpirationTime = 900000L; // 15 minutes
         return generateToken(username, accessTokenExpirationTime, userId, appUserEmail);
@@ -225,7 +266,7 @@ public class JWTService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload()
-                .get("appUserId", String.class);
+                .get("role", String.class);
     }
 
     public UUID extractAppUserId(HttpServletRequest request) {

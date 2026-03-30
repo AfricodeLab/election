@@ -301,9 +301,30 @@ public class ElectionService implements IElectionService {
             throw new InvalidUpdate("This election has already ended and cannot be modified.");
         }
 
-        if (!statusChange.getElectionStatus().equals(ElectionStatus.DRAFT)) {
-
+        if (statusChange.getElectionStatus() == ElectionStatus.RESULTS_RELEASED) {
+            throw new InvalidUpdate("Results have already been released for this election.");
         }
+
+        // Enforce valid status transition path:
+        // DRAFT -> UPCOMING -> LIVE -> ENDED -> RESULTS_RELEASED
+        java.util.Map<ElectionStatus, java.util.Set<ElectionStatus>> allowedTransitions = java.util.Map.of(
+                ElectionStatus.DRAFT,            java.util.Set.of(ElectionStatus.UPCOMING, ElectionStatus.LIVE),
+                ElectionStatus.UPCOMING,         java.util.Set.of(ElectionStatus.LIVE, ElectionStatus.DRAFT),
+                ElectionStatus.LIVE,             java.util.Set.of(ElectionStatus.ENDED),
+                ElectionStatus.ENDED,            java.util.Set.of(ElectionStatus.RESULTS_RELEASED),
+                ElectionStatus.RESULTS_RELEASED, java.util.Set.of()
+        );
+
+        java.util.Set<ElectionStatus> validNext = allowedTransitions.getOrDefault(
+                statusChange.getElectionStatus(), java.util.Set.of());
+
+        if (!validNext.contains(newStatus)) {
+            throw new InvalidUpdate(
+                    "Invalid status transition: cannot move from "
+                    + statusChange.getElectionStatus() + " to " + newStatus
+                    + ". Allowed transitions: " + validNext);
+        }
+
         statusChange.setElectionStatus(newStatus);
 
         Election statChange = electionRepository.save(statusChange);

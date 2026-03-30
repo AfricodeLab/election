@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.common.config.security;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Role;
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import lombok.extern.slf4j.Slf4j;
@@ -29,9 +30,18 @@ public class CustomUserDetailsService implements UserDetailsService {
 
     @Override
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        Optional<AppUser> appUser = appUserRepository.findByUsernameOrEmail((username));
-        if (appUser.isPresent()){
-            return new UserPrincipal(getAuthorities(appUser.get()), appUser.get());
+        Optional<AppUser> appUser = appUserRepository.findByUsernameOrEmail(username);
+        if (appUser.isPresent()) {
+            AppUser user = appUser.get();
+            if (DeleteYn.Y.equals(user.getDeleteYn())) {
+                log.warn("Login attempt for deactivated account: {}", username);
+                throw new UsernameNotFoundException("User account has been deactivated.");
+            }
+            if (!user.isEmailVerified()) {
+                log.warn("Login attempt for unverified account: {}", username);
+                throw new UsernameNotFoundException("Email address not verified. Please check your inbox for the verification link.");
+            }
+            return new UserPrincipal(getAuthorities(user), user);
         }
         throw new UserNotFound("User account not found.");
     }

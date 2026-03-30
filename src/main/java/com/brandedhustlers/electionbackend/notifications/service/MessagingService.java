@@ -163,6 +163,27 @@ public class MessagingService {
     }
 
     @Async
+    public void sendVerificationEmail(String recipientEmail, String firstName, String verificationUrl)
+            throws MessagingException {
+        MimeMessage mime = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+
+        Context ctx = new Context();
+        ctx.setVariable("firstName", firstName);
+        ctx.setVariable("verificationUrl", verificationUrl);
+
+        String html = templateEngine.process("EmailVerification", ctx);
+
+        helper.setFrom(appEmail);
+        helper.setTo(recipientEmail);
+        helper.setSubject("Verify your email address");
+        helper.setText(html, true);
+
+        mailSender.send(mime);
+        log.info("Verification email sent to {}", recipientEmail);
+    }
+
+    @Async
     public void sendOtpEmail(String recipientEmail, String recipientName, String otp) throws MessagingException {
         jakarta.mail.internet.MimeMessage mime = mailSender.createMimeMessage();
         org.springframework.mail.javamail.MimeMessageHelper helper =

@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.voter.dto.AssignVotersCmd;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.ImportStatusDTO;
 import com.brandedhustlers.electionbackend.voter.service.VoterImportService;
@@ -71,15 +72,12 @@ public class VoterController {
         return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
     }
 
-/*    @PostMapping("/assign")
+    @PostMapping("/assign")
     public ResponseEntity<?> assign(@Valid @RequestBody AssignVotersCmd cmd) {
         UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
-        if (actorOrgId != null) {
-            voterService.assignToElection(actorOrgId, cmd);
-            return new ResponseEntity<>("Voter Assigned Successfully", HttpStatus.OK);
-        }
-        return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
-    }*/
+        voterService.assignToElection(actorOrgId, cmd);
+        return new ResponseEntity<>("Voters assigned successfully", HttpStatus.OK);
+    }
 
     @PostMapping("/import")
     public ResponseEntity<?> uploadFile(
