@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableCaching
 public class ElectionbackendApplication {
 
-	public static void main(String[] args) {
+    public static void main(String[] args) {
         Dotenv dotenv = Dotenv.configure().load();
 
         System.setProperty("SPRING_DATASOURCE_URL", dotenv.get("SPRING_DATASOURCE_URL"));
@@ -37,7 +37,9 @@ public class ElectionbackendApplication {
         System.setProperty("RABBITMQ_USERNAME", dotenv.get("RABBITMQ_USERNAME"));
         System.setProperty("RABBITMQ_PASSWORD", dotenv.get("RABBITMQ_PASSWORD"));
 
-		SpringApplication.run(ElectionbackendApplication.class, args);
-	}
+        System.setProperty("RESEND_API_KEY", dotenv.get("RESEND_API_KEY"));
+
+        SpringApplication.run(ElectionbackendApplication.class, args);
+    }
 
 }
