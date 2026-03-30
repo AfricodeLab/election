@@ -28,14 +28,21 @@ public class EligibilityService {
         }
 
         if (voterAttributes == null || voterAttributes.isEmpty()) {
-            return EligibilityResult.deny("Voter has no attributes configured");
+            log.debug("Voter has no attributes — cannot evaluate policy, allowing by default");
+            return EligibilityResult.allow();
         }
 
         try {
             // Evaluate "all" conditions (AND logic)
+            // A rule is skipped (null) if the voter is missing the attribute — only an explicit false denies.
             if (policy.getAll() != null && !policy.getAll().isEmpty()) {
                 for (PolicyRule rule : policy.getAll()) {
-                    if (!evaluateRule(voterAttributes, rule)) {
+                    Boolean result = evaluateRule(voterAttributes, rule);
+                    if (result == null) {
+                        log.debug("Skipping 'all' rule for missing attribute: {}", rule.getField());
+                        continue;
+                    }
+                    if (!result) {
                         return EligibilityResult.deny(
                                 String.format("Failed requirement: %s %s %s",
                                         rule.getField(), rule.getOp(), rule.getValue())
@@ -45,15 +52,23 @@ public class EligibilityService {
             }
 
             // Evaluate "any" conditions (OR logic)
+            // A rule is skipped if the attribute is missing. Deny only if every evaluable rule explicitly failed.
             if (policy.getAny() != null && !policy.getAny().isEmpty()) {
                 boolean anyMatched = false;
+                boolean anyEvaluated = false;
                 for (PolicyRule rule : policy.getAny()) {
-                    if (evaluateRule(voterAttributes, rule)) {
+                    Boolean result = evaluateRule(voterAttributes, rule);
+                    if (result == null) {
+                        log.debug("Skipping 'any' rule for missing attribute: {}", rule.getField());
+                        continue;
+                    }
+                    anyEvaluated = true;
+                    if (result) {
                         anyMatched = true;
                         break;
                     }
                 }
-                if (!anyMatched) {
+                if (anyEvaluated && !anyMatched) {
                     return EligibilityResult.deny(
                             "Does not meet any of the alternative requirements"
                     );
@@ -70,13 +85,15 @@ public class EligibilityService {
 
     /**
      * Evaluate a single rule.
+     * Returns true if the rule passes, false if it explicitly fails,
+     * or null if the voter is missing the attribute (inconclusive).
      */
-    private boolean evaluateRule(Map<String, Object> attributes, PolicyRule rule) {
+    private Boolean evaluateRule(Map<String, Object> attributes, PolicyRule rule) {
         Object actualValue = attributes.get(rule.getField());
 
         if (actualValue == null) {
-            log.warn("Voter missing attribute: {}", rule.getField());
-            return false;
+            log.debug("Voter missing attribute '{}', skipping rule", rule.getField());
+            return null;
         }
 
         Object expectedValue = rule.getValue();

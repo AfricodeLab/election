@@ -1,13 +1,12 @@
 package com.brandedhustlers.electionbackend.notifications.service;
 
-import com.brandedhustlers.electionbackend.auth.domain.Organization;
-import com.brandedhustlers.electionbackend.auth.exceptions.OrganizationNotFound;
-import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.ops.domain.Launch;
 import com.brandedhustlers.electionbackend.ops.exception.LaunchNotfound;
 import com.brandedhustlers.electionbackend.ops.repository.LaunchRepository;
+import com.brandedhustlers.electionbackend.voter.domain.EligibleVoterElection;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
+import com.brandedhustlers.electionbackend.voter.repository.EligibleVoterElectionRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import io.github.cdimascio.dotenv.Dotenv;
 import jakarta.mail.MessagingException;
@@ -23,33 +22,33 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.sql.Timestamp;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class MessagingService {
     private static final Logger log = LoggerFactory.getLogger(MessagingService.class);
 
     private final JavaMailSender mailSender;
-    private final OrganizationRepository organizationRepository;
     private final VoterRepository voterRepository;
     private final TemplateEngine templateEngine;
     private final LaunchRepository launchRepository;
+    private final EligibleVoterElectionRepository eligibleVoterElectionRepository;
 
     Dotenv dotenv = Dotenv.configure().load();
     private final String appEmail = dotenv.get("SPRING_MAIL_USERNAME");
 
     public MessagingService(JavaMailSender mailSender,
-                            OrganizationRepository organizationRepository,
                             VoterRepository voterRepository,
                             TemplateEngine templateEngine,
-                            LaunchRepository launchRepository) {
+                            LaunchRepository launchRepository,
+                            EligibleVoterElectionRepository eligibleVoterElectionRepository) {
         this.mailSender = mailSender;
-        this.organizationRepository = organizationRepository;
         this.voterRepository = voterRepository;
         this.templateEngine = templateEngine;
         this.launchRepository = launchRepository;
+        this.eligibleVoterElectionRepository = eligibleVoterElectionRepository;
     }
 
     @RabbitListener(queues = "notif.email")
@@ -71,48 +70,74 @@ public class MessagingService {
 
             log.info("Processing election notification for launchId: {}, orgId: {}", launchId, orgId);
 
-            Organization voterOrg = organizationRepository.findById(orgId)
-                    .orElseThrow(() -> new OrganizationNotFound("Organization not found with id: " + orgId));
-
             Launch electionLaunch = launchRepository.findById(launchId)
                     .orElseThrow(() -> new LaunchNotfound("Launch not found with id: " + launchId));
 
-            List<Voter> voters = voterRepository.findByOrganization(voterOrg);
             List<Election> elections = electionLaunch.getElection();
-
-            if (voters.isEmpty()) {
-                log.warn("No voters found for organization: {}", orgId);
-                return;
-            }
 
             if (elections.isEmpty()) {
                 log.warn("No elections found for launch: {}", launchId);
                 return;
             }
 
-            log.info("Sending emails to {} voters for {} elections", voters.size(), elections.size());
+            // Build election lookup by ID from the launch
+            Map<UUID, Election> electionMap = elections.stream()
+                    .collect(Collectors.toMap(Election::getElectionId, Function.identity()));
+
+            // Get all distinct eligible voter IDs from pre-computed snapshot
+            List<UUID> eligibleVoterIds = eligibleVoterElectionRepository
+                    .findDistinctVoterIdsByLaunchId(launchId);
+
+            if (eligibleVoterIds.isEmpty()) {
+                log.warn("No eligible voters found for launch: {}", launchId);
+                return;
+            }
+
+            // Fetch eligible voters in bulk
+            List<Voter> voters = voterRepository.findAllById(eligibleVoterIds);
+
+            // Group eligible election IDs by voter
+            Map<UUID, Set<UUID>> voterEligibleElections = eligibleVoterElectionRepository
+                    .findByLaunchId(launchId)
+                    .stream()
+                    .collect(Collectors.groupingBy(
+                            EligibleVoterElection::getVoterId,
+                            Collectors.mapping(EligibleVoterElection::getElectionId, Collectors.toSet())));
+
+            log.info("Sending emails to {} eligible voters for {} elections", voters.size(), elections.size());
 
             int successCount = 0;
             int failureCount = 0;
 
-            // Collect all live election titles
-            List<String> liveElectionTitles = elections.stream()
-                    .map(Election::getElectionTitle)
-                    .toList();
-
-            Timestamp earliestStartTime = elections.stream()
-                    .map(Election::getElectionStartTime)
-                    .min(Timestamp::compareTo)
-                    .orElse(null);
-
-            Timestamp latestEndTime = elections.stream()
-                    .map(Election::getElectionEndTime)
-                    .max(Timestamp::compareTo)
-                    .orElse(null);
-
             for (Voter voter : voters) {
+                Set<UUID> eligibleElectionIds = voterEligibleElections
+                        .getOrDefault(voter.getVoterId(), Collections.emptySet());
+
+                List<Election> voterElections = eligibleElectionIds.stream()
+                        .map(electionMap::get)
+                        .filter(Objects::nonNull)
+                        .toList();
+
+                if (voterElections.isEmpty()) {
+                    continue;
+                }
+
+                List<String> electionTitles = voterElections.stream()
+                        .map(Election::getElectionTitle)
+                        .toList();
+
+                Timestamp earliestStartTime = voterElections.stream()
+                        .map(Election::getElectionStartTime)
+                        .min(Timestamp::compareTo)
+                        .orElse(null);
+
+                Timestamp latestEndTime = voterElections.stream()
+                        .map(Election::getElectionEndTime)
+                        .max(Timestamp::compareTo)
+                        .orElse(null);
+
                 try {
-                    sendSingleEmail(voter, liveElectionTitles, earliestStartTime, latestEndTime);
+                    sendSingleEmail(voter, electionTitles, earliestStartTime, latestEndTime);
                     successCount++;
                 } catch (Exception e) {
                     failureCount++;
@@ -122,7 +147,7 @@ public class MessagingService {
 
             log.info("Email sending completed. Success: {}, Failures: {}", successCount, failureCount);
 
-        } catch (OrganizationNotFound | LaunchNotfound e) {
+        } catch (LaunchNotfound e) {
             log.error("Entity not found: {}", e.getMessage());
         } catch (ClassCastException e) {
             log.error("Invalid payload format: {}", e.getMessage());
@@ -160,6 +185,27 @@ public class MessagingService {
 
         log.debug("Sending email to {} for {} election(s)", voter.getEmail(), electionTitles.size());
         mailSender.send(mime);
+    }
+
+    @Async
+    public void sendVerificationEmail(String recipientEmail, String firstName, String verificationUrl)
+            throws MessagingException {
+        MimeMessage mime = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+
+        Context ctx = new Context();
+        ctx.setVariable("firstName", firstName);
+        ctx.setVariable("verificationUrl", verificationUrl);
+
+        String html = templateEngine.process("EmailVerification", ctx);
+
+        helper.setFrom(appEmail);
+        helper.setTo(recipientEmail);
+        helper.setSubject("Verify your email address");
+        helper.setText(html, true);
+
+        mailSender.send(mime);
+        log.info("Verification email sent to {}", recipientEmail);
     }
 
     @Async

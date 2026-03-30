@@ -21,18 +21,15 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
 @Configuration
-@EnableWebSecurity(debug = true)
+@EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
     private final JWTAuthFilter jwtFilter;
-    private final CustomUserDetailsService userDetailsService;
     private final AllRequestsLoggingFilter loggingFilter;
 
     public SecurityConfig(JWTAuthFilter jwtFilter,
-            CustomUserDetailsService userDetailsService,
-            AllRequestsLoggingFilter loggingFilter) {
+                          AllRequestsLoggingFilter loggingFilter) {
         this.jwtFilter = jwtFilter;
-        this.userDetailsService = userDetailsService;
         this.loggingFilter = loggingFilter;
     }
 
@@ -56,10 +53,10 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         // Shorthand arrays for role groups
-        String[] ADMINS = { "ADMIN", "SUPER_ADMIN", "ORG_ADMIN" };
-        String[] ADMINS_AUDIT = { "ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR" };
-        String[] READERS = { "ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR" };
-        String[] ALL_INTERNAL = { "ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR", "OBSERVER" };
+        String[] ADMINS = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN"};
+        String[] ADMINS_AUDIT = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR"};
+        String[] READERS = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR"};
+        String[] ALL_INTERNAL = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR", "OBSERVER"};
 
         return http
                 .cors(Customizer.withDefaults())
@@ -76,7 +73,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/auth/register-user",
                                 "/api/v1/auth/login",
-                                "/api/v1/auth/refresh")
+                                "/api/v1/auth/refresh",
+                                "/api/v1/auth/verify-email",
+                                "/api/v1/auth/resend-verification",
+                                "/api/v1/auth/mfa/verify")
                         .permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**", "/swagger-ui.html",
@@ -85,9 +85,10 @@ public class SecurityConfig {
                         .requestMatchers("/ws/**", "/ws-raw/**").permitAll()
 
                         // ── Voter-only ──────────────────────────────────────────
-                        .requestMatchers("/api/v1/verification/send").hasRole("VOTER")
-                        .requestMatchers("/api/v1/verification/confirm").hasRole("VOTER")
-                        .requestMatchers("/api/v1/votes/cast").hasRole("VOTER")
+                        .requestMatchers("/api/v1/verification/send").permitAll()
+                        .requestMatchers("/api/v1/verification/confirm").permitAll()
+                        .requestMatchers("/api/v1/votes/cast","/api/v1/election/live").hasRole("VOTER")
+                        .requestMatchers("/api/v1/election/live").hasRole("VOTER")
 
                         // ── SUPER_ADMIN-only ────────────────────────────────────
                         .requestMatchers("/api/v1/organization/all").hasRole("SUPER_ADMIN")
@@ -143,6 +144,7 @@ public class SecurityConfig {
 
                         // ── Voters (write) ──────────────────────────────────────
                         .requestMatchers(HttpMethod.POST, "/api/v1/voters").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/voters/assign").hasAnyRole(ADMINS)
                         .requestMatchers(HttpMethod.POST, "/api/v1/voters/import").hasAnyRole(ADMINS)
                         // Voters (read)
                         .requestMatchers(HttpMethod.GET, "/api/v1/voters").hasAnyRole(READERS)

@@ -59,6 +59,7 @@ public class ElectionService implements IElectionService {
     private final Util util;
     private final ElectionTypeRepository electionTypeRepository;
     private final ElectionPresetRepository electionPresetRepository;
+    private final EligibilityService eligibilityService;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -74,7 +75,8 @@ public class ElectionService implements IElectionService {
                            HttpServletRequest httpServletRequest,
                            VoterRepository voterRepository, Util util,
                            ElectionTypeRepository electionTypeRepository,
-                           ElectionPresetRepository electionPresetRepository) {
+                           ElectionPresetRepository electionPresetRepository,
+                           EligibilityService eligibilityService) {
         this.electionRepository = electionRepository;
         this.util = util;
         this.electionMapper = electionMapper;
@@ -87,6 +89,7 @@ public class ElectionService implements IElectionService {
         this.configAnchorService = configAnchorService;
         this.electionTypeRepository = electionTypeRepository;
         this.electionPresetRepository = electionPresetRepository;
+        this.eligibilityService = eligibilityService;
     }
 
     @Override
@@ -301,9 +304,30 @@ public class ElectionService implements IElectionService {
             throw new InvalidUpdate("This election has already ended and cannot be modified.");
         }
 
-        if (!statusChange.getElectionStatus().equals(ElectionStatus.DRAFT)) {
-
+        if (statusChange.getElectionStatus() == ElectionStatus.RESULTS_RELEASED) {
+            throw new InvalidUpdate("Results have already been released for this election.");
         }
+
+        // Enforce valid status transition path:
+        // DRAFT -> UPCOMING -> LIVE -> ENDED -> RESULTS_RELEASED
+        java.util.Map<ElectionStatus, java.util.Set<ElectionStatus>> allowedTransitions = java.util.Map.of(
+                ElectionStatus.DRAFT,            java.util.Set.of(ElectionStatus.UPCOMING, ElectionStatus.LIVE),
+                ElectionStatus.UPCOMING,         java.util.Set.of(ElectionStatus.LIVE, ElectionStatus.DRAFT),
+                ElectionStatus.LIVE,             java.util.Set.of(ElectionStatus.ENDED),
+                ElectionStatus.ENDED,            java.util.Set.of(ElectionStatus.RESULTS_RELEASED),
+                ElectionStatus.RESULTS_RELEASED, java.util.Set.of()
+        );
+
+        java.util.Set<ElectionStatus> validNext = allowedTransitions.getOrDefault(
+                statusChange.getElectionStatus(), java.util.Set.of());
+
+        if (!validNext.contains(newStatus)) {
+            throw new InvalidUpdate(
+                    "Invalid status transition: cannot move from "
+                    + statusChange.getElectionStatus() + " to " + newStatus
+                    + ". Allowed transitions: " + validNext);
+        }
+
         statusChange.setElectionStatus(newStatus);
 
         Election statChange = electionRepository.save(statusChange);
@@ -425,15 +449,23 @@ public class ElectionService implements IElectionService {
         UUID voterOrgId = currentVoter.getOrganization().getOrganizationId();
         UUID voterId = currentVoter.getVoterId();
 
-        List<ElectionDTO> unvotedElections = electionRepository.findLiveByOrgAndNotVoted(
+        List<ElectionDTO> eligibleElections = electionRepository.findLiveByOrgAndNotVoted(
                 voterOrgId,
                 ElectionStatus.LIVE,
                 voterId)
                 .stream()
-                 .map(electionMapper::entityToDto)
+                .filter(election -> {
+                    if (election.getEligibilityPolicy() == null) {
+                        return true;
+                    }
+                    return eligibilityService
+                            .evaluate(currentVoter.getAttributes(), election.getEligibilityPolicy())
+                            .isAllowed();
+                })
+                .map(electionMapper::entityToDto)
                 .toList();
 
-        return new PageImpl<>(unvotedElections, pageable, unvotedElections.size());
+        return new PageImpl<>(eligibleElections, pageable, eligibleElections.size());
     }
 
     /**

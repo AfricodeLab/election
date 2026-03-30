@@ -10,6 +10,7 @@ import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.election.service.EligibilitySnapshotService;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.brandedhustlers.electionbackend.ops.domain.Launch;
 import com.brandedhustlers.electionbackend.ops.domain.LaunchElection;
@@ -52,6 +53,7 @@ public class LaunchService {
     private final ElectionMapper electionMapper;
     private final GetUser getUser;
     private final ElectionService electionService;
+    private final EligibilitySnapshotService eligibilitySnapshotService;
     private final Util util;
 
 
@@ -61,7 +63,8 @@ public class LaunchService {
                          RabbitTemplate rabbitTemplate,
                          AuditEmitter auditEmitter,
                          ElectionRepository electionRepository,
-                         ElectionMapper electionMapper, GetUser getUser, ElectionService electionService, Util util) {
+                         ElectionMapper electionMapper, GetUser getUser, ElectionService electionService,
+                         EligibilitySnapshotService eligibilitySnapshotService, Util util) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
@@ -71,6 +74,7 @@ public class LaunchService {
         this.electionMapper = electionMapper;
         this.getUser = getUser;
         this.electionService = electionService;
+        this.eligibilitySnapshotService = eligibilitySnapshotService;
         this.util = util;
     }
 
@@ -341,6 +345,8 @@ public class LaunchService {
             for(Election election : launchElections){
                 electionService.transitionToLive(election.getElectionId(), actor.getAppUserId());
             }
+
+            eligibilitySnapshotService.computeForLaunch(orgId, l.getId(), launchElections);
 
             rabbitTemplate.convertAndSend("notif.email", launchLivePayload);
 

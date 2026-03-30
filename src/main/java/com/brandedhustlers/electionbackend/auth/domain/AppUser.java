@@ -11,6 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -74,6 +75,20 @@ public class AppUser {
     private AppUser createdBy;
 
     private String userProfilePicture;
+
+    // ── Email verification ───────────────────────────────────────────────────
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+
+    @Column(unique = true)
+    private String emailVerificationToken;
+
+    private Instant emailVerificationExpiry;
+
+    // ── MFA ──────────────────────────────────────────────────────────────────
+    /** When true, a second-factor OTP is required after password login. */
+    @Column(nullable = false)
+    private boolean mfaEnabled = false;
 
     @OneToMany(mappedBy = "appUser", fetch = FetchType.EAGER)
     @Builder.Default

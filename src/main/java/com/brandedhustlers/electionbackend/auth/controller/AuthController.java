@@ -2,9 +2,11 @@ package com.brandedhustlers.electionbackend.auth.controller;
 
 import com.brandedhustlers.electionbackend.auth.dto.CreateUserRequest;
 import com.brandedhustlers.electionbackend.auth.dto.LoginRequest;
+import com.brandedhustlers.electionbackend.auth.dto.MfaVerifyRequest;
 import com.brandedhustlers.electionbackend.auth.dto.RegistrationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshRequest;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
+import com.brandedhustlers.electionbackend.auth.service.MfaService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,13 +22,16 @@ import java.util.UUID;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
     private final AuthService authService;
+    private final MfaService mfaService;
     private final HttpServletResponse servletResponse;
     private final GetUser getUser;
 
     public AuthController(AuthService authService,
+            MfaService mfaService,
             HttpServletResponse response,
             GetUser getUser) {
         this.authService = authService;
+        this.mfaService = mfaService;
         this.servletResponse = response;
         this.getUser = getUser;
     }
@@ -57,6 +62,12 @@ public class AuthController {
         return new ResponseEntity<>(authService.refreshToken(request), HttpStatus.OK);
     }
 
+    @PostMapping("/mfa/verify")
+    @RateLimiter(name = "auth_paths")
+    public ResponseEntity<?> verifyMfa(@Valid @RequestBody MfaVerifyRequest request) {
+        return new ResponseEntity<>(mfaService.verify(request), HttpStatus.OK);
+    }
+
     @GetMapping("/get-users")
     public ResponseEntity<?> getOrgUser(Pageable pageable) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
@@ -75,6 +86,19 @@ public class AuthController {
         authService.activateUser(userId);
 
         return ResponseEntity.ok("User with ID: " + userId + " activated.");
+    }
+
+    @GetMapping("/verify-email")
+    public ResponseEntity<?> verifyEmail(@RequestParam String token) {
+        authService.verifyEmail(token);
+        return ResponseEntity.ok("Email verified successfully. You can now log in.");
+    }
+
+    @PostMapping("/resend-verification")
+    @RateLimiter(name = "auth_paths")
+    public ResponseEntity<?> resendVerification(@RequestParam String email) {
+        authService.resendVerificationEmail(email);
+        return ResponseEntity.ok("Verification email sent. Please check your inbox.");
     }
 
     @PatchMapping("/password/change")
