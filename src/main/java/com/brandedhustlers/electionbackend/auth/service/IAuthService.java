@@ -14,4 +14,8 @@ public interface IAuthService {
     CreateUserResponse createUser(CreateUserRequest createUserRequest) throws IOException;
 
     TokenRefreshResponse refreshToken(TokenRefreshRequest request);
+
+    void verifyEmail(String token);
+
+    void resendVerificationEmail(String email);
 }

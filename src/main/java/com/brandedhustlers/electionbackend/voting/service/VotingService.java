@@ -25,7 +25,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -90,6 +89,15 @@ public class VotingService implements IVotingService {
             Voter actor = voterRepository.findById(voterId)
                     .orElseThrow(() -> new UserNotFound(
                             "Voter with ID: " + voterId + " not found."));
+
+            // Guard: voter must belong to the org from their JWT token
+            if (actor.getOrganization() == null
+                    || !actor.getOrganization().getOrganizationId().equals(orgId)) {
+                log.warn("Voter {} org mismatch: token orgId={}, voter orgId={}",
+                        voterId, orgId,
+                        actor.getOrganization() == null ? "null" : actor.getOrganization().getOrganizationId());
+                return new VoteAckDTO(null, "REJECTED", "ORG_MISMATCH");
+            }
 
             String dedupeKey = Optional.ofNullable(cmd.idempotencyKey())
                     .orElseGet(() -> UUID.randomUUID().toString());
@@ -247,12 +255,4 @@ public class VotingService implements IVotingService {
         }
     }
 
-    public void requireFreshStepUp(HttpSession session) {
-        Instant ts = (Instant) session.getAttribute("STEP_UP_VERIFIED_AT");
-        if (ts == null)
-            throw new SecurityException("VOTE-401 step-up required");
-        if (Duration.between(ts, Instant.now()).compareTo(STEP_UP_WINDOW) > 0) {
-            throw new SecurityException("VOTE-401 step-up expired");
-        }
-    }
 }

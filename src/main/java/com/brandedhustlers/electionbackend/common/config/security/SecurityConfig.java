@@ -21,7 +21,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
 @Configuration
-@EnableWebSecurity(debug = true)
+@EnableWebSecurity
 @EnableMethodSecurity
 public class SecurityConfig {
     private final JWTAuthFilter jwtFilter;
@@ -73,7 +73,10 @@ public class SecurityConfig {
                         .requestMatchers(
                                 "/api/v1/auth/register-user",
                                 "/api/v1/auth/login",
-                                "/api/v1/auth/refresh")
+                                "/api/v1/auth/refresh",
+                                "/api/v1/auth/verify-email",
+                                "/api/v1/auth/resend-verification",
+                                "/api/v1/auth/mfa/verify")
                         .permitAll()
                         .requestMatchers(
                                 "/swagger-ui/**", "/swagger-ui.html",
@@ -141,6 +144,7 @@ public class SecurityConfig {
 
                         // ── Voters (write) ──────────────────────────────────────
                         .requestMatchers(HttpMethod.POST, "/api/v1/voters").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/voters/assign").hasAnyRole(ADMINS)
                         .requestMatchers(HttpMethod.POST, "/api/v1/voters/import").hasAnyRole(ADMINS)
                         // Voters (read)
                         .requestMatchers(HttpMethod.GET, "/api/v1/voters").hasAnyRole(READERS)
