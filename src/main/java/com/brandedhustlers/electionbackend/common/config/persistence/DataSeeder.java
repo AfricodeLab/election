@@ -217,6 +217,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
+                        .emailVerified(true)
                         .build(), orgs.get("Electoral Commission")),
                 new UserSeed(AppUser.builder()
                         .firstName("Elikem").lastName("Fenuku")
@@ -225,6 +226,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
+                        .emailVerified(true)
                         .build(), orgs.get("Electoral Commission")),
                 new UserSeed(AppUser.builder()
                         .firstName("Ekow").lastName("Davis")
@@ -233,6 +235,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.ADMIN)
                         .roles(roleSet(roles, UserRole.ADMIN))
+                        .emailVerified(true)
                         .build(), orgs.get("Electoral Commission")),
                 new UserSeed(AppUser.builder()
                         .firstName("Nat").lastName("Auditor")
@@ -241,6 +244,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.AUDITOR)
                         .roles(roleSet(roles, UserRole.AUDITOR))
+                        .emailVerified(true)
                         .build(), orgs.get("Open Civic Alliance")),
                 new UserSeed(AppUser.builder()
                         .firstName("Joel").lastName("Contributor")
@@ -249,6 +253,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.CONTRIBUTOR)
                         .roles(roleSet(roles, UserRole.CONTRIBUTOR))
+                        .emailVerified(true)
                         .build(), orgs.get("Demo Party")),
                 new UserSeed(AppUser.builder()
                         .firstName("roman").lastName("Observer")
@@ -257,6 +262,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.OBSERVER)
                         .roles(roleSet(roles, UserRole.OBSERVER))
+                        .emailVerified(true)
                         .build(), orgs.get("Open Civic Alliance")));
 
         for (UserSeed seed : seeds) {

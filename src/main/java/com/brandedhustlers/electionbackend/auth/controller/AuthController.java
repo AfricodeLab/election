@@ -1,8 +1,10 @@
 package com.brandedhustlers.electionbackend.auth.controller;
 
 import com.brandedhustlers.electionbackend.auth.dto.CreateUserRequest;
+import com.brandedhustlers.electionbackend.auth.dto.ForgotPasswordCmd;
 import com.brandedhustlers.electionbackend.auth.dto.LoginRequest;
 import com.brandedhustlers.electionbackend.auth.dto.MfaVerifyRequest;
+import com.brandedhustlers.electionbackend.auth.dto.PasswordResetCmd;
 import com.brandedhustlers.electionbackend.auth.dto.RegistrationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshRequest;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
@@ -99,6 +101,37 @@ public class AuthController {
     public ResponseEntity<?> resendVerification(@RequestParam String email) {
         authService.resendVerificationEmail(email);
         return ResponseEntity.ok("Verification email sent. Please check your inbox.");
+    }
+
+    // ── Password reset (public, rate-limited) ────────────────────────────────
+
+    @PostMapping("/forgot-password")
+    @RateLimiter(name = "auth_paths")
+    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordCmd cmd) {
+        authService.forgotPassword(cmd.email());
+        // Always return 200 to avoid revealing whether the email exists
+        return ResponseEntity.ok("If an account with that email exists, a reset link has been sent.");
+    }
+
+    @PostMapping("/reset-password")
+    @RateLimiter(name = "auth_paths")
+    public ResponseEntity<?> resetPassword(@Valid @RequestBody PasswordResetCmd cmd) {
+        authService.resetPassword(cmd.token(), cmd.newPassword());
+        return ResponseEntity.ok("Password reset successfully. You can now log in.");
+    }
+
+    // ── MFA toggle (authenticated) ───────────────────────────────────────────
+
+    @PostMapping("/mfa/enable")
+    public ResponseEntity<?> enableMfa() {
+        authService.enableMfa();
+        return ResponseEntity.ok("MFA has been enabled on your account.");
+    }
+
+    @PostMapping("/mfa/disable")
+    public ResponseEntity<?> disableMfa() {
+        authService.disableMfa();
+        return ResponseEntity.ok("MFA has been disabled on your account.");
     }
 
     @PatchMapping("/password/change")
