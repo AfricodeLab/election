@@ -41,18 +41,19 @@ public class AlertService {
     public void notifyTamperingDetected(List<TamperingLog> incidents) {
         if (incidents == null || incidents.isEmpty()) return;
 
-        long critical = incidents.stream()
-                .filter(i -> "ARCHIVE_TAMPERED".equals(i.getIncidentType()))
-                .count();
-        long restored = incidents.stream()
-                .filter(i -> "RESTORED".equals(i.getIncidentType()))
-                .count();
-
-        // Collect distinct affected orgs from the incident list
+        // Group incidents by org so each org only receives counts for its own data.
+        // Computing totals across all orgs first then reusing them per-org would send
+        // one org's severity/counts into another org's alert email.
         incidents.stream()
-                .map(TamperingLog::getOrgId)
-                .distinct()
-                .forEach(orgId -> {
+                .collect(java.util.stream.Collectors.groupingBy(TamperingLog::getOrgId))
+                .forEach((orgId, orgIncidents) -> {
+                    long critical = orgIncidents.stream()
+                            .filter(i -> "ARCHIVE_TAMPERED".equals(i.getIncidentType()))
+                            .count();
+                    long restored = orgIncidents.stream()
+                            .filter(i -> "RESTORED".equals(i.getIncidentType()))
+                            .count();
+
                     String severity = critical > 0 ? "CRITICAL" : "WARNING";
                     String summary = buildTamperingSummary(orgId, critical, restored);
                     log.error("Tampering alert dispatched for org {}: {} critical, {} restored",

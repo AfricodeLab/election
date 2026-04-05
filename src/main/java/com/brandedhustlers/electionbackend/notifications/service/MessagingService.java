@@ -242,11 +242,17 @@ public class MessagingService {
             helper.setTo(recipientEmail);
             helper.setSubject("[" + severity + "] Vote Tampering Detected");
 
+            // HTML-escape dynamic values to prevent HTML injection in outbound email.
+            // recipientName and summary can contain admin-supplied data (election/candidate names).
+            String safeName    = org.springframework.web.util.HtmlUtils.htmlEscape(recipientName);
+            String safeSummary = org.springframework.web.util.HtmlUtils.htmlEscape(summary);
+            String headerColor = "CRITICAL".equals(severity) ? "#c0392b" : "#e67e22";
+
             String body = "<html><body style='font-family:sans-serif'>"
-                    + "<h2 style='color:" + ("CRITICAL".equals(severity) ? "#c0392b" : "#e67e22") + "'>"
+                    + "<h2 style='color:" + headerColor + "'>"
                     + severity + ": Vote Tampering Detected</h2>"
-                    + "<p>Hi " + recipientName + ",</p>"
-                    + "<p>" + summary + "</p>"
+                    + "<p>Hi " + safeName + ",</p>"
+                    + "<p>" + safeSummary + "</p>"
                     + "<p>Log in to the admin panel immediately to review the audit trail.</p>"
                     + "<hr/><small>This is an automated security alert from the Election Platform.</small>"
                     + "</body></html>";

@@ -17,7 +17,7 @@ public class WebsocketConfig implements WebSocketMessageBrokerConfigurer {
     @Value("${spring.rabbitmq.host}")
     private String rabbitHost;
 
-    @Value("${rabbitmq.stomp.port:5672}")
+    @Value("${rabbitmq.stomp.port:61613}")
     private int rabbitStompPort;
 
     @Value("${spring.rabbitmq.username}")

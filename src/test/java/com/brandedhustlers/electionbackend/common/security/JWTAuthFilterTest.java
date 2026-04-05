@@ -24,6 +24,7 @@ import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
@@ -129,9 +130,10 @@ class JWTAuthFilterTest {
 
             verify(chain).doFilter(request, response);
             var auth = SecurityContextHolder.getContext().getAuthentication();
-            assert auth != null;
-            assert auth.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_VOTER"));
+            assertNotNull(auth, "SecurityContext should contain authentication for a valid VOTER token");
+            assertTrue(auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_VOTER")),
+                    "Expected ROLE_VOTER authority");
             verifyNoInteractions(customUserDetailsService);
         }
 
@@ -149,7 +151,8 @@ class JWTAuthFilterTest {
             filter.doFilter(request, response, chain);
 
             verify(chain).doFilter(request, response);
-            assert SecurityContextHolder.getContext().getAuthentication() == null;
+            assertNull(SecurityContextHolder.getContext().getAuthentication(),
+                    "SecurityContext should be empty when VOTER token is invalid");
         }
 
         @Test
@@ -171,7 +174,8 @@ class JWTAuthFilterTest {
             filter.doFilter(request, response, chain);
 
             verify(chain).doFilter(request, response);
-            assert SecurityContextHolder.getContext().getAuthentication() == null;
+            assertNull(SecurityContextHolder.getContext().getAuthentication(),
+                    "SecurityContext should be empty when step-up claim is missing");
         }
     }
 
@@ -197,9 +201,10 @@ class JWTAuthFilterTest {
 
             verify(chain).doFilter(request, response);
             var auth = SecurityContextHolder.getContext().getAuthentication();
-            assert auth != null;
-            assert auth.getAuthorities().stream()
-                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN"));
+            assertNotNull(auth, "SecurityContext should contain authentication for a valid APP_USER token");
+            assertTrue(auth.getAuthorities().stream()
+                    .anyMatch(a -> a.getAuthority().equals("ROLE_ADMIN")),
+                    "Expected ROLE_ADMIN authority");
         }
 
         @Test
@@ -218,7 +223,8 @@ class JWTAuthFilterTest {
             filter.doFilter(request, response, chain);
 
             verify(chain).doFilter(request, response);
-            assert SecurityContextHolder.getContext().getAuthentication() == null;
+            assertNull(SecurityContextHolder.getContext().getAuthentication(),
+                    "SecurityContext should be empty when APP_USER token fails validation");
         }
     }
 

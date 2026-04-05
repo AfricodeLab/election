@@ -34,10 +34,26 @@ public class FeatureFlagAspect {
 
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
 
-        // No security context — allow through (scheduler / system context)
-        if (auth == null || !auth.isAuthenticated() || !(auth.getPrincipal() instanceof UserPrincipal principal)) {
-            log.debug("@RequiresFeature({}) — no authenticated user, skipping check (system context)", feature);
+        // No auth / unauthenticated — allow through (scheduler / system context)
+        if (auth == null || !auth.isAuthenticated()) {
+            log.debug("@RequiresFeature({}) — no authenticated principal, skipping check (system context)", feature);
             return;
+        }
+
+        Object rawPrincipal = auth.getPrincipal();
+
+        // Spring Security anonymous placeholder — not a real user, allow through
+        if ("anonymousUser".equals(rawPrincipal)) {
+            log.debug("@RequiresFeature({}) — anonymous user, skipping check", feature);
+            return;
+        }
+
+        // Authenticated but not an admin principal (e.g., a voter JWT) — deny.
+        // This prevents non-UserPrincipal tokens from silently bypassing feature gates.
+        if (!(rawPrincipal instanceof UserPrincipal principal)) {
+            log.warn("@RequiresFeature({}) — authenticated principal type {} is not supported; denying access",
+                    feature, rawPrincipal.getClass().getName());
+            throw new FeatureNotAvailableException(feature);
         }
 
         Organization org = principal.getActiveOrganization();
