@@ -26,6 +26,16 @@ public class EligibilityPolicy {
     private List<PolicyRule> any;
 
     /**
+     * When true, a voter missing any required attribute is DENIED (fail-closed).
+     * When false (default), a missing attribute skips the rule (fail-open).
+     *
+     * Use strictMode=true for national/formal elections.
+     * Use strictMode=false (default) for internal corporate votes where eligibility is pre-vetted.
+     */
+    @Builder.Default
+    private boolean strictMode = false;
+
+    /**
      * Policy description (for display to admins/voters).
      */
     private String description;

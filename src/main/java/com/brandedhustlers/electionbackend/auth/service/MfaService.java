@@ -7,112 +7,104 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.mail.MessagingException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 
 /**
  * MFA service for operator accounts (ADMIN, ORG_ADMIN, SUPER_ADMIN).
- *
- * <p>OTPs are stored in-memory for simplicity. In a multi-instance deployment
- * this should be replaced with a Redis-backed store (e.g. using Spring Data Redis
- * with a short TTL key).
+ * OTPs are stored in Redis with a 10-minute TTL — safe across restarts
+ * and multiple instances.
  */
 @Slf4j
 @Service
 public class MfaService {
 
-    private static final int OTP_TTL_SECONDS = 600;  // 10 min
+    private static final int OTP_TTL_SECONDS = 600;
     private static final int MAX_ATTEMPTS = 3;
+    private static final String KEY_PREFIX = "mfa:otp:";
 
     private final AppUserRepository appUserRepository;
     private final MessagingService messagingService;
     private final JWTService jwtService;
     private final RefreshTokenService refreshTokenService;
-
-    /** userId → pending OTP entry (in-memory; swap for Redis in multi-node) */
-    private final ConcurrentHashMap<UUID, OtpEntry> pendingOtps = new ConcurrentHashMap<>();
+    private final StringRedisTemplate redis;
+    private final ObjectMapper objectMapper;
     private final SecureRandom rng = new SecureRandom();
 
     public MfaService(AppUserRepository appUserRepository,
                       MessagingService messagingService,
                       JWTService jwtService,
-                      RefreshTokenService refreshTokenService) {
+                      RefreshTokenService refreshTokenService,
+                      StringRedisTemplate redis,
+                      ObjectMapper objectMapper) {
         this.appUserRepository = appUserRepository;
         this.messagingService = messagingService;
         this.jwtService = jwtService;
         this.refreshTokenService = refreshTokenService;
+        this.redis = redis;
+        this.objectMapper = objectMapper;
     }
 
     /**
-     * Generates a 6-digit OTP, stores it (hashed), sends it by email,
-     * and returns a short-lived MFA-pending JWT the client must include
-     * when calling /auth/mfa/verify.
+     * Generates a 6-digit OTP, stores it (hashed) in Redis with a 10-min TTL,
+     * sends it by email, and returns a short-lived MFA-pending JWT.
      */
     public String initiateMfa(UUID userId) {
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User not found"));
 
         String otp = String.valueOf(100_000 + rng.nextInt(900_000));
-        String otpHash = sha256(otp);
-        Instant expiresAt = Instant.now().plusSeconds(OTP_TTL_SECONDS);
-
-        pendingOtps.put(userId, new OtpEntry(otpHash, expiresAt, 0));
+        storeOtp(userId, new OtpEntry(sha256(otp), 0));
 
         try {
             messagingService.sendOtpEmail(user.getAppUserEmail(), user.getFirstName(), otp);
         } catch (MessagingException e) {
             log.error("Failed to send MFA OTP to {}: {}", user.getAppUserEmail(), e.getMessage());
-            // Don't throw — caller already generated the mfaToken;
-            // the user can request a new one via login again.
         }
 
         return jwtService.generateMfaPendingToken(userId, user.getAppUserEmail());
     }
 
     /**
-     * Validates the MFA-pending token + OTP, then issues a full access + refresh token pair.
+     * Validates the MFA-pending token + OTP, then issues full access + refresh tokens.
      */
     public MfaVerifyResponse verify(MfaVerifyRequest req) {
-        String mfaToken = req.mfaToken();
-
-        if (!jwtService.isMfaPendingToken(mfaToken)) {
+        if (!jwtService.isMfaPendingToken(req.mfaToken())) {
             throw new IllegalArgumentException("Invalid MFA token");
         }
-        if (jwtService.isTokenExpired(mfaToken)) {
+        if (jwtService.isTokenExpired(req.mfaToken())) {
             throw new IllegalArgumentException("MFA session expired. Please log in again.");
         }
 
-        UUID userId = jwtService.extractMfaPendingUserId(mfaToken);
+        UUID userId = jwtService.extractMfaPendingUserId(req.mfaToken());
         if (userId == null) {
             throw new IllegalArgumentException("Invalid MFA token: missing user identifier");
         }
 
-        OtpEntry entry = pendingOtps.get(userId);
-        if (entry == null || Instant.now().isAfter(entry.expiresAt())) {
-            pendingOtps.remove(userId);
+        OtpEntry entry = loadOtp(userId);
+        if (entry == null) {
             throw new IllegalArgumentException("OTP has expired. Please log in again to receive a new code.");
         }
-
         if (entry.attempts() >= MAX_ATTEMPTS) {
-            pendingOtps.remove(userId);
+            redis.delete(KEY_PREFIX + userId);
             throw new IllegalStateException("Too many incorrect attempts. Please log in again.");
         }
-
         if (!sha256(req.otp()).equals(entry.otpHash())) {
-            pendingOtps.put(userId, entry.incrementAttempts());
+            Long ttl = redis.getExpire(KEY_PREFIX + userId, TimeUnit.SECONDS);
+            storeOtp(userId, entry.incrementAttempts(), ttl != null && ttl > 0 ? ttl : OTP_TTL_SECONDS);
             int remaining = MAX_ATTEMPTS - entry.attempts() - 1;
             throw new IllegalArgumentException("Incorrect OTP. Attempts remaining: " + remaining);
         }
 
-        // OTP correct — clear entry and issue full tokens
-        pendingOtps.remove(userId);
+        redis.delete(KEY_PREFIX + userId);
 
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User not found"));
@@ -122,12 +114,38 @@ public class MfaService {
         String refreshToken = refreshTokenService.createRefreshToken(user.getAppUserId()).getToken();
 
         log.info("MFA verification successful for user {}", userId);
-
         return new MfaVerifyResponse(true, accessToken, refreshToken,
                 user.getUsername(), user.getAppUserEmail());
     }
 
-    // ── helpers ────────────────────────────────────────────────────────────────
+    // ── Redis helpers ──────────────────────────────────────────────────────────
+
+    private void storeOtp(UUID userId, OtpEntry entry) {
+        storeOtp(userId, entry, OTP_TTL_SECONDS);
+    }
+
+    private void storeOtp(UUID userId, OtpEntry entry, long ttlSeconds) {
+        try {
+            redis.opsForValue().set(KEY_PREFIX + userId,
+                    objectMapper.writeValueAsString(entry),
+                    ttlSeconds, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to store MFA OTP", e);
+        }
+    }
+
+    private OtpEntry loadOtp(UUID userId) {
+        String raw = redis.opsForValue().get(KEY_PREFIX + userId);
+        if (raw == null) return null;
+        try {
+            return objectMapper.readValue(raw, OtpEntry.class);
+        } catch (Exception e) {
+            log.error("Failed to deserialise MFA OTP for user {}", userId);
+            return null;
+        }
+    }
+
+    // ── Crypto helper ──────────────────────────────────────────────────────────
 
     private static String sha256(String s) {
         try {
@@ -141,9 +159,9 @@ public class MfaService {
         }
     }
 
-    private record OtpEntry(String otpHash, Instant expiresAt, int attempts) {
+    record OtpEntry(String otpHash, int attempts) {
         OtpEntry incrementAttempts() {
-            return new OtpEntry(otpHash, expiresAt, attempts + 1);
+            return new OtpEntry(otpHash, attempts + 1);
         }
     }
 }

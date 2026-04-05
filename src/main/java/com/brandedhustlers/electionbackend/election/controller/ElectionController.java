@@ -6,6 +6,8 @@ import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.voter.dto.TurnoutDTO;
+import com.brandedhustlers.electionbackend.voter.service.VoterService;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
 import com.brandedhustlers.electionbackend.election.dto.UpdateCandidateCmd;
@@ -37,17 +39,19 @@ public class ElectionController {
     private final GetUser getUser;
     private final CandidateService candidateService;
     private final ElectionRepository electionRepository;
+    private final VoterService voterService;
 
     public ElectionController(ElectionService electionService,
             ObjectMapper objectMapper,
             AppUserRepository appUserRepository, GetUser getUser, CandidateService candidateService,
-            ElectionRepository electionRepository) {
+            ElectionRepository electionRepository, VoterService voterService) {
         this.electionService = electionService;
         this.objectMapper = objectMapper;
         this.appUserRepository = appUserRepository;
         this.getUser = getUser;
         this.candidateService = candidateService;
         this.electionRepository = electionRepository;
+        this.voterService = voterService;
     }
 
     @PostMapping("/create")
@@ -168,5 +172,23 @@ public class ElectionController {
                     "status", "error",
                     "message", "Internal server error: " + e.getMessage()));
         }
+    }
+
+    /** Dry-run eligibility check — no state mutation. Requires ADMIN+ role. */
+    @GetMapping("/{electionId}/eligibility/check")
+    public ResponseEntity<?> checkEligibility(
+            @PathVariable UUID electionId,
+            @RequestParam UUID voterId) {
+        var result = electionService.checkEligibility(electionId, voterId);
+        return ResponseEntity.ok(Map.of(
+                "allowed", result.isAllowed(),
+                "reason", result.getReason() == null ? "" : result.getReason()));
+    }
+
+    /** Voter turnout stats for an election. Requires ADMIN+ role. */
+    @GetMapping("/{electionId}/turnout")
+    public ResponseEntity<TurnoutDTO> getTurnout(@PathVariable UUID electionId) {
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        return ResponseEntity.ok(voterService.getTurnout(orgId, electionId));
     }
 }

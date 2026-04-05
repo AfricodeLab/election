@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.auth.domain;
 
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
+import com.brandedhustlers.electionbackend.common.flags.Tier;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -38,6 +39,11 @@ public class Organization {
 
     @OneToOne
     private AppUser createdBy;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private Tier tier = Tier.BASE;
 
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn = DeleteYn.N;

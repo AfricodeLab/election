@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.ConflictException;
 import com.brandedhustlers.electionbackend.auth.exceptions.OrganizationNotFound;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserAlreadyExists;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
+import com.brandedhustlers.electionbackend.common.flags.FeatureNotAvailableException;
 import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import com.brandedhustlers.electionbackend.ops.exception.*;
 import jakarta.servlet.http.HttpServletRequest;
@@ -264,5 +265,19 @@ public class GlobalExceptionHandler {
                         Timestamp.from(Instant.now())),
                 request.getRequestId());
         return new ResponseEntity<>(apiException, HttpStatus.CONFLICT);
+    }
+
+    @ExceptionHandler(FeatureNotAvailableException.class)
+    public ResponseEntity<?> handleFeatureNotAvailable(FeatureNotAvailableException e,
+                                                        HttpServletRequest request) {
+        APIException apiException = new APIException(
+                HttpStatus.PAYMENT_REQUIRED.value(),
+                new APIException.APIError(
+                        HttpStatus.PAYMENT_REQUIRED,
+                        e.getMessage(),
+                        Timestamp.from(Instant.now())),
+                request.getRequestId());
+        log.warn("Feature gate blocked: feature={} requiredTier={}", e.getFeature(), e.getRequiredTier());
+        return new ResponseEntity<>(apiException, HttpStatus.PAYMENT_REQUIRED);
     }
 }

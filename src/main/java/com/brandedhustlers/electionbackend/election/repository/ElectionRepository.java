@@ -118,4 +118,23 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
 
     @Query("select e.organization from Election e where e.electionId = :electionId")
     Organization getElectionOrganization(UUID electionId);
+
+    /**
+     * Finds all LIVE elections that should be automatically closed because either:
+     * 1. Their end time has passed (time-based close), OR
+     * 2. shouldEndAutomatically is true AND totalVotes has reached expectedVoterCount
+     *    (vote-count-based close).
+     */
+    @Query("""
+        SELECT e FROM Election e
+        WHERE e.electionStatus = 'LIVE'
+          AND (
+            (e.electionEndTime IS NOT NULL AND e.electionEndTime <= :now)
+            OR (e.shouldEndAutomatically = true
+                AND e.expectedVoterCount IS NOT NULL
+                AND e.totalVotes IS NOT NULL
+                AND e.totalVotes >= e.expectedVoterCount)
+          )
+    """)
+    List<Election> findElectionsReadyToClose(@Param("now") Timestamp now);
 }

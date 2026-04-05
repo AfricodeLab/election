@@ -60,6 +60,7 @@ public class ElectionService implements IElectionService {
     private final ElectionTypeRepository electionTypeRepository;
     private final ElectionPresetRepository electionPresetRepository;
     private final EligibilityService eligibilityService;
+    private final VoterRepository voterRepository;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -90,6 +91,7 @@ public class ElectionService implements IElectionService {
         this.electionTypeRepository = electionTypeRepository;
         this.electionPresetRepository = electionPresetRepository;
         this.eligibilityService = eligibilityService;
+        this.voterRepository = voterRepository;
     }
 
     @Override
@@ -364,6 +366,56 @@ public class ElectionService implements IElectionService {
         return electionMapper.entityToDto(statChange);
     }
 
+    /**
+     * System-initiated election close — no authenticated user required.
+     * Called by {@link com.brandedhustlers.electionbackend.election.scheduler.ElectionAutoCloseScheduler}
+     * when an election's end time has passed or its vote-count threshold has been reached.
+     *
+     * <p>Bypasses the auth/org ownership checks that {@link #changeElectionStatus} enforces,
+     * but still validates the LIVE → ENDED transition and emits a full audit event
+     * with actor type "SYSTEM".</p>
+     */
+    @Override
+    @Transactional
+    public void endElectionSystemAuto(UUID electionId, String reason) {
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() ->
+                        new ElectionNotFound("Auto-close: election not found — " + electionId));
+
+        // Guard: only LIVE elections can be moved to ENDED
+        if (election.getElectionStatus() != ElectionStatus.LIVE) {
+            log.warn("Auto-close skipped for election {} — status is {} (expected LIVE)",
+                    electionId, election.getElectionStatus());
+            return;
+        }
+
+        election.setElectionStatus(ElectionStatus.ENDED);
+        Election saved = electionRepository.save(election);
+
+        log.info("Election auto-closed [id={}, title='{}', reason={}]",
+                saved.getElectionId(), saved.getElectionTitle(), reason);
+
+        auditEmitter.emit(
+                null,
+                "election.auto_closed",
+                null,
+                saved.getOrganization().getOrganizationId(),
+                "Election automatically closed by system scheduler — reason: " + reason,
+                null,              // no human actor
+                "SYSTEM_SCHEDULER",
+                "SYSTEM",
+                "SYSTEM",
+                "Election",
+                saved.getElectionId(),
+                saved.getElectionTitle(),
+                "SCHEDULER",
+                null,
+                null,
+                null,
+                "INFO",
+                1);
+    }
+
     @Override
     @Transactional
     public ElectionDTO addCandidate(UUID electionId, CandidateDTO newCandidate, MultipartFile candidateImage)
@@ -510,5 +562,28 @@ public class ElectionService implements IElectionService {
         log.info("Election {} transitioned to LIVE, config anchored", electionId);
 
         // return electionMapper.entityToDto(election);
+    }
+
+    /**
+     * Dry-run eligibility check — lets admins verify a voter's eligibility before go-live.
+     * Does not cast any vote or mutate any state.
+     *
+     * @return {allowed, reason} — reason is null when allowed=true
+     */
+    public EligibilityService.EligibilityResult checkEligibility(UUID electionId, UUID voterId) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+        util.requireAdminOrPermission(actor, PermissionType.EDIT_ELECTIONS);
+
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() -> new ElectionNotFound("Election not found: " + electionId));
+
+        com.brandedhustlers.electionbackend.voter.domain.Voter voter = voterRepository.findById(voterId)
+                .orElseThrow(() -> new IllegalArgumentException("Voter not found: " + voterId));
+
+        if (election.getEligibilityPolicy() == null) {
+            return EligibilityService.EligibilityResult.allow();
+        }
+
+        return eligibilityService.evaluate(voter.getAttributes(), election.getEligibilityPolicy());
     }
 }

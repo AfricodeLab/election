@@ -61,15 +61,23 @@ public class VerificationService {
             throw new IllegalStateException("OTP-429 resend too soon, please wait");
         }
 
+        String channel = req.resolvedChannel();
+        if (!channel.equals("EMAIL") && !channel.equals("SMS")) {
+            throw new IllegalArgumentException("Invalid channel '" + channel + "'. Supported: EMAIL, SMS");
+        }
+        if (channel.equals("SMS") && (voter.getPhone() == null || voter.getPhone().isBlank())) {
+            throw new IllegalStateException("Voter has no phone number on file. Use EMAIL channel instead.");
+        }
+
         String otp = generateOtp6();
-        log.info("otp generated for voter with email: {}", voter.getEmail());
+        log.info("otp generated for voter with email: {} via channel: {}", voter.getEmail(), channel);
         String hash = sha256(otp);
 
         var t = VerificationToken.builder()
                 .voterId(voter.getVoterId())
                 .tokenHash(hash)
                 .type("OTP")
-                .channel("EMAIL")
+                .channel(channel)
                 .attempts(0)
                 .createdAt(now)
                 .expiresAt(now.plus(OTP_TTL))
@@ -77,8 +85,11 @@ public class VerificationService {
                 .build();
         tokens.save(t);
 
-        // Send email directly
-        notif.sendOtpEmail(voter.getEmail(), voter.getName(), otp);
+        if (channel.equals("SMS")) {
+            notif.sendOtpSms(voter.getPhone(), voter.getName(), otp);
+        } else {
+            notif.sendOtpEmail(voter.getEmail(), voter.getName(), otp);
+        }
 
         // todo emit audit log here
 

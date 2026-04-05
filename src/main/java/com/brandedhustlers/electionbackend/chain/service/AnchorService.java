@@ -3,10 +3,13 @@ package com.brandedhustlers.electionbackend.chain.service;
 import com.brandedhustlers.electionbackend.chain.domain.Batch;
 import com.brandedhustlers.electionbackend.chain.repository.ChainBatchRepository;
 import com.brandedhustlers.electionbackend.chain.util.Merkle;
+import com.brandedhustlers.electionbackend.common.flags.Feature;
+import com.brandedhustlers.electionbackend.common.flags.FeatureFlagService;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.domain.OutBox;
 import com.brandedhustlers.electionbackend.voting.repository.OutBoxRepository;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,19 +27,22 @@ import java.util.stream.Collectors;
 public class AnchorService {
 
     private final ElectionRepository electionRepo;
-    private final OutBoxRepository outbox; // Changed from VoteRepository
+    private final OutBoxRepository outbox;
     private final ChainBatchRepository batchRepo;
     private final BlockchainProvider chain;
+    private final FeatureFlagService featureFlags;
 
     public AnchorService(
             ElectionRepository electionRepo,
             OutBoxRepository outbox,
             ChainBatchRepository batchRepo,
-            BlockchainProvider chain) {
+            BlockchainProvider chain,
+            FeatureFlagService featureFlags) {
         this.electionRepo = electionRepo;
         this.outbox = outbox;
         this.batchRepo = batchRepo;
         this.chain = chain;
+        this.featureFlags = featureFlags;
     }
 
     /**
@@ -44,6 +50,7 @@ public class AnchorService {
      * Anchors all validated votes that are pending anchor.
      */
     @Scheduled(fixedDelay = 30000)
+    @SchedulerLock(name = "anchorPendingVotes", lockAtMostFor = "25s", lockAtLeastFor = "5s")
     @Transactional()
     public void anchorPendingVotes() {
         Timestamp now = Timestamp.from(Instant.now());
@@ -95,6 +102,12 @@ public class AnchorService {
      */
     private void anchorElectionBatch(UUID electionId, List<OutBox> entries, Timestamp now) {
         UUID orgId = electionRepo.findOrgId(electionId);
+
+        if (!featureFlags.isEnabled(orgId, Feature.BLOCKCHAIN_ANCHORING)) {
+            log.info("BLOCKCHAIN_ANCHORING not enabled for org {}, skipping batch for election {}",
+                    orgId, electionId);
+            return;
+        }
 
         /**
          * CRITICAL CHANGE:

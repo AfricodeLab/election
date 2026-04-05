@@ -1,0 +1,10 @@
+-- ShedLock: distributed scheduler locking table.
+-- Prevents duplicate @Scheduled runs (e.g. AnchorService) when multiple
+-- application instances are active.
+CREATE TABLE IF NOT EXISTS shedlock (
+    name       VARCHAR(64)  NOT NULL,
+    lock_until TIMESTAMP    NOT NULL,
+    locked_at  TIMESTAMP    NOT NULL,
+    locked_by  VARCHAR(255) NOT NULL,
+    PRIMARY KEY (name)
+);

@@ -3,6 +3,8 @@ package com.brandedhustlers.electionbackend.voting.service;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
+import com.brandedhustlers.electionbackend.common.flags.Feature;
+import com.brandedhustlers.electionbackend.common.flags.FeatureFlagService;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
@@ -19,14 +21,17 @@ import java.util.UUID;
 public class AlertService {
     private final MessagingService messagingService;
     private final AppUserRepository appUserRepository;
+    private final FeatureFlagService featureFlags;
 
     private static final Set<UserRole> ALERT_ROLES =
             Set.of(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.ORG_ADMIN);
 
     public AlertService(MessagingService messagingService,
-                        AppUserRepository appUserRepository) {
+                        AppUserRepository appUserRepository,
+                        FeatureFlagService featureFlags) {
         this.messagingService = messagingService;
         this.appUserRepository = appUserRepository;
+        this.featureFlags = featureFlags;
     }
 
     /**
@@ -79,6 +84,12 @@ public class AlertService {
     // ── helpers ────────────────────────────────────────────────────────────────
 
     private void notifyOrgAdmins(UUID orgId, String severity, String summary) {
+        if (!featureFlags.isEnabled(orgId, Feature.TAMPER_ALERTS)) {
+            log.warn("TAMPER_ALERTS not enabled for org {} — {} alert suppressed. Summary: {}",
+                    orgId, severity, summary);
+            return;
+        }
+
         List<AppUser> admins = appUserRepository.getUsersInOrg(orgId).stream()
                 .filter(u -> ALERT_ROLES.contains(u.getUserRole()))
                 .toList();

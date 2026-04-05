@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.results;
 
+import com.brandedhustlers.electionbackend.realtime.gateway.RealtimeGateway;
 import com.brandedhustlers.electionbackend.results.domain.Tally;
 import com.brandedhustlers.electionbackend.results.domain.TallyId;
 import com.brandedhustlers.electionbackend.results.repository.TallyRepository;
@@ -27,6 +28,8 @@ class TallyProjectorTest {
 
     @Mock
     TallyRepository repo;
+    @Mock
+    RealtimeGateway realtimeGateway;
     // Real ObjectMapper — no external deps
     private final ObjectMapper om = new ObjectMapper();
 

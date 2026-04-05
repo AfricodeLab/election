@@ -259,6 +259,22 @@ public class MessagingService {
         }
     }
 
+    /**
+     * Send OTP via SMS.
+     * Stubbed with a log until an SMS gateway (e.g. Twilio, Africa's Talking) is wired in.
+     * Replace the body with the provider's SDK call and add credentials to application.properties.
+     */
+    @Async
+    public void sendOtpSms(String phoneNumber, String recipientName, String otp) {
+        // TODO: integrate SMS provider (Twilio, Africa's Talking, etc.)
+        // Example Twilio call:
+        //   Message.creator(new PhoneNumber(phoneNumber), new PhoneNumber(smsFromNumber),
+        //       "Hi " + recipientName + ", your verification code is: " + otp)
+        //       .create();
+        log.info("[SMS-STUB] OTP for {} ({}): {} — wire up an SMS gateway to deliver this",
+                recipientName, phoneNumber, otp);
+    }
+
     @Async
     public void sendOtpEmail(String recipientEmail, String recipientName, String otp) throws MessagingException {
         jakarta.mail.internet.MimeMessage mime = mailSender.createMimeMessage();
