@@ -5,6 +5,7 @@ import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.voter.dto.AssignVotersCmd;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.ImportStatusDTO;
+import com.brandedhustlers.electionbackend.voter.dto.UpdateVoterContactCmd;
 import com.brandedhustlers.electionbackend.voter.service.VoterImportService;
 import com.brandedhustlers.electionbackend.voter.service.VoterService;
 import jakarta.validation.Valid;
@@ -132,5 +133,27 @@ public class VoterController {
     @GetMapping("/org/voters")
     public ResponseEntity<?> getOrgVoters(Pageable pageable){
         return new ResponseEntity<>(voterService.getOrgVoters(pageable), HttpStatus.OK);
+    }
+
+    @PatchMapping("/{voterId}/contact")
+    public ResponseEntity<?> updateContact(
+            @PathVariable UUID voterId,
+            @Valid @RequestBody UpdateVoterContactCmd cmd) {
+        UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (actorOrgId == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("status", "forbidden", "message", "No active organization. Please join or switch to an organization first."));
+        }
+        return ResponseEntity.ok(voterService.updateContact(actorOrgId, voterId, cmd));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<?> search(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "20") int limit) {
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (orgId == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("status", "forbidden", "message", "No active organization. Please join or switch to an organization first."));
+        }
+        return ResponseEntity.ok(voterService.search(orgId, q, limit));
     }
 }

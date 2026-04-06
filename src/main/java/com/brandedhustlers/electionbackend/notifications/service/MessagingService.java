@@ -209,6 +209,81 @@ public class MessagingService {
     }
 
     @Async
+    public void sendPasswordResetEmail(String recipientEmail, String firstName, String resetUrl) {
+        try {
+            MimeMessage mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+
+            Context ctx = new Context();
+            ctx.setVariable("firstName", firstName);
+            ctx.setVariable("resetUrl", resetUrl);
+
+            String html = templateEngine.process("PasswordReset", ctx);
+
+            helper.setFrom(appEmail);
+            helper.setTo(recipientEmail);
+            helper.setSubject("Reset your password");
+            helper.setText(html, true);
+
+            mailSender.send(mime);
+            log.info("Password reset email sent to {}", recipientEmail);
+        } catch (Exception e) {
+            log.error("Failed to send password reset email to {}: {}", recipientEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendTamperingAlert(String recipientEmail, String recipientName,
+                                   String severity, String summary) {
+        try {
+            MimeMessage mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+            helper.setFrom(appEmail);
+            helper.setTo(recipientEmail);
+            helper.setSubject("[" + severity + "] Vote Tampering Detected");
+
+            // HTML-escape dynamic values to prevent HTML injection in outbound email.
+            // summary is plain text (newline-delimited); convert \n to <br/> after escaping.
+            String safeName    = org.springframework.web.util.HtmlUtils.htmlEscape(recipientName);
+            String safeSummary = org.springframework.web.util.HtmlUtils.htmlEscape(summary)
+                    .replace("\n", "<br/>");
+            String headerColor = "CRITICAL".equals(severity) ? "#c0392b" : "#e67e22";
+
+            String body = "<html><body style='font-family:sans-serif'>"
+                    + "<h2 style='color:" + headerColor + "'>"
+                    + severity + ": Vote Tampering Detected</h2>"
+                    + "<p>Hi " + safeName + ",</p>"
+                    + "<p>" + safeSummary + "</p>"
+                    + "<p>Log in to the admin panel immediately to review the audit trail.</p>"
+                    + "<hr/><small>This is an automated security alert from the Election Platform.</small>"
+                    + "</body></html>";
+
+            helper.setText(body, true);
+            mailSender.send(mime);
+            log.warn("Tampering alert sent to {} [{}]", recipientEmail, severity);
+        } catch (Exception e) {
+            log.error("Failed to send tampering alert to {}: {}", recipientEmail, e.getMessage());
+        }
+    }
+
+    /**
+     * Send OTP via SMS.
+     * Stubbed with a log until an SMS gateway (e.g. Twilio, Africa's Talking) is wired in.
+     * Replace the body with the provider's SDK call and add credentials to application.properties.
+     */
+    @Async
+    public void sendOtpSms(String phoneNumber, String recipientName, String otp) {
+        // TODO: integrate SMS provider (Twilio, Africa's Talking, etc.)
+        // Example Twilio call:
+        //   Message.creator(new PhoneNumber(phoneNumber), new PhoneNumber(smsFromNumber),
+        //       "Hi " + recipientName + ", your verification code is: " + otp)
+        //       .create();
+        // OTPs are authentication secrets — never log the value itself.
+        log.info("[SMS-STUB] OTP requested for {} ({}) — wire up an SMS gateway to deliver this",
+                recipientName, phoneNumber);
+    }
+
+    @Async
     public void sendOtpEmail(String recipientEmail, String recipientName, String otp) throws MessagingException {
         jakarta.mail.internet.MimeMessage mime = mailSender.createMimeMessage();
         org.springframework.mail.javamail.MimeMessageHelper helper =

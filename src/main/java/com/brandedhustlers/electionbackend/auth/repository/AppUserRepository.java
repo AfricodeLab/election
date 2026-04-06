@@ -23,6 +23,8 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
 
     Optional<AppUser> findByEmailVerificationToken(String token);
 
+    Optional<AppUser> findByPasswordResetToken(String token);
+
     @Query("select uo.appUser from UserOrganization uo where uo.organization.organizationId = :orgId")
     List<AppUser> getUsersInOrg(UUID orgId);
 }

@@ -1,4 +1,10 @@
 package com.brandedhustlers.electionbackend.auth.dto;
 
-public record ForgotPasswordCmd(String email) {
+import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.NotBlank;
+
+public record ForgotPasswordCmd(
+        @NotBlank(message = "Email must not be blank")
+        @Email(message = "Must be a valid email address")
+        String email) {
 }

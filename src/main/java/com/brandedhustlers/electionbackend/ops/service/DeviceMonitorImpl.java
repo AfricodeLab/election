@@ -50,7 +50,7 @@ public class DeviceMonitorImpl implements DeviceMonitor {
 
                 d.setStatus(DeviceStatus.OFFLINE);
                 devices.save(d);
-                rt.sendDeviceStatus(d.getStationId().toString(), Map.of(
+                rt.sendDeviceStatus(d.getOrgId(), d.getStationId().toString(), Map.of(
                         "deviceId", d.getId().toString(),
                         "status", d.getStatus().name(),
                         "lastSeen", d.getLastSeen().toString(),

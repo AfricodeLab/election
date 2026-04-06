@@ -13,6 +13,8 @@ import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.dto.AssignVotersCmd;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
+import com.brandedhustlers.electionbackend.voter.dto.TurnoutDTO;
+import com.brandedhustlers.electionbackend.voter.dto.UpdateVoterContactCmd;
 import com.brandedhustlers.electionbackend.voter.dto.VoterDTO;
 import com.brandedhustlers.electionbackend.voter.enums.VoterStatus;
 import com.brandedhustlers.electionbackend.voter.mapper.VoterMapper;
@@ -164,6 +166,57 @@ public class VoterService implements IVoterService {
                 .limit(limit > 0 ? limit : 20)
                 .map(voterMapper::entityToDto)
                 .toList();
+    }
+
+    @Transactional
+    public VoterDTO updateContact(UUID orgId, UUID voterId, UpdateVoterContactCmd cmd) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+        if (!(util.authorizeUser(actor, UserRole.ADMIN)
+                || util.authorizeUser(actor, UserRole.SUPER_ADMIN)
+                || util.authorizeUser(actor, UserRole.ORG_ADMIN))) {
+            throw new AccessDeniedException("You do not have authority to update voter contact info");
+        }
+
+        Voter voter = voterRepository.findById(voterId)
+                .orElseThrow(() -> new EntityNotFoundException("Voter not found: " + voterId));
+
+        if (!voter.getOrganization().getOrganizationId().equals(orgId)) {
+            throw new AccessDeniedException("Voter does not belong to your organization");
+        }
+
+        if (cmd.email() != null && !cmd.email().isBlank()) {
+            voterRepository.findByEmailIgnoreCase(cmd.email()).ifPresent(conflict -> {
+                if (!conflict.getVoterId().equals(voterId)) {
+                    throw new IllegalArgumentException("Email address is already in use by another voter");
+                }
+            });
+            voter.setEmail(cmd.email().trim().toLowerCase());
+        }
+
+        if (cmd.phone() != null && !cmd.phone().isBlank()) {
+            voterRepository.findByPhone(cmd.phone().trim()).ifPresent(conflict -> {
+                if (!conflict.getVoterId().equals(voterId)) {
+                    throw new IllegalArgumentException("Phone number is already in use by another voter");
+                }
+            });
+            voter.setPhone(cmd.phone().trim());
+        }
+
+        voterRepository.save(voter);
+        log.info("Contact info updated for voter {} by admin {}", voterId, actor.getAppUserId());
+        return voterMapper.entityToDto(voter);
+    }
+
+    public TurnoutDTO getTurnout(UUID orgId, UUID electionId) {
+        electionRepository.findByElectionId(electionId)
+                .filter(e -> e.getOrganization().getOrganizationId().equals(orgId))
+                .orElseThrow(() -> new EntityNotFoundException("Election not found in this organization"));
+
+        long registered = electionVoterRepository.countByElectionId(electionId);
+        long voted = electionVoterRepository.countVotedByElectionId(electionId);
+        double pct = registered == 0 ? 0.0 : Math.round((voted * 100.0 / registered) * 10.0) / 10.0;
+
+        return new TurnoutDTO(electionId, registered, voted, pct);
     }
 
     @Override

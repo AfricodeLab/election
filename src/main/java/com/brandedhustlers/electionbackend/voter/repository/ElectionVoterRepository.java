@@ -43,6 +43,12 @@ public interface ElectionVoterRepository extends JpaRepository<ElectionVoter, UU
     @Query("select ev from ElectionVoter ev where ev.voter.voterId = :voterId and ev.election.electionId = :electionId")
     Optional<ElectionVoter> findByVoterIdAndElectionId(UUID voterId, UUID electionId);
 
+    @Query("SELECT COUNT(ev) FROM ElectionVoter ev WHERE ev.id.electionId = :electionId")
+    long countByElectionId(@Param("electionId") UUID electionId);
+
+    @Query("SELECT COUNT(ev) FROM ElectionVoter ev WHERE ev.id.electionId = :electionId AND ev.hasVoted = true")
+    long countVotedByElectionId(@Param("electionId") UUID electionId);
+
 
     // Optional: quick assignment check without loading the entity
 /*    default boolean isAssigned(UUID electionId, UUID voterId) {

@@ -28,17 +28,26 @@ public class EligibilityService {
         }
 
         if (voterAttributes == null || voterAttributes.isEmpty()) {
+            if (policy.isStrictMode()) {
+                log.warn("Voter has no attributes and policy is strict — denying");
+                return EligibilityResult.deny("Voter has no attributes on file. Contact your administrator.");
+            }
             log.debug("Voter has no attributes — cannot evaluate policy, allowing by default");
             return EligibilityResult.allow();
         }
 
         try {
             // Evaluate "all" conditions (AND logic)
-            // A rule is skipped (null) if the voter is missing the attribute — only an explicit false denies.
+            // In strict mode, a missing attribute is a denial.
+            // In lenient mode (default), a missing attribute skips the rule.
             if (policy.getAll() != null && !policy.getAll().isEmpty()) {
                 for (PolicyRule rule : policy.getAll()) {
                     Boolean result = evaluateRule(voterAttributes, rule);
                     if (result == null) {
+                        if (policy.isStrictMode()) {
+                            return EligibilityResult.deny(
+                                    String.format("Missing required attribute: %s", rule.getField()));
+                        }
                         log.debug("Skipping 'all' rule for missing attribute: {}", rule.getField());
                         continue;
                     }
@@ -52,14 +61,19 @@ public class EligibilityService {
             }
 
             // Evaluate "any" conditions (OR logic)
-            // A rule is skipped if the attribute is missing. Deny only if every evaluable rule explicitly failed.
+            // In strict mode, missing attributes count as "not matching" (evaluated = true, matched = false).
+            // In lenient mode, missing attributes are skipped entirely.
             if (policy.getAny() != null && !policy.getAny().isEmpty()) {
                 boolean anyMatched = false;
                 boolean anyEvaluated = false;
                 for (PolicyRule rule : policy.getAny()) {
                     Boolean result = evaluateRule(voterAttributes, rule);
                     if (result == null) {
-                        log.debug("Skipping 'any' rule for missing attribute: {}", rule.getField());
+                        if (policy.isStrictMode()) {
+                            anyEvaluated = true; // missing = not matched in strict mode
+                        } else {
+                            log.debug("Skipping 'any' rule for missing attribute: {}", rule.getField());
+                        }
                         continue;
                     }
                     anyEvaluated = true;

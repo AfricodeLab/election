@@ -85,6 +85,12 @@ public class AppUser {
 
     private Instant emailVerificationExpiry;
 
+    // ── Password reset ───────────────────────────────────────────────────────
+    @Column(unique = true)
+    private String passwordResetToken;
+
+    private Instant passwordResetExpiry;
+
     // ── MFA ──────────────────────────────────────────────────────────────────
     /** When true, a second-factor OTP is required after password login. */
     @Column(nullable = false)

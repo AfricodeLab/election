@@ -19,5 +19,12 @@ public interface IElectionService {
 
     ElectionDTO addCandidate(UUID electionId, CandidateDTO newCandidate, MultipartFile candidateImage) throws IOException;
 
-
+    /**
+     * Closes a LIVE election as a system-initiated action (no human actor required).
+     * Used by the auto-close scheduler for time-based or vote-count-based expiry.
+     *
+     * @param electionId the election to close
+     * @param reason     a short label explaining why it was closed (e.g. "TIME_EXPIRED", "VOTE_COUNT_REACHED")
+     */
+    void endElectionSystemAuto(UUID electionId, String reason);
 }

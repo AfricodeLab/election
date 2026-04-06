@@ -18,4 +18,12 @@ public interface IAuthService {
     void verifyEmail(String token);
 
     void resendVerificationEmail(String email);
+
+    void forgotPassword(String email);
+
+    void resetPassword(String token, String newPassword);
+
+    void enableMfa();
+
+    void disableMfa();
 }

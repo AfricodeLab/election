@@ -14,9 +14,11 @@ import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
 import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepository;
+import com.brandedhustlers.electionbackend.auth.service.MfaService;
 import com.brandedhustlers.electionbackend.auth.service.RefreshTokenService;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
 import com.brandedhustlers.electionbackend.auth.service.OrganizationService;
+import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
@@ -80,6 +82,10 @@ class AuthServiceTest {
         private RefreshTokenService refreshTokenService;
         @Mock
         private UserOrganizationRepository userOrganizationRepository;
+        @Mock
+        private MessagingService messagingService;
+        @Mock
+        private MfaService mfaService;
         @Mock
         private HttpServletResponse response;
 

@@ -1,13 +1,14 @@
 package com.brandedhustlers.electionbackend.audit.services;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class RedactionServiceImpl implements RedactionService {
     private final String salt;
 
-    RedactionServiceImpl() {
-        this.salt = ""; // TODO: inject via @Value or config properties
+    RedactionServiceImpl(@Value("${audit.redaction.salt}") String salt) {
+        this.salt = salt;
     }
 
     @Override

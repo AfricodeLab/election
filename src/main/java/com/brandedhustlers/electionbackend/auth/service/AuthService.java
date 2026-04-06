@@ -200,6 +200,59 @@ public class AuthService implements IAuthService {
     }
 
     @Override
+    public void forgotPassword(String email) {
+        // Deliberately vague: no exception thrown if email not found (prevents user enumeration)
+        appUserRepository.findByAppUserEmail(email).ifPresent(user -> {
+            String token = UUID.randomUUID().toString();
+            user.setPasswordResetToken(token);
+            user.setPasswordResetExpiry(Instant.now().plus(1, ChronoUnit.HOURS));
+            appUserRepository.save(user);
+
+            // Point at the frontend reset page, not the API endpoint.
+        // The frontend collects the new password and POSTs to /api/v1/auth/reset-password.
+        String resetUrl = appBaseUrl + "/reset-password?token=" + token;
+            messagingService.sendPasswordResetEmail(user.getAppUserEmail(), user.getFirstName(), resetUrl);
+            log.info("Password reset email queued for user {}", user.getAppUserId());
+        });
+    }
+
+    @Override
+    public void resetPassword(String token, String newPassword) {
+        AppUser user = appUserRepository.findByPasswordResetToken(token)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired reset token"));
+
+        if (user.getPasswordResetExpiry() == null || Instant.now().isAfter(user.getPasswordResetExpiry())) {
+            throw new IllegalArgumentException("Reset token has expired. Please request a new one.");
+        }
+
+        if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            throw new IllegalArgumentException("New password must differ from the current password.");
+        }
+
+        user.setPassword(passwordEncoder.encode(newPassword));
+        user.setPasswordResetToken(null);
+        user.setPasswordResetExpiry(null);
+        appUserRepository.save(user);
+        log.info("Password reset completed for user {}", user.getAppUserId());
+    }
+
+    @Override
+    public void enableMfa() {
+        AppUser user = getUser.getCurrentAuthenticatedUser();
+        user.setMfaEnabled(true);
+        appUserRepository.save(user);
+        log.info("MFA enabled for user {}", user.getAppUserId());
+    }
+
+    @Override
+    public void disableMfa() {
+        AppUser user = getUser.getCurrentAuthenticatedUser();
+        user.setMfaEnabled(false);
+        appUserRepository.save(user);
+        log.info("MFA disabled for user {}", user.getAppUserId());
+    }
+
+    @Override
     public LoginResponse login(LoginRequest loginRequest, HttpServletResponse response) {
 
         Authentication authentication = authenticationManager.authenticate(

@@ -4,11 +4,8 @@ import com.brandedhustlers.electionbackend.auth.domain.*;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
-import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
-import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
-import com.brandedhustlers.electionbackend.auth.repository.PermissionRepository;
-import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
-import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepository;
+import com.brandedhustlers.electionbackend.auth.repository.*;
+import com.brandedhustlers.electionbackend.common.flags.Tier;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -35,7 +32,7 @@ public class DataSeeder implements CommandLineRunner {
                       OrganizationRepository organizationRepository,
                       PasswordEncoder encoder,
                       AppUserRepository userRepository,
-                      UserOrganizationRepository userOrganizationRepository) {
+                      UserOrganizationRepository userOrganizationRepository)                           {
         this.encoder = encoder;
         this.permissionRepository = permissionRepository;
         this.roleRepository = roleRepository;
@@ -168,24 +165,30 @@ public class DataSeeder implements CommandLineRunner {
 
     private Map<String, Organization> seedOrganizations() {
         List<Organization> toEnsure = List.of(
+                // ENTERPRISE tier — flagship demo: all features unlocked
                 Organization.builder()
                         .organizationName("Electoral Commission")
                         .organizationDescription("National election management body")
                         .isEnabled(true)
+                        .tier(Tier.ENTERPRISE)
                         .deleteYn(DeleteYn.N)
                         .build(),
 
+                // COMPLIANCE tier — audit trail + tamper alerts, no real-time push
                 Organization.builder()
                         .organizationName("Open Civic Alliance")
                         .organizationDescription("Civil society monitors")
                         .isEnabled(true)
+                        .tier(Tier.COMPLIANCE)
                         .deleteYn(DeleteYn.N)
                         .build(),
 
+                // INTEGRITY tier — blockchain anchoring only, no compliance or enterprise features
                 Organization.builder()
                         .organizationName("Demo Party")
                         .organizationDescription("Sample political organization")
                         .isEnabled(true)
+                        .tier(Tier.INTEGRITY)
                         .deleteYn(DeleteYn.N)
                         .build());
 
@@ -206,7 +209,8 @@ public class DataSeeder implements CommandLineRunner {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private record UserSeed(AppUser user, Organization org) {}
+    private record UserSeed(AppUser user, Organization org) {
+    }
 
     private void seedUsers(Map<UserRole, Role> roles, Map<String, Organization> orgs) {
         List<UserSeed> seeds = List.of(
@@ -217,7 +221,9 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
+                        .emailVerified(true)
                         .build(), orgs.get("Electoral Commission")),
+
                 new UserSeed(AppUser.builder()
                         .firstName("Elikem").lastName("Fenuku")
                         .username("reynolds")
@@ -225,6 +231,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.SUPER_ADMIN)
                         .roles(new HashSet<>(roles.values()))
+                        .emailVerified(true)
                         .build(), orgs.get("Electoral Commission")),
                 new UserSeed(AppUser.builder()
                         .firstName("Ekow").lastName("Davis")
@@ -233,6 +240,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.ADMIN)
                         .roles(roleSet(roles, UserRole.ADMIN))
+                        .emailVerified(true)
                         .build(), orgs.get("Electoral Commission")),
                 new UserSeed(AppUser.builder()
                         .firstName("Nat").lastName("Auditor")
@@ -241,6 +249,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.AUDITOR)
                         .roles(roleSet(roles, UserRole.AUDITOR))
+                        .emailVerified(true)
                         .build(), orgs.get("Open Civic Alliance")),
                 new UserSeed(AppUser.builder()
                         .firstName("Joel").lastName("Contributor")
@@ -249,6 +258,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.CONTRIBUTOR)
                         .roles(roleSet(roles, UserRole.CONTRIBUTOR))
+                        .emailVerified(true)
                         .build(), orgs.get("Demo Party")),
                 new UserSeed(AppUser.builder()
                         .firstName("roman").lastName("Observer")
@@ -257,6 +267,7 @@ public class DataSeeder implements CommandLineRunner {
                         .password(encoder.encode("test"))
                         .userRole(UserRole.OBSERVER)
                         .roles(roleSet(roles, UserRole.OBSERVER))
+                        .emailVerified(true)
                         .build(), orgs.get("Open Civic Alliance")));
 
         for (UserSeed seed : seeds) {

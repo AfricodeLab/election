@@ -26,6 +26,7 @@ import io.github.resilience4j.bulkhead.annotation.Bulkhead;
 import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -109,8 +110,11 @@ public class VotingService implements IVotingService {
             Optional<ElectionVoter> existingEv = evRepository.findByVoterIdAndElectionId(voterId,
                     cmd.electionId());
 
-            if (existingEv.isPresent()) {
-                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED");
+            // If a record exists and hasVoted=true, the voter already cast their ballot.
+            // If hasVoted=false, the voter was pre-assigned but hasn't voted yet — allow them through.
+            if (existingEv.isPresent() && existingEv.get().isHasVoted()) {
+                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED",
+                        "You have already cast your vote in this election. Each voter may only vote once.");
             }
 
             /**
@@ -135,20 +139,23 @@ public class VotingService implements IVotingService {
                         cmd.electionId());
             }
 
-            // create the election voter here instead removing load from org admins, tied to
-            // the voter entity
-            ElectionVoterId embeddedId = new ElectionVoterId(
-                    cmd.electionId(),
-                    actor.getVoterId());
-            ElectionVoter newVoter = new ElectionVoter(
-                    embeddedId,
-                    actor,
-                    election,
-                    null,
-                    null,
-                    Timestamp.from(Instant.now()),
-                    false);
-            evRepository.save(newVoter);
+            // If the voter was not pre-assigned, create the ElectionVoter record on-the-fly.
+            // Pre-assigned voters already have this record (hasVoted=false), so we skip creation.
+            // Race condition: two concurrent requests for the same voter can both see existingEv
+            // as empty and race to insert. The second insert will hit the primary-key constraint.
+            // We catch that and continue — the pessimistic lock below will serialize them.
+            if (existingEv.isEmpty()) {
+                try {
+                    ElectionVoterId embeddedId = new ElectionVoterId(cmd.electionId(), actor.getVoterId());
+                    evRepository.save(new ElectionVoter(embeddedId, actor, election, null, null,
+                            Timestamp.from(Instant.now()), false));
+                } catch (DataIntegrityViolationException e) {
+                    // Concurrent insert won the race — the row now exists.
+                    // The lockByIds call below will acquire the pessimistic lock and proceed normally.
+                    log.debug("ElectionVoter already inserted concurrently for voter {} / election {} — proceeding to lock",
+                            voterId, cmd.electionId());
+                }
+            }
 
             var existing = votes.findByDedupeKey(dedupeKey);
             if (existing.isPresent()) {
@@ -172,7 +179,8 @@ public class VotingService implements IVotingService {
                             "Voter not assigned to this election"));
 
             if (ev.isHasVoted()) {
-                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED");
+                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED",
+                        "You have already cast your vote in this election. Each voter may only vote once.");
             }
 
             // save the vote and flip hasVoted=true
