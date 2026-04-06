@@ -574,11 +574,26 @@ public class ElectionService implements IElectionService {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(actor, PermissionType.EDIT_ELECTIONS);
 
+        Organization actorOrg = actor.getActiveOrganization();
+        if (actorOrg == null) {
+            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
+        }
+
         Election election = electionRepository.findById(electionId)
                 .orElseThrow(() -> new ElectionNotFound("Election not found: " + electionId));
 
+        // Scope check: election must belong to the caller's org
+        if (!election.getOrganization().getOrganizationId().equals(actorOrg.getOrganizationId())) {
+            throw new AccessDeniedException("You cannot check eligibility for elections outside your organization.");
+        }
+
         com.brandedhustlers.electionbackend.voter.domain.Voter voter = voterRepository.findById(voterId)
                 .orElseThrow(() -> new IllegalArgumentException("Voter not found: " + voterId));
+
+        // Scope check: voter must belong to the same org
+        if (!actorOrg.getOrganizationId().equals(voter.getOrganization().getOrganizationId())) {
+            throw new AccessDeniedException("You cannot check eligibility for voters outside your organization.");
+        }
 
         if (election.getEligibilityPolicy() == null) {
             return EligibilityService.EligibilityResult.allow();

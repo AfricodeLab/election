@@ -141,7 +141,7 @@ public class VoterController {
             @Valid @RequestBody UpdateVoterContactCmd cmd) {
         UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
         if (actorOrgId == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No active organization");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("status", "forbidden", "message", "No active organization. Please join or switch to an organization first."));
         }
         return ResponseEntity.ok(voterService.updateContact(actorOrgId, voterId, cmd));
     }
@@ -152,7 +152,7 @@ public class VoterController {
             @RequestParam(defaultValue = "20") int limit) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
         if (orgId == null) {
-            return ResponseEntity.status(HttpStatus.NOT_FOUND).body("No active organization");
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("status", "forbidden", "message", "No active organization. Please join or switch to an organization first."));
         }
         return ResponseEntity.ok(voterService.search(orgId, q, limit));
     }

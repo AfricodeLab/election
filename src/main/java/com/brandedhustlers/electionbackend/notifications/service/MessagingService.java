@@ -278,8 +278,9 @@ public class MessagingService {
         //   Message.creator(new PhoneNumber(phoneNumber), new PhoneNumber(smsFromNumber),
         //       "Hi " + recipientName + ", your verification code is: " + otp)
         //       .create();
-        log.info("[SMS-STUB] OTP for {} ({}): {} — wire up an SMS gateway to deliver this",
-                recipientName, phoneNumber, otp);
+        // OTPs are authentication secrets — never log the value itself.
+        log.info("[SMS-STUB] OTP requested for {} ({}) — wire up an SMS gateway to deliver this",
+                recipientName, phoneNumber);
     }
 
     @Async
