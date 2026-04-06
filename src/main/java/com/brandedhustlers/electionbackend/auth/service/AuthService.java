@@ -208,7 +208,9 @@ public class AuthService implements IAuthService {
             user.setPasswordResetExpiry(Instant.now().plus(1, ChronoUnit.HOURS));
             appUserRepository.save(user);
 
-            String resetUrl = appBaseUrl + "/api/v1/auth/reset-password?token=" + token;
+            // Point at the frontend reset page, not the API endpoint.
+        // The frontend collects the new password and POSTs to /api/v1/auth/reset-password.
+        String resetUrl = appBaseUrl + "/reset-password?token=" + token;
             messagingService.sendPasswordResetEmail(user.getAppUserEmail(), user.getFirstName(), resetUrl);
             log.info("Password reset email queued for user {}", user.getAppUserId());
         });

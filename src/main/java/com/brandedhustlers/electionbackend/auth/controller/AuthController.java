@@ -107,7 +107,7 @@ public class AuthController {
 
     @PostMapping("/forgot-password")
     @RateLimiter(name = "auth_paths")
-    public ResponseEntity<?> forgotPassword(@RequestBody ForgotPasswordCmd cmd) {
+    public ResponseEntity<?> forgotPassword(@Valid @RequestBody ForgotPasswordCmd cmd) {
         authService.forgotPassword(cmd.email());
         // Always return 200 to avoid revealing whether the email exists
         return ResponseEntity.ok("If an account with that email exists, a reset link has been sent.");

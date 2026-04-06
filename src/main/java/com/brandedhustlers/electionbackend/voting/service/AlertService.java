@@ -56,7 +56,9 @@ public class AlertService {
 
                     String severity = critical > 0 ? "CRITICAL" : "WARNING";
                     String summary = buildTamperingSummary(orgId, critical, restored);
-                    log.error("Tampering alert dispatched for org {}: {} critical, {} restored",
+                    // Log "attempting" not "dispatched" — notifyOrgAdmins checks the feature
+                    // flag and admin list before anything is actually sent.
+                    log.warn("Tampering alert attempting for org {}: {} critical, {} restored",
                             orgId, critical, restored);
                     notifyOrgAdmins(orgId, severity, summary);
                 });
@@ -109,17 +111,19 @@ public class AlertService {
     }
 
     private String buildTamperingSummary(UUID orgId, long critical, long restored) {
+        // Returns plain text — MessagingService.sendTamperingAlert() HTML-escapes this string
+        // before embedding it in the email body, so HTML tags here would be rendered literally.
         StringBuilder sb = new StringBuilder();
-        sb.append("Tampering was detected in your organisation's election data.<br/><br/>");
+        sb.append("Tampering was detected in your organisation's election data.\n\n");
         if (critical > 0) {
-            sb.append("<strong>").append(critical)
-              .append(" vote(s) could not be restored</strong> — both the vote record and its archive were corrupted.<br/>");
+            sb.append(critical)
+              .append(" vote(s) could not be restored — both the vote record and its archive were corrupted.\n");
         }
         if (restored > 0) {
             sb.append(restored)
-              .append(" vote(s) were tampered with but <strong>successfully restored</strong> from the archive.<br/>");
+              .append(" vote(s) were tampered with but successfully restored from the archive.\n");
         }
-        sb.append("<br/>Organisation ID: ").append(orgId);
+        sb.append("\nOrganisation ID: ").append(orgId);
         return sb.toString();
     }
 }

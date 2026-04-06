@@ -243,9 +243,10 @@ public class MessagingService {
             helper.setSubject("[" + severity + "] Vote Tampering Detected");
 
             // HTML-escape dynamic values to prevent HTML injection in outbound email.
-            // recipientName and summary can contain admin-supplied data (election/candidate names).
+            // summary is plain text (newline-delimited); convert \n to <br/> after escaping.
             String safeName    = org.springframework.web.util.HtmlUtils.htmlEscape(recipientName);
-            String safeSummary = org.springframework.web.util.HtmlUtils.htmlEscape(summary);
+            String safeSummary = org.springframework.web.util.HtmlUtils.htmlEscape(summary)
+                    .replace("\n", "<br/>");
             String headerColor = "CRITICAL".equals(severity) ? "#c0392b" : "#e67e22";
 
             String body = "<html><body style='font-family:sans-serif'>"

@@ -187,8 +187,13 @@ public class ElectionController {
 
     /** Voter turnout stats for an election. Requires ADMIN+ role. */
     @GetMapping("/{electionId}/turnout")
-    public ResponseEntity<TurnoutDTO> getTurnout(@PathVariable UUID electionId) {
+    public ResponseEntity<?> getTurnout(@PathVariable UUID electionId) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (orgId == null) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "status", "forbidden",
+                    "message", "No active organization. Please join or switch to an organization first."));
+        }
         return ResponseEntity.ok(voterService.getTurnout(orgId, electionId));
     }
 }
