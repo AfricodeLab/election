@@ -1,7 +1,10 @@
 package com.brandedhustlers.electionbackend.voter.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
+import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.domain.VoterImportJob;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
@@ -35,23 +38,29 @@ public class VoterImportService implements IVoterImportService {
     private final VoterRepository voterRepository;
     private final AttributeExtractor attributeExtractor;
     private final GetUser getUser;
+    private final Util util;
 
     public VoterImportService(VoterImportJobRepository jobRepository,
                               VoterRepository voterRepository,
                               AttributeExtractor attributeExtractor,
-                              GetUser getUser) {
+                              GetUser getUser,
+                              Util util) {
         this.jobRepository = jobRepository;
         this.voterRepository = voterRepository;
         this.attributeExtractor = attributeExtractor;
         this.getUser = getUser;
+        this.util = util;
     }
 
     @Override
     @Transactional
     public UUID startImport(String fileRef) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+        util.requireAdminOrPermission(actor, PermissionType.IMPORT_VOTERS);
+
         UUID jobId = UUID.randomUUID();
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        UUID userId = getUser.getCurrentAuthenticatedUser().getAppUserId();
+        UUID userId = actor.getAppUserId();
 
         log.info("Starting import job {} for org {} by user {}", jobId, orgId, userId);
 
@@ -80,10 +89,12 @@ public class VoterImportService implements IVoterImportService {
         VoterImportJob job = jobRepository.findById(jobId)
                 .orElseThrow(() -> new RuntimeException("Job not found"));
 
-        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-
-        if (!job.getOrgId().equals(orgId)) {
-            throw new RuntimeException("Unauthorized access to job");
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+        if (!util.isPlatformAdmin(actor)) {
+            UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+            if (!job.getOrgId().equals(orgId)) {
+                throw new AccessDeniedException("Unauthorized access to job");
+            }
         }
 
         return new ImportStatusDTO(

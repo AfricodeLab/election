@@ -2,7 +2,6 @@ package com.brandedhustlers.electionbackend.common.config.persistence;
 
 import com.brandedhustlers.electionbackend.auth.domain.*;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
-import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.repository.*;
 import com.brandedhustlers.electionbackend.common.flags.Tier;
@@ -16,25 +15,30 @@ import org.springframework.util.StringUtils;
 import java.util.*;
 import java.util.stream.Collectors;
 
+/**
+ * Seeds the initial organizations and users on first startup.
+ * Runs after {@link PermissionSyncer} ({@code @Order(0)}) so that
+ * system roles and permissions are guaranteed to exist when users are created.
+ *
+ * <p>Guarded by a count check — will not re-run if any users or organizations
+ * already exist in the database.</p>
+ */
 @Component
 @Order(1)
 public class DataSeeder implements CommandLineRunner {
 
-    private final PermissionRepository permissionRepository;
     private final RoleRepository roleRepository;
     private final OrganizationRepository organizationRepository;
     private final AppUserRepository userRepository;
     private final UserOrganizationRepository userOrganizationRepository;
     private final PasswordEncoder encoder;
 
-    public DataSeeder(PermissionRepository permissionRepository,
-                      RoleRepository roleRepository,
+    public DataSeeder(RoleRepository roleRepository,
                       OrganizationRepository organizationRepository,
                       PasswordEncoder encoder,
                       AppUserRepository userRepository,
-                      UserOrganizationRepository userOrganizationRepository)                           {
+                      UserOrganizationRepository userOrganizationRepository) {
         this.encoder = encoder;
-        this.permissionRepository = permissionRepository;
         this.roleRepository = roleRepository;
         this.organizationRepository = organizationRepository;
         this.userRepository = userRepository;
@@ -44,124 +48,28 @@ public class DataSeeder implements CommandLineRunner {
     @Override
     @Transactional
     public void run(String... args) {
-        // Make it safe to re-run
+        // PermissionSyncer (@Order 0) has already seeded permissions and system roles.
+        // This seeder only creates organizations and users on first run.
         if (userRepository.count() > 0 && organizationRepository.count() > 0) {
             return;
         }
 
-        // 1) Seed all Permission rows from the enum
-        Map<PermissionType, Permission> perms = seedPermissions();
-
-        // 2) Ensure Role rows exist from UserRole enum
-        Map<UserRole, Role> roles = seedRoles();
-
-        // 3) Attach permission sets to roles
-        assignPermissionsToRoles(roles, perms);
-
-        // 4) Seed Organizations
+        Map<UserRole, Role> roles = loadSystemRoles();
         Map<String, Organization> orgs = seedOrganizations();
-
-        // 5) Seed Users (and attach roles + enum)
         seedUsers(roles, orgs);
     }
 
-    private Map<PermissionType, Permission> seedPermissions() {
-        Map<PermissionType, Permission> out = new EnumMap<>(PermissionType.class);
-        for (PermissionType type : PermissionType.values()) {
-            Permission existing = permissionRepository.findByPermissionType(type).orElse(null);
-            if (existing == null) {
-                Permission p = new Permission();
-                p.setPermissionType(type);
-                existing = permissionRepository.save(p);
-            }
-            out.put(type, existing);
-        }
-        return out;
-    }
+    // ── Load system roles created by PermissionSyncer ────────────────────────
 
-    private Map<UserRole, Role> seedRoles() {
+    private Map<UserRole, Role> loadSystemRoles() {
         Map<UserRole, Role> out = new EnumMap<>(UserRole.class);
         for (UserRole ur : UserRole.values()) {
-            Role existing = roleRepository.findByRoleName(ur.name()).orElse(null);
-            if (existing == null) {
-                Role r = new Role();
-                r.setRoleName(ur.name());
-                r = roleRepository.save(r);
-                existing = r;
-            }
-            out.put(ur, existing);
+            roleRepository.findByRoleName(ur.name()).ifPresent(r -> out.put(ur, r));
         }
         return out;
     }
 
-    // put this at class level (inside DataSeeder, but OUTSIDE any other method)
-    private Set<Permission> permSet(Map<PermissionType, Permission> perms,
-                                    PermissionType... types) {
-        return Arrays.stream(types)
-                .map(perms::get)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-    }
-
-    private void assignPermissionsToRoles(Map<UserRole, Role> roles,
-                                          Map<PermissionType, Permission> perms) {
-
-        // Buckets (tweak as you like)
-        Set<Permission> adminSet = permSet(perms,
-                PermissionType.ADD_USERS, PermissionType.EDIT_USERS, PermissionType.DELETE_USERS,
-                PermissionType.VIEW_USERS,
-                PermissionType.ADD_ROLES, PermissionType.EDIT_ROLES, PermissionType.DELETE_ROLES,
-                PermissionType.VIEW_ROLES,
-                PermissionType.ADD_TAX, PermissionType.EDIT_TAX, PermissionType.DELETE_TAX, PermissionType.VIEW_TAX,
-                PermissionType.ADD_REPORTS, PermissionType.EDIT_REPORTS, PermissionType.DELETE_REPORTS,
-                PermissionType.VIEW_REPORTS,
-                PermissionType.ADD_SETTINGS, PermissionType.EDIT_SETTINGS, PermissionType.DELETE_SETTINGS,
-                PermissionType.VIEW_SETTINGS,
-                PermissionType.EDIT_ELECTIONS, PermissionType.VIEW_RESULTS);
-
-        Set<Permission> auditorSet = permSet(perms,
-                PermissionType.VIEW_USERS, PermissionType.VIEW_ROLES,
-                PermissionType.VIEW_TAX, PermissionType.VIEW_REPORTS, PermissionType.VIEW_SETTINGS);
-
-        Set<Permission> contributorSet = permSet(perms,
-                PermissionType.VIEW_USERS, PermissionType.VIEW_ROLES, PermissionType.VIEW_TAX,
-                PermissionType.ADD_REPORTS, PermissionType.EDIT_REPORTS, PermissionType.VIEW_REPORTS,
-                PermissionType.EDIT_ELECTIONS);
-
-        Set<Permission> observerSet = permSet(perms,
-                PermissionType.VIEW_USERS, PermissionType.VIEW_ROLES,
-                PermissionType.VIEW_TAX, PermissionType.VIEW_REPORTS, PermissionType.VIEW_SETTINGS);
-
-        // SUPER_ADMIN gets everything
-        Set<Permission> superAll = new HashSet<>(perms.values());
-
-        upsertRolePermissions(roles.get(UserRole.SUPER_ADMIN), superAll);
-        if (roles.containsKey(UserRole.ADMIN)) {
-            upsertRolePermissions(roles.get(UserRole.ADMIN), adminSet);
-        }
-        if (roles.containsKey(UserRole.AUDITOR)) {
-            upsertRolePermissions(roles.get(UserRole.AUDITOR), auditorSet);
-        }
-        if (roles.containsKey(UserRole.CONTRIBUTOR)) {
-            upsertRolePermissions(roles.get(UserRole.CONTRIBUTOR), contributorSet);
-        }
-        if (roles.containsKey(UserRole.OBSERVER)) {
-            upsertRolePermissions(roles.get(UserRole.OBSERVER), observerSet);
-        }
-    }
-
-    private void upsertRolePermissions(Role role, Set<Permission> desired) {
-        if (role == null) {
-            return;
-        }
-        Set<Permission> current = role.getRolePermissions();
-        if (current == null) {
-            current = new HashSet<>();
-        }
-        if (!current.equals(desired)) {
-            role.setRolePermissions(new HashSet<>(desired));
-            roleRepository.save(role);
-        }
-    }
+    // ── Organizations ─────────────────────────────────────────────────────────
 
     private Map<String, Organization> seedOrganizations() {
         List<Organization> toEnsure = List.of(
@@ -183,7 +91,7 @@ public class DataSeeder implements CommandLineRunner {
                         .deleteYn(DeleteYn.N)
                         .build(),
 
-                // INTEGRITY tier — blockchain anchoring only, no compliance or enterprise features
+                // INTEGRITY tier — blockchain anchoring only
                 Organization.builder()
                         .organizationName("Demo Party")
                         .organizationDescription("Sample political organization")
@@ -202,6 +110,8 @@ public class DataSeeder implements CommandLineRunner {
         return map;
     }
 
+    // ── Users ─────────────────────────────────────────────────────────────────
+
     private Set<Role> roleSet(Map<UserRole, Role> roles, UserRole... types) {
         return Arrays.stream(types)
                 .map(roles::get)
@@ -209,8 +119,7 @@ public class DataSeeder implements CommandLineRunner {
                 .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 
-    private record UserSeed(AppUser user, Organization org) {
-    }
+    private record UserSeed(AppUser user, Organization org) {}
 
     private void seedUsers(Map<UserRole, Role> roles, Map<String, Organization> orgs) {
         List<UserSeed> seeds = List.of(
@@ -233,15 +142,17 @@ public class DataSeeder implements CommandLineRunner {
                         .roles(new HashSet<>(roles.values()))
                         .emailVerified(true)
                         .build(), orgs.get("Electoral Commission")),
+
                 new UserSeed(AppUser.builder()
                         .firstName("Ekow").lastName("Davis")
                         .username("davis")
-                        .appUserEmail("reynoldsfenuku@gmail.com")
+                        .appUserEmail("davis@brandedhustlers.com")
                         .password(encoder.encode("test"))
                         .userRole(UserRole.ADMIN)
                         .roles(roleSet(roles, UserRole.ADMIN))
                         .emailVerified(true)
                         .build(), orgs.get("Electoral Commission")),
+
                 new UserSeed(AppUser.builder()
                         .firstName("Nat").lastName("Auditor")
                         .username("auditor")
@@ -251,6 +162,7 @@ public class DataSeeder implements CommandLineRunner {
                         .roles(roleSet(roles, UserRole.AUDITOR))
                         .emailVerified(true)
                         .build(), orgs.get("Open Civic Alliance")),
+
                 new UserSeed(AppUser.builder()
                         .firstName("Joel").lastName("Contributor")
                         .username("contrib")
@@ -260,8 +172,9 @@ public class DataSeeder implements CommandLineRunner {
                         .roles(roleSet(roles, UserRole.CONTRIBUTOR))
                         .emailVerified(true)
                         .build(), orgs.get("Demo Party")),
+
                 new UserSeed(AppUser.builder()
-                        .firstName("roman").lastName("Observer")
+                        .firstName("Roman").lastName("Observer")
                         .username("reigns")
                         .appUserEmail("observer@civic.local")
                         .password(encoder.encode("test"))
@@ -273,7 +186,9 @@ public class DataSeeder implements CommandLineRunner {
         for (UserSeed seed : seeds) {
             AppUser u = seed.user();
             boolean exists = userRepository.findByUsernameOrEmail(
-                    StringUtils.hasText(u.getAppUserEmail()) ? u.getAppUserEmail() : u.getUsername()).isPresent();
+                    StringUtils.hasText(u.getAppUserEmail())
+                            ? u.getAppUserEmail()
+                            : u.getUsername()).isPresent();
             if (!exists) {
                 AppUser saved = userRepository.save(u);
                 userOrganizationRepository.save(UserOrganization.builder()

@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.voter;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
@@ -98,7 +99,6 @@ class VoterServiceTest {
         @Test
         void createsVoterForAdmin() {
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
-            when(util.authorizeUser(adminUser, UserRole.ADMIN)).thenReturn(true);
             when(attributeExtractor.extractAttributes(any(), any(), any(), any()))
                     .thenReturn(Map.of("age", 34, "citizen", true));
 
@@ -124,6 +124,8 @@ class VoterServiceTest {
         @Test
         void throwsForNonAdmin() {
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(regularUser);
+            doThrow(new AccessDeniedException("You do not have authority to create a voter"))
+                    .when(util).requireAdminOrPermission(eq(regularUser), any(PermissionType.class));
 
             assertThatThrownBy(() -> voterService.create(org.getOrganizationId(), cmd))
                     .isInstanceOf(AccessDeniedException.class)
@@ -134,7 +136,6 @@ class VoterServiceTest {
         void throwsWhenCallerHasNoOrg() {
             adminUser.setUserOrganizations(new HashSet<>());
             when(getUser.getCurrentAuthenticatedUser()).thenReturn(adminUser);
-            when(util.authorizeUser(adminUser, UserRole.ADMIN)).thenReturn(true);
 
             assertThatThrownBy(() -> voterService.create(org.getOrganizationId(), cmd))
                     .isInstanceOf(AccessDeniedException.class)

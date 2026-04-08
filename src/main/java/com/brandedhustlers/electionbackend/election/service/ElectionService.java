@@ -99,11 +99,7 @@ public class ElectionService implements IElectionService {
     public ElectionDTO createElection(CreateElectionRequest request) {
         AppUser creator = getUser.getCurrentAuthenticatedUser();
 
-        if (!(util.authorizeUser(creator, UserRole.ADMIN)
-                || util.authorizeUser(creator, UserRole.SUPER_ADMIN)
-                || util.authorizeUser(creator, UserRole.ORG_ADMIN))) {
-            throw new AccessDeniedException("You do not have authority to create an election");
-        }
+        util.requireAdminOrPermission(creator, PermissionType.CREATE_ELECTION);
 
         if (creator.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create an election");
@@ -222,18 +218,8 @@ public class ElectionService implements IElectionService {
         Election electionToUpdate = electionRepository.findById(electionID)
                 .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionID + " does not exist"));
 
-        Organization updaterOrg = updater.getActiveOrganization();
-
-        if (updaterOrg == null) {
-            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
-        }
-
-        if (!electionToUpdate.getOrganization().getOrganizationId()
-                .equals(updaterOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You cannot manage elections outside your organization");
-        }
-
-        util.requireAdminOrPermission(updater, PermissionType.EDIT_ELECTIONS);
+        util.requireOrgMatch(updater, electionToUpdate.getOrganization().getOrganizationId());
+        util.requireAdminOrPermission(updater, PermissionType.UPDATE_ELECTION);
 
         if (!electionToUpdate.getElectionStatus().equals(ElectionStatus.DRAFT)) {
             throw new InvalidUpdate("The selected election is not in draft and can no longer be updated");
@@ -260,7 +246,7 @@ public class ElectionService implements IElectionService {
                 null,
                 "election.election_updated",
                 null,
-                updaterOrg.getOrganizationId(),
+                updated.getOrganization().getOrganizationId(),
                 "Election details updated",
                 actorId,
                 actorName,
@@ -290,17 +276,15 @@ public class ElectionService implements IElectionService {
 
         ElectionStatus currStatus = statusChange.getElectionStatus();
 
-        Organization updaterOrg = updater.getActiveOrganization();
-        if (updaterOrg == null) {
-            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
-        }
+        util.requireOrgMatch(updater, statusChange.getOrganization().getOrganizationId());
 
-        if (!statusChange.getOrganization().getOrganizationId()
-                .equals(updaterOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You cannot manage elections outside your organization");
-        }
-
-        util.requireAdminOrPermission(updater, PermissionType.EDIT_ELECTIONS);
+        PermissionType required = switch (newStatus) {
+            case UPCOMING, LIVE     -> PermissionType.PUBLISH_ELECTION;
+            case ENDED              -> PermissionType.END_ELECTION;
+            case RESULTS_RELEASED   -> PermissionType.RELEASE_RESULTS;
+            default                 -> PermissionType.UPDATE_ELECTION;
+        };
+        util.requireAdminOrPermission(updater, required);
 
         if (statusChange.getElectionStatus() == ElectionStatus.ENDED) {
             throw new InvalidUpdate("This election has already ended and cannot be modified.");
@@ -347,7 +331,7 @@ public class ElectionService implements IElectionService {
                 null,
                 "election.status_change",
                 null,
-                updaterOrg.getOrganizationId(),
+                statChange.getOrganization().getOrganizationId(),
                 "Election status updated from " + currStatus + " to: " + statChange.getElectionStatus(),
                 actorId,
                 actorName,
@@ -572,28 +556,17 @@ public class ElectionService implements IElectionService {
      */
     public EligibilityService.EligibilityResult checkEligibility(UUID electionId, UUID voterId) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
-        util.requireAdminOrPermission(actor, PermissionType.EDIT_ELECTIONS);
-
-        Organization actorOrg = actor.getActiveOrganization();
-        if (actorOrg == null) {
-            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
-        }
+        util.requireAdminOrPermission(actor, PermissionType.CHECK_ELIGIBILITY);
 
         Election election = electionRepository.findById(electionId)
                 .orElseThrow(() -> new ElectionNotFound("Election not found: " + electionId));
 
-        // Scope check: election must belong to the caller's org
-        if (!election.getOrganization().getOrganizationId().equals(actorOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You cannot check eligibility for elections outside your organization.");
-        }
+        util.requireOrgMatch(actor, election.getOrganization().getOrganizationId());
 
         com.brandedhustlers.electionbackend.voter.domain.Voter voter = voterRepository.findById(voterId)
                 .orElseThrow(() -> new IllegalArgumentException("Voter not found: " + voterId));
 
-        // Scope check: voter must belong to the same org
-        if (!actorOrg.getOrganizationId().equals(voter.getOrganization().getOrganizationId())) {
-            throw new AccessDeniedException("You cannot check eligibility for voters outside your organization.");
-        }
+        util.requireOrgMatch(actor, voter.getOrganization().getOrganizationId());
 
         if (election.getEligibilityPolicy() == null) {
             return EligibilityService.EligibilityResult.allow();

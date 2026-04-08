@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.election.service;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.ConflictAction;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
@@ -35,7 +36,7 @@ public class ElectionTypeService {
      */
     public ElectionTypeDTO createCustomType(CreateElectionTypeRequest request) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        util.requireAdmin(caller);
+        util.requireAdminOrPermission(caller, PermissionType.CREATE_ELECTION);
 
         if (caller.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create election types");
@@ -90,7 +91,7 @@ public class ElectionTypeService {
      */
     public void deleteType(UUID typeId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        util.requireAdmin(caller);
+        util.requireAdminOrPermission(caller, PermissionType.CREATE_ELECTION);
 
         ElectionTypeEntity type = electionTypeRepository.findByElectionTypeId(typeId)
                 .orElseThrow(() -> new InvalidUpdate("Election type not found: " + typeId));
@@ -99,12 +100,8 @@ public class ElectionTypeService {
             throw new InvalidUpdate("System election types cannot be deleted");
         }
 
-        // Org scoping check
-        Organization callerOrg = caller.getActiveOrganization();
-        if (callerOrg == null || type.getOrganization() == null ||
-                !type.getOrganization().getOrganizationId()
-                        .equals(callerOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You can only delete election types from your own organization");
+        if (type.getOrganization() != null) {
+            util.requireOrgMatch(caller, type.getOrganization().getOrganizationId());
         }
 
         type.setDeleteYn(DeleteYn.Y);
@@ -115,13 +112,13 @@ public class ElectionTypeService {
 
     public List<ElectionTypeOptionDto> getElectionTypeOptions(){
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        util.requireAdmin(caller);
+        util.requireAdminOrPermission(caller, PermissionType.VIEW_ELECTIONS);
         return electionTypeRepository.getElectionTypeOption();
     }
 
     public List<ElectionTypeOptionDto> getElectionTypeOptionsByOrg(){
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        util.requireAdmin(caller);
+        util.requireAdminOrPermission(caller, PermissionType.VIEW_ELECTIONS);
         return electionTypeRepository.getElectionTypeOptionByOrg(getUser.getCurrentAuthenticatedUserOrgId());
     }
 

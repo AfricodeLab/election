@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.election.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
@@ -57,14 +58,8 @@ public class CandidateService {
 
         Election election = candidate.getElection();
 
-        Organization organization = election.getOrganization();
-        Organization adminOrg = admin.getActiveOrganization();
-        if (adminOrg == null) {
-            throw new AccessDeniedException("Admin has no active organization");
-        }
-        if (adminOrg.equals(organization)){
-            throw new AccessDeniedException("Admin with ID: " + admin.getAppUserId() + " is not a member of this org.");
-        }
+        util.requireAdminOrPermission(admin, PermissionType.MANAGE_CANDIDATES);
+        util.requireOrgMatch(admin, election.getOrganization().getOrganizationId());
 
         /**
          * Check if election is currently LIVE (voting in progress).

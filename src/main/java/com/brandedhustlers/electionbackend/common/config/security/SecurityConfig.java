@@ -53,10 +53,15 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
         // Shorthand arrays for role groups
-        String[] ADMINS = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN"};
+        String[] ADMINS       = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN"};
         String[] ADMINS_AUDIT = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR"};
-        String[] READERS = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR"};
+        String[] READERS      = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR"};
         String[] ALL_INTERNAL = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR", "OBSERVER"};
+        // DOERS: roles that can perform write operations via delegated permissions.
+        // Gate 1 (HTTP layer) lets these roles through; Gate 2 (service layer)
+        // enforces the specific PermissionType. OBSERVER/AUDITOR are read-only so
+        // they are excluded from write endpoints.
+        String[] DOERS = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "CONTRIBUTOR"};
 
         return http
                 .cors(Customizer.withDefaults())
@@ -112,6 +117,9 @@ public class SecurityConfig {
 
                         // ── Auth: user management (write) ───────────────────────
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/create-user").hasAnyRole(ADMINS)
+                        // Role update: ADMIN/SUPER_ADMIN can update any user; ORG_ADMIN can update
+                        // users within their own org (service layer enforces the org boundary)
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/auth/users/*/role").hasAnyRole(ADMINS)
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/deactivate/**")
                         .hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/activate/**")
@@ -120,15 +128,18 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/get-users").hasAnyRole(ADMINS_AUDIT)
 
                         // ── Organization (write) ────────────────────────────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/organization/create").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/organization/update/**").hasAnyRole(ADMINS)
+                        // Only BH platform team creates / configures organizations
+                        .requestMatchers(HttpMethod.POST, "/api/v1/organization/create").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/organization/update/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        // ORG_ADMIN may add users to their own org
                         .requestMatchers(HttpMethod.PUT, "/api/v1/organization/add-user").hasAnyRole(ADMINS)
 
                         // ── Election (write) ────────────────────────────────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/election/create").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/election/update/**").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/election/update-status/**").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.POST, "/api/v1/election/candidate-add/**").hasAnyRole(ADMINS)
+                        // DOERS: service layer enforces specific PermissionType
+                        .requestMatchers(HttpMethod.POST, "/api/v1/election/create").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/election/update/**").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/election/update-status/**").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/election/candidate-add/**").hasAnyRole(DOERS)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/election/update-candidate/**")
                         .hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/v1/election/live/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
@@ -137,17 +148,17 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/election/live").hasAnyRole(ALL_INTERNAL)
 
                         // ── Election types (write) ──────────────────────────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/election-types").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.POST, "/api/v1/election-types/presets").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/election-types/**").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/election-types").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/election-types/presets").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/election-types/**").hasAnyRole(DOERS)
                         // Election types (read)
                         .requestMatchers(HttpMethod.GET, "/api/v1/election-types").hasAnyRole(READERS)
                         .requestMatchers(HttpMethod.GET, "/api/v1/election-types/**").hasAnyRole(READERS)
 
                         // ── Voters (write) ──────────────────────────────────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/voters").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.POST, "/api/v1/voters/assign").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.POST, "/api/v1/voters/import").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/voters").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/voters/assign").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/voters/import").hasAnyRole(DOERS)
                         // Voters (read)
                         .requestMatchers(HttpMethod.GET, "/api/v1/voters").hasAnyRole(READERS)
                         .requestMatchers(HttpMethod.GET, "/api/v1/voters/**").hasAnyRole(READERS)
@@ -155,22 +166,31 @@ public class SecurityConfig {
                         // ── Verification: attribute coverage (read) ─────────────
                         .requestMatchers(HttpMethod.GET, "/api/v1/verification/voters/**").hasAnyRole(ADMINS_AUDIT)
 
+                        // ── Roles (write) — only admins can manage roles ────────
+                        .requestMatchers(HttpMethod.POST, "/api/v1/roles").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/roles/**").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/roles/**").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/roles/users/**").hasAnyRole(ADMINS)
+                        // Roles (read) — all internal roles can view
+                        .requestMatchers(HttpMethod.GET, "/api/v1/roles/**").hasAnyRole(ALL_INTERNAL)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/roles").hasAnyRole(ALL_INTERNAL)
+
                         // ── Stations (write) ────────────────────────────────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/stations/**").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/stations/**").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/stations/**").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/stations/**").hasAnyRole(DOERS)
                         // Stations (read)
                         .requestMatchers(HttpMethod.GET, "/api/v1/stations/**").hasAnyRole(READERS)
 
                         // ── Devices (write) ─────────────────────────────────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/devices/**").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/devices/**").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/devices/**").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/devices/**").hasAnyRole(DOERS)
                         // Devices (read)
                         .requestMatchers(HttpMethod.GET, "/api/v1/devices/**").hasAnyRole(READERS)
 
                         // ── Launches (write) ────────────────────────────────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/launches/**").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/launches/**").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/launches/**").hasAnyRole(ADMINS)
+                        .requestMatchers(HttpMethod.POST, "/api/v1/launches/**").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/launches/**").hasAnyRole(DOERS)
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/launches/**").hasAnyRole(DOERS)
                         // Launches (read)
                         .requestMatchers(HttpMethod.GET, "/api/v1/launches/**").hasAnyRole(READERS)
 

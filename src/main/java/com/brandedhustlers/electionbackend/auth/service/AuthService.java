@@ -342,6 +342,68 @@ public class AuthService implements IAuthService {
         return new PageImpl<>(appUsers, pageable, appUsers.size());
     }
 
+    /**
+     * Updates the base system role (userRole enum) for an existing user.
+     *
+     * <p>Rules:
+     * <ul>
+     *   <li>SUPER_ADMIN may promote to any role including ADMIN/SUPER_ADMIN.</li>
+     *   <li>ADMIN may assign any role except ADMIN/SUPER_ADMIN (no self-promotion).</li>
+     *   <li>ORG_ADMIN may only assign roles within their own org (ORG_ADMIN and below).</li>
+     *   <li>Nobody can demote a SUPER_ADMIN except another SUPER_ADMIN.</li>
+     * </ul>
+     */
+    @Transactional
+    public void updateUserRole(UUID targetUserId, UserRole newRole) {
+        AppUser caller = getUser.getCurrentAuthenticatedUser();
+        AppUser target = appUserRepository.findById(targetUserId)
+                .orElseThrow(() -> new UserNotFound("User not found: " + targetUserId));
+
+        UserRole callerRole = caller.getUserRole();
+
+        // Nobody can demote a SUPER_ADMIN unless they are also SUPER_ADMIN
+        if (target.getUserRole() == UserRole.SUPER_ADMIN && callerRole != UserRole.SUPER_ADMIN) {
+            throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
+                    "Only a SUPER_ADMIN can modify another SUPER_ADMIN's role");
+        }
+
+        // ADMIN cannot assign ADMIN or SUPER_ADMIN (prevents privilege escalation)
+        if (callerRole == UserRole.ADMIN
+                && (newRole == UserRole.ADMIN || newRole == UserRole.SUPER_ADMIN)) {
+            throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
+                    "ADMIN cannot assign platform-level roles. Contact a SUPER_ADMIN.");
+        }
+
+        // ORG_ADMIN can only reassign within their own org
+        if (callerRole == UserRole.ORG_ADMIN) {
+            if (newRole == UserRole.ADMIN || newRole == UserRole.SUPER_ADMIN || newRole == UserRole.ORG_ADMIN) {
+                throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
+                        "ORG_ADMIN cannot assign admin-level roles");
+            }
+            // Ensure target belongs to caller's org
+            Organization callerOrg = caller.getActiveOrganization();
+            Organization targetOrg = target.getActiveOrganization();
+            if (callerOrg == null || targetOrg == null
+                    || !callerOrg.getOrganizationId().equals(targetOrg.getOrganizationId())) {
+                throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
+                        "You can only update roles for users in your organization");
+            }
+        }
+
+        target.setUserRole(newRole);
+
+        // Sync the system Role entity to match — ensures the roles Set stays consistent
+        // with the new userRole enum value so both gates agree
+        roleRepository.findByRoleName(newRole.name()).ifPresent(systemRole -> {
+            // Remove any other system roles (orgId = null) from the user's roles set
+            target.getRoles().removeIf(r -> r.getOrgId() == null);
+            target.getRoles().add(systemRole);
+        });
+
+        appUserRepository.save(target);
+        log.info("User {} role updated to {} by {}", targetUserId, newRole, caller.getAppUserId());
+    }
+
     public void deactivateUser(UUID userId) {
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));

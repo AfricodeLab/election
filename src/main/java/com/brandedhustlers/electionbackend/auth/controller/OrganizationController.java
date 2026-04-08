@@ -5,6 +5,7 @@ import com.brandedhustlers.electionbackend.auth.dto.CreateOrganizationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.OrganizationDTO;
 import com.brandedhustlers.electionbackend.auth.service.OrganizationService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +27,7 @@ public class OrganizationController {
 
     @PostMapping("/create")
     public ResponseEntity<?> createOrganization(
-            @RequestBody CreateOrganizationRequest request
+            @Valid @RequestBody CreateOrganizationRequest request
     ) {
         return new ResponseEntity<>(organizationService.createOrganization(request, getUser.getCurrentAuthenticatedUserId()), HttpStatus.CREATED);
     }
@@ -46,7 +47,7 @@ public class OrganizationController {
 
     @PutMapping("/add-user")
     public ResponseEntity<?> addUserToOrganization(
-            @RequestBody AddUserToOrg addUserToOrg
+            @Valid @RequestBody AddUserToOrg addUserToOrg
     ) {
         organizationService.addUserToOrganization(addUserToOrg);
         return new ResponseEntity<>("User added to org successfully", HttpStatus.OK);
