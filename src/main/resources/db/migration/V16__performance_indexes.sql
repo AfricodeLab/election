@@ -21,10 +21,20 @@ CREATE INDEX IF NOT EXISTS idx_election_org_status
 CREATE INDEX IF NOT EXISTS idx_election_status
     ON election.election (election_status);
 
--- RefreshToken: user lookup (used on every token refresh)
-CREATE INDEX IF NOT EXISTS idx_refresh_token_user_id
-    ON auth.refresh_token (user_id);
+-- RefreshToken: indexes are created only when the table exists.
+-- On a fresh deploy the table is created in V17; on an existing DB it is
+-- already present, so the DO block runs the CREATE INDEX statements.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE  table_schema = 'auth'
+        AND    table_name   = 'refresh_token'
+    ) THEN
+        CREATE INDEX IF NOT EXISTS idx_refresh_token_user_id
+            ON auth.refresh_token (user_id);
 
--- RefreshToken: expiry-based cleanup queries
-CREATE INDEX IF NOT EXISTS idx_refresh_token_expiry
-    ON auth.refresh_token (expiry_date);
+        CREATE INDEX IF NOT EXISTS idx_refresh_token_expiry
+            ON auth.refresh_token (expiry_date);
+    END IF;
+END $$;
