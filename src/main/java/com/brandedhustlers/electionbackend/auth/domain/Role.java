@@ -29,7 +29,7 @@ public class Role {
     @Column(name = "org_id")
     private UUID orgId;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "auth_role_permissions",
             joinColumns = @JoinColumn(name = "role_id"),
