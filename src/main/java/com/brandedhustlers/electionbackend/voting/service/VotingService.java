@@ -22,9 +22,11 @@ import com.brandedhustlers.electionbackend.voting.repository.VoteArchiveReposito
 import com.brandedhustlers.electionbackend.voting.repository.VoteRepository;
 import com.brandedhustlers.electionbackend.voting.util.Hash;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.resilience4j.bulkhead.annotation.Bulkhead;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,7 +55,6 @@ public class VotingService implements IVotingService {
 
     private static final Duration STEP_UP_WINDOW = Duration.ofMinutes(15);
 
-
     public VotingService(VoteRepository votes,
                          ElectionVoterRepository evRepo,
                          OutBoxRepository outbox,
@@ -63,7 +64,8 @@ public class VotingService implements IVotingService {
                          VoterRepository voterRepository,
                          ElectionVoterRepository evRepository,
                          Hash getHash,
-                         VoteArchiveRepository voteArchive, AuditEmitter emitter, EligibilityService eligibilityService) {
+                         VoteArchiveRepository voteArchive, AuditEmitter emitter,
+                         EligibilityService eligibilityService) {
         this.votes = votes;
         this.evRepo = evRepo;
         this.candidateRepository = candidateRepository;
@@ -80,22 +82,39 @@ public class VotingService implements IVotingService {
 
     @Override
     @Transactional
+    @RateLimiter(name = "critical")
+    @Bulkhead(name = "critical")
     public VoteAckDTO cast(UUID orgId, UUID voterId, CastVoteCmd cmd, HttpServletRequest httpServletRequest) {
 
         try {
             Voter actor = voterRepository.findById(voterId)
-                    .orElseThrow(() -> new UserNotFound("Voter with ID: " + voterId + " not found."));
+                    .orElseThrow(() -> new UserNotFound(
+                            "Voter with ID: " + voterId + " not found."));
+
+            // Guard: voter must belong to the org from their JWT token
+            if (actor.getOrganization() == null
+                    || !actor.getOrganization().getOrganizationId().equals(orgId)) {
+                log.warn("Voter {} org mismatch: token orgId={}, voter orgId={}",
+                        voterId, orgId,
+                        actor.getOrganization() == null ? "null" : actor.getOrganization().getOrganizationId());
+                return new VoteAckDTO(null, "REJECTED", "ORG_MISMATCH");
+            }
 
             String dedupeKey = Optional.ofNullable(cmd.idempotencyKey())
                     .orElseGet(() -> UUID.randomUUID().toString());
 
             Election election = electionRepository.findByElectionId(cmd.electionId())
-                    .orElseThrow(() -> new IllegalArgumentException("Election with id: " + cmd.electionId() + " not found"));
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Election with id: " + cmd.electionId() + " not found"));
 
-            Optional<ElectionVoter> existingEv = evRepository.findByVoterIdAndElectionId(voterId, cmd.electionId());
+            Optional<ElectionVoter> existingEv = evRepository.findByVoterIdAndElectionId(voterId,
+                    cmd.electionId());
 
-            if (existingEv.isPresent()) {
-                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED");
+            // If a record exists and hasVoted=true, the voter already cast their ballot.
+            // If hasVoted=false, the voter was pre-assigned but hasn't voted yet — allow them through.
+            if (existingEv.isPresent() && existingEv.get().isHasVoted()) {
+                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED",
+                        "You have already cast your vote in this election. Each voter may only vote once.");
             }
 
             /**
@@ -103,8 +122,8 @@ public class VotingService implements IVotingService {
              * This is fast and prevents ineligible voters from even attempting to vote.
              */
             if (election.getEligibilityPolicy() != null) {
-                EligibilityService.EligibilityResult eligibilityResult =
-                        eligibilityService.evaluate(actor.getAttributes(), election.getEligibilityPolicy());
+                EligibilityService.EligibilityResult eligibilityResult = eligibilityService
+                        .evaluate(actor.getAttributes(), election.getEligibilityPolicy());
 
                 if (!eligibilityResult.isAllowed()) {
                     log.warn("Voter {} ineligible for election {}: {}",
@@ -113,28 +132,30 @@ public class VotingService implements IVotingService {
                     return new VoteAckDTO(
                             null,
                             "REJECTED",
-                            "INELIGIBLE: " + eligibilityResult.getReason()
-                    );
+                            "INELIGIBLE: " + eligibilityResult.getReason());
                 }
 
-                log.info("Voter {} passed eligibility check for election {}", voterId, cmd.electionId());
+                log.info("Voter {} passed eligibility check for election {}", voterId,
+                        cmd.electionId());
             }
 
-            //create the election voter here instead removing load from org admins, tied to the voter entity
-            ElectionVoterId embeddedId = new ElectionVoterId(
-                    cmd.electionId(),
-                    actor.getVoterId()
-            );
-            ElectionVoter newVoter = new ElectionVoter(
-                    embeddedId,
-                    actor,
-                    election,
-                    null,
-                    null,
-                    Timestamp.from(Instant.now()),
-                    false
-            );
-            evRepository.save(newVoter);
+            // If the voter was not pre-assigned, create the ElectionVoter record on-the-fly.
+            // Pre-assigned voters already have this record (hasVoted=false), so we skip creation.
+            // Race condition: two concurrent requests for the same voter can both see existingEv
+            // as empty and race to insert. The second insert will hit the primary-key constraint.
+            // We catch that and continue — the pessimistic lock below will serialize them.
+            if (existingEv.isEmpty()) {
+                try {
+                    ElectionVoterId embeddedId = new ElectionVoterId(cmd.electionId(), actor.getVoterId());
+                    evRepository.save(new ElectionVoter(embeddedId, actor, election, null, null,
+                            Timestamp.from(Instant.now()), false));
+                } catch (DataIntegrityViolationException e) {
+                    // Concurrent insert won the race — the row now exists.
+                    // The lockByIds call below will acquire the pessimistic lock and proceed normally.
+                    log.debug("ElectionVoter already inserted concurrently for voter {} / election {} — proceeding to lock",
+                            voterId, cmd.electionId());
+                }
+            }
 
             var existing = votes.findByDedupeKey(dedupeKey);
             if (existing.isPresent()) {
@@ -144,21 +165,25 @@ public class VotingService implements IVotingService {
             // Election is LIVE + in the same org
             var nowTs = new Timestamp(System.currentTimeMillis());
             electionRepository.verifyLiveInOrg(cmd.electionId(), orgId, ElectionStatus.LIVE, nowTs)
-                    .orElseThrow(() -> new IllegalStateException("Election not live / not in org / outside window"));
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Election not live / not in org / outside window"));
 
             // Candidate belongs to this election
             candidateRepository.findByCandidateIdAndElectionElectionId(cmd.candidateId(), cmd.electionId())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid candidate for election"));
+                    .orElseThrow(() -> new IllegalArgumentException(
+                            "Invalid candidate for election"));
 
             // Pessimistic lock to prevent concurrent double-vote
             ElectionVoter ev = evRepo.lockByIds(cmd.electionId(), voterId)
-                    .orElseThrow(() -> new IllegalStateException("Voter not assigned to this election"));
+                    .orElseThrow(() -> new IllegalStateException(
+                            "Voter not assigned to this election"));
 
             if (ev.isHasVoted()) {
-                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED");
+                return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED",
+                        "You have already cast your vote in this election. Each voter may only vote once.");
             }
 
-            //save the vote and flip hasVoted=true
+            // save the vote and flip hasVoted=true
             Vote vote = Vote.builder()
                     .id(UUID.randomUUID())
                     .orgId(orgId)
@@ -197,8 +222,7 @@ public class VotingService implements IVotingService {
                     "id", vote.getId(),
                     "electionId", vote.getElectionId(),
                     "candidateId", vote.getCandidateId(),
-                    "orgId", orgId
-            );
+                    "orgId", orgId);
 
             outbox.save(OutBox.builder()
                     .eventType("voting.vote.cast")
@@ -230,8 +254,7 @@ public class VotingService implements IVotingService {
                     null,
                     null,
                     "INFO",
-                    1
-            );
+                    1);
             return new VoteAckDTO(vote.getId(), "ACCEPTED", "NEW_VOTE");
 
         } catch (Exception e) {
@@ -240,11 +263,4 @@ public class VotingService implements IVotingService {
         }
     }
 
-    public void requireFreshStepUp(HttpSession session) {
-        Instant ts = (Instant) session.getAttribute("STEP_UP_VERIFIED_AT");
-        if (ts == null) throw new SecurityException("VOTE-401 step-up required");
-        if (Duration.between(ts, Instant.now()).compareTo(STEP_UP_WINDOW) > 0) {
-            throw new SecurityException("VOTE-401 step-up expired");
-        }
-    }
 }

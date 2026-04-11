@@ -1,48 +1,48 @@
-CREATE TABLE if not exists ops.device
-(
-    device_id       UUID                        NOT NULL,
-    org_id          UUID                        NOT NULL,
-    station_id      UUID                        NOT NULL,
-    label           VARCHAR(255)                NOT NULL,
-    status          VARCHAR(255)                NOT NULL,
-    last_seen       TIMESTAMP WITHOUT TIME ZONE,
-    last_latency_ms BIGINT,
-    app_version     VARCHAR(255),
-    created_at      TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    delete_yn       VARCHAR(255),
-    CONSTRAINT pk_device PRIMARY KEY (device_id)
-);
-
-CREATE TABLE if not exists ops.launch
-(
-    launch_id   UUID                        NOT NULL,
-    org_id      UUID                        NOT NULL,
-    name        VARCHAR(255)                NOT NULL,
-    description VARCHAR(255),
-    status      VARCHAR(255)                NOT NULL,
-    start_at    TIMESTAMP WITHOUT TIME ZONE,
-    end_at      TIMESTAMP WITHOUT TIME ZONE,
-    created_at  TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    delete_yn   VARCHAR(255),
-    CONSTRAINT pk_launch PRIMARY KEY (launch_id)
-);
-
-CREATE TABLE if not exists ops.launch_election
-(
-    launch_id   UUID NOT NULL,
-    election_id UUID NOT NULL,
-    CONSTRAINT pk_launch_election PRIMARY KEY (launch_id, election_id)
-);
-
-CREATE TABLE  if not exists ops.station
-(
-    station_id UUID                        NOT NULL,
-    org_id     UUID                        NOT NULL,
-    launch_id  UUID                        NOT NULL,
-    name       VARCHAR(255)                NOT NULL,
-    location   VARCHAR(255),
-    capacity   INTEGER,
-    created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
-    delete_yn  VARCHAR(255),
-    CONSTRAINT pk_station PRIMARY KEY (station_id)
-);
+-- CREATE TABLE if not exists ops.device
+-- (
+--     device_id       UUID                        NOT NULL,
+--     org_id          UUID                        NOT NULL,
+--     station_id      UUID                        NOT NULL,
+--     label           VARCHAR(255)                NOT NULL,
+--     status          VARCHAR(255)                NOT NULL,
+--     last_seen       TIMESTAMP WITHOUT TIME ZONE,
+--     last_latency_ms BIGINT,
+--     app_version     VARCHAR(255),
+--     created_at      TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     delete_yn       VARCHAR(255),
+--     CONSTRAINT pk_device PRIMARY KEY (device_id)
+-- );
+--
+-- CREATE TABLE if not exists ops.launch
+-- (
+--     launch_id   UUID                        NOT NULL,
+--     org_id      UUID                        NOT NULL,
+--     name        VARCHAR(255)                NOT NULL,
+--     description VARCHAR(255),
+--     status      VARCHAR(255)                NOT NULL,
+--     start_at    TIMESTAMP WITHOUT TIME ZONE,
+--     end_at      TIMESTAMP WITHOUT TIME ZONE,
+--     created_at  TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     delete_yn   VARCHAR(255),
+--     CONSTRAINT pk_launch PRIMARY KEY (launch_id)
+-- );
+--
+-- CREATE TABLE if not exists ops.launch_election
+-- (
+--     launch_id   UUID NOT NULL,
+--     election_id UUID NOT NULL,
+--     CONSTRAINT pk_launch_election PRIMARY KEY (launch_id, election_id)
+-- );
+--
+-- CREATE TABLE  if not exists ops.station
+-- (
+--     station_id UUID                        NOT NULL,
+--     org_id     UUID                        NOT NULL,
+--     launch_id  UUID                        NOT NULL,
+--     name       VARCHAR(255)                NOT NULL,
+--     location   VARCHAR(255),
+--     capacity   INTEGER,
+--     created_at TIMESTAMP WITHOUT TIME ZONE NOT NULL,
+--     delete_yn  VARCHAR(255),
+--     CONSTRAINT pk_station PRIMARY KEY (station_id)
+-- );

@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.voter.web;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.election.domain.Election;
@@ -15,6 +16,8 @@ import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import com.brandedhustlers.electionbackend.voter.service.AttributeExtractor;
 import com.brandedhustlers.electionbackend.voter.service.VerificationService;
 import jakarta.mail.MessagingException;
+import jakarta.validation.Valid;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -35,10 +38,10 @@ public class VerificationController {
     private final AttributeExtractor attributeExtractor;
 
     public VerificationController(VerificationService service,
-                                  VoterRepository voterRepository,
-                                  ElectionRepository electionRepository,
-                                  GetUser getUser,
-                                  AttributeExtractor attributeExtractor) {
+            VoterRepository voterRepository,
+            ElectionRepository electionRepository,
+            GetUser getUser,
+            AttributeExtractor attributeExtractor) {
         this.service = service;
         this.voterRepository = voterRepository;
         this.electionRepository = electionRepository;
@@ -47,13 +50,14 @@ public class VerificationController {
     }
 
     @PostMapping("/send")
-    public ResponseEntity<OtpSendResponse> send(@RequestBody OtpSendRequest req) throws MessagingException {
+    public ResponseEntity<OtpSendResponse> send(@Valid @RequestBody OtpSendRequest req) throws MessagingException {
         return ResponseEntity.accepted().body(service.sendOtp(req));
     }
 
     @PostMapping("/confirm")
-    public ResponseEntity<OtpConfirmResponse> confirm(@RequestBody OtpConfirmRequest req) {
-        return ResponseEntity.ok(service.confirmOtp(req));
+    public ResponseEntity<OtpConfirmResponse> confirm(@Valid @RequestBody OtpConfirmRequest req,
+            HttpServletResponse response) {
+        return ResponseEntity.ok(service.confirmOtp(req, response));
     }
 
     @GetMapping("/voters/attribute-coverage")
@@ -68,7 +72,11 @@ public class VerificationController {
             EligibilityPolicy policy = election.getEligibilityPolicy();
 
             // Get all voters in org
-            List<Voter> voters = voterRepository.findByOrgId((admin.getAppUserOrganization().getOrganizationId()));
+            Organization adminOrg = admin.getActiveOrganization();
+            if (adminOrg == null) {
+                return ResponseEntity.status(403).body("No active organization");
+            }
+            List<Voter> voters = voterRepository.findByOrgId(adminOrg.getOrganizationId());
 
             int total = voters.size();
             int complete = 0;
@@ -77,8 +85,7 @@ public class VerificationController {
             for (Voter voter : voters) {
                 List<String> missing = attributeExtractor.validateRequiredAttributes(
                         voter.getAttributes(),
-                        policy
-                );
+                        policy);
 
                 if (missing.isEmpty()) {
                     complete++;
@@ -87,8 +94,7 @@ public class VerificationController {
                             "voterId", voter.getVoterId(),
                             "name", voter.getName() != null ? voter.getName() : "",
                             "email", voter.getEmail() != null ? voter.getEmail() : "",
-                            "missingAttributes", missing
-                    ));
+                            "missingAttributes", missing));
                 }
             }
 
@@ -97,7 +103,7 @@ public class VerificationController {
                     "complete", complete,
                     "incomplete", total - complete,
                     "coverage", complete * 100.0 / total,
-                    "incompleteVoters", incomplete.stream().limit(50).toList()  // First 50
+                    "incompleteVoters", incomplete.stream().limit(50).toList() // First 50
             ));
 
         } catch (Exception e) {

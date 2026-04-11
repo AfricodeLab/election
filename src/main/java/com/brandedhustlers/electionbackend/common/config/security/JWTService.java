@@ -34,26 +34,69 @@ public class JWTService {
         this.voterRepository = voterRepository;
     }
 
-
     public String generateRefreshToken(String username, UUID userID, String appUserEmail) {
-        long refreshTokenExp = 15552000000L;
+        long refreshTokenExp = 604800000L; // 7 days
         return generateToken(username, refreshTokenExp, userID, appUserEmail);
     }
 
-    public String generateAccessToken(String username, UUID userId, String appUserEmail) {
-        long accessTokenExpirationTime = 15552000000L;
-        return generateToken(username, accessTokenExpirationTime, userId, appUserEmail );
+    /**
+     * Generates a short-lived (5 min) MFA-pending token.
+     * This token intentionally carries NO role claim so the JWTAuthFilter
+     * cannot use it to grant access to protected endpoints.
+     * It can only be exchanged for a full access token at /auth/mfa/verify.
+     */
+    public String generateMfaPendingToken(UUID userId, String email) {
+        Map<String, Object> claims = new HashMap<>();
+        claims.put("userId", userId.toString());
+        claims.put("userEmail", email);
+        claims.put("mfaPending", true);
+        claims.put("iss", "brandedhustlers_backend");
+        claims.put("aud", "election_client");
+
+        return Jwts.builder()
+                .claims()
+                .add(claims)
+                .subject(email)
+                .issuedAt(new Date(System.currentTimeMillis()))
+                .expiration(new Date(System.currentTimeMillis() + 300_000L)) // 5 min
+                .and()
+                .signWith(getKey())
+                .compact();
     }
 
-    public String generateVoterToken(String voterEmail){
+    public UUID extractMfaPendingUserId(String token) {
+        Claims claims = extractAllClaim(token);
+        String id = claims.get("userId", String.class);
+        return id == null ? null : UUID.fromString(id);
+    }
+
+    public boolean isMfaPendingToken(String token) {
+        try {
+            Claims claims = extractAllClaim(token);
+            Object flag = claims.get("mfaPending");
+            return Boolean.TRUE.equals(flag);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public String generateAccessToken(String username, UUID userId, String appUserEmail) {
+        long accessTokenExpirationTime = 900000L; // 15 minutes
+        return generateToken(username, accessTokenExpirationTime, userId, appUserEmail);
+    }
+
+    public String generateVoterToken(String voterEmail) {
         Voter voter = voterRepository.findByEmailIgnoreCase(voterEmail)
                 .orElseThrow(() -> new UserNotFound("Voter with email: " + voterEmail + " not found"));
 
         Map<String, Object> claims = new HashMap<>();
-        claims.put("voterOrgId",voter.getOrganization() == null ? null : voter.getOrganization().getOrganizationId().toString());
+        claims.put("voterOrgId",
+                voter.getOrganization() == null ? null : voter.getOrganization().getOrganizationId().toString());
         claims.put("voterId", voter.getVoterId().toString());
         claims.put("role", UserRole.VOTER.getName());
         claims.put("stepUpVerifiedAt", Instant.now().toEpochMilli());
+        claims.put("iss", "brandedhustlers_backend");
+        claims.put("aud", "election_client");
 
         return Jwts.builder()
                 .claims()
@@ -89,7 +132,7 @@ public class JWTService {
         return null;
     }
 
-    public String extractVoterId(String token){
+    public String extractVoterId(String token) {
         return Jwts.parser()
                 .verifyWith(getKey())
                 .build()
@@ -98,7 +141,7 @@ public class JWTService {
                 .get("voterId", String.class);
     }
 
-    public String extractVoterOrgId(String token){
+    public String extractVoterOrgId(String token) {
         return Jwts.parser()
                 .verifyWith(getKey())
                 .build()
@@ -107,19 +150,20 @@ public class JWTService {
                 .get("voterOrgId", String.class);
     }
 
-
-
     public String generateToken(String username, long expirationTime, UUID userId, String appUserEmail) {
 
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
 
         Map<String, Object> claims = new HashMap<>();
-        claims.put("userID",userId);
+        claims.put("userID", userId);
         claims.put("username", username);
         claims.put("userEmail", appUserEmail);
-        claims.put("userOrgId", user.getAppUserOrganization() == null ? null : user.getAppUserOrganization().getOrganizationId());
+        claims.put("activeOrgId",
+                user.getActiveOrganization() == null ? null : user.getActiveOrganization().getOrganizationId());
         claims.put("role", user.getUserRole());
+        claims.put("iss", "brandedhustlers_backend");
+        claims.put("aud", "election_client");
 
         return Jwts.builder()
                 .claims()
@@ -131,7 +175,6 @@ public class JWTService {
                 .signWith(getKey())
                 .compact();
     }
-
 
     private SecretKey getKey() {
         byte[] keyBytes = Decoders.BASE64.decode(secretKey);
@@ -160,7 +203,7 @@ public class JWTService {
         return (username.equals(userDetails.getUsername()) && !isTokenExpired(token));
     }
 
-    public boolean validateToken(String token){
+    public boolean validateToken(String token) {
         return !isTokenExpired(token);
     }
 
@@ -181,8 +224,7 @@ public class JWTService {
                 .get("role", String.class);
     }
 
-
-    public String extractUserEmail(String token){
+    public String extractUserEmail(String token) {
         return Jwts.parser()
                 .verifyWith(getKey())
                 .build()
@@ -191,7 +233,7 @@ public class JWTService {
                 .get("userEmail", String.class);
     }
 
-    public String extractUserType(String token){
+    public String extractUserType(String token) {
         return Jwts.parser()
                 .verifyWith(getKey())
                 .build()
@@ -208,10 +250,10 @@ public class JWTService {
         return null;
     }
 
-    public UUID extractOrgId(String token) {
+    public UUID extractActiveOrgId(String token) {
         Claims claims = extractAllClaim(token);
-        if (claims.containsKey("userOrgId")) {
-            return UUID.fromString(claims.get("userOrgId", String.class));
+        if (claims.containsKey("activeOrgId")) {
+            return UUID.fromString(claims.get("activeOrgId", String.class));
         }
         return null;
     }
@@ -222,13 +264,13 @@ public class JWTService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload()
-                .get("appUserId", String.class);
+                .get("role", String.class);
     }
 
-    public UUID extractAppUserId(HttpServletRequest request){
+    public UUID extractAppUserId(HttpServletRequest request) {
         String token;
         token = getTokenFromCookie(request.getCookies());
-        if(token == null){
+        if (token == null) {
             token = getTokenFromAuthorizationHeader(request);
         }
         return extractAppUserId(token);
@@ -253,4 +295,3 @@ public class JWTService {
         return null;
     }
 }
-

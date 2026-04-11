@@ -2,7 +2,6 @@ package com.brandedhustlers.electionbackend.auth.service;
 
 import com.brandedhustlers.electionbackend.auth.dto.*;
 import jakarta.servlet.http.HttpServletResponse;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 
@@ -12,5 +11,19 @@ public interface IAuthService {
 
     LoginResponse login(LoginRequest loginRequest, HttpServletResponse response);
 
-    CreateUserResponse createUser(CreateUserRequest createUserRequest, MultipartFile userImage) throws IOException;
+    CreateUserResponse createUser(CreateUserRequest createUserRequest) throws IOException;
+
+    TokenRefreshResponse refreshToken(TokenRefreshRequest request);
+
+    void verifyEmail(String token);
+
+    void resendVerificationEmail(String email);
+
+    void forgotPassword(String email);
+
+    void resetPassword(String token, String newPassword);
+
+    void enableMfa();
+
+    void disableMfa();
 }

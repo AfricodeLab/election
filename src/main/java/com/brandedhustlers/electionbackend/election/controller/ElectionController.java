@@ -6,6 +6,8 @@ import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.voter.dto.TurnoutDTO;
+import com.brandedhustlers.electionbackend.voter.service.VoterService;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
 import com.brandedhustlers.electionbackend.election.dto.UpdateCandidateCmd;
@@ -15,7 +17,6 @@ import com.brandedhustlers.electionbackend.election.repository.ElectionRepositor
 import com.brandedhustlers.electionbackend.election.service.CandidateService;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -38,39 +39,38 @@ public class ElectionController {
     private final GetUser getUser;
     private final CandidateService candidateService;
     private final ElectionRepository electionRepository;
+    private final VoterService voterService;
 
     public ElectionController(ElectionService electionService,
-                              ObjectMapper objectMapper,
-                              AppUserRepository appUserRepository, GetUser getUser, CandidateService candidateService, ElectionRepository electionRepository) {
+            ObjectMapper objectMapper,
+            AppUserRepository appUserRepository, GetUser getUser, CandidateService candidateService,
+            ElectionRepository electionRepository, VoterService voterService) {
         this.electionService = electionService;
         this.objectMapper = objectMapper;
         this.appUserRepository = appUserRepository;
         this.getUser = getUser;
         this.candidateService = candidateService;
         this.electionRepository = electionRepository;
+        this.voterService = voterService;
     }
-
 
     @PostMapping("/create")
     public ResponseEntity<?> createElection(
-            @RequestBody @Valid CreateElectionRequest request
-    ) {
+            @RequestBody @Valid CreateElectionRequest request) {
         return new ResponseEntity<>(electionService.createElection(request), HttpStatus.CREATED);
     }
 
     @PutMapping("/update/{electionId}")
     public ResponseEntity<?> updateElection(
-            @RequestBody UpdateElection election,
-            @PathVariable UUID electionId
-    ) {
+            @Valid @RequestBody UpdateElection election,
+            @PathVariable UUID electionId) {
         return new ResponseEntity<>(electionService.updateElection(electionId, election), HttpStatus.OK);
     }
 
     @PutMapping("/update-status/{electionId}")
     public ResponseEntity<?> changeStatus(
             @PathVariable UUID electionId,
-            @RequestParam ElectionStatus electionStatus
-    ) {
+            @RequestParam ElectionStatus electionStatus) {
         return new ResponseEntity<>(electionService.changeElectionStatus(electionId, electionStatus), HttpStatus.OK);
     }
 
@@ -78,8 +78,7 @@ public class ElectionController {
     public ResponseEntity<?> addCandidate(
             @PathVariable UUID electionId,
             @RequestPart(name = "candidate") String candidate,
-            @RequestPart(name = "candidateImage", required = false) MultipartFile candidateImage
-    ) throws IOException {
+            @RequestPart(name = "candidateImage", required = false) MultipartFile candidateImage) throws IOException {
         CandidateDTO candidateDTO = objectMapper.readValue(candidate, CandidateDTO.class);
         return new ResponseEntity<>(
                 electionService.addCandidate(electionId,
@@ -93,25 +92,29 @@ public class ElectionController {
         AppUser launchCreator = appUserRepository.findById(getUser.getCurrentAuthenticatedUserId())
                 .orElseThrow(() -> new UserNotFound("User not found."));
 
-        Organization creatorOrg = launchCreator.getAppUserOrganization();
-        return new ResponseEntity<>(electionService.getElectionsByOrg(creatorOrg.getOrganizationId(), pageable), HttpStatus.OK);
+        Organization creatorOrg = launchCreator.getActiveOrganization();
+        if (creatorOrg == null) {
+            return ResponseEntity.status(403).body(Map.of("status", "forbidden",
+                    "message", "No active organization. Please join or switch to an organization first."));
+        }
+        return new ResponseEntity<>(electionService.getElectionsByOrg(creatorOrg.getOrganizationId(), pageable),
+                HttpStatus.OK);
     }
 
     @GetMapping("/live")
-    public ResponseEntity<?> live(HttpServletRequest httpServletRequest, Pageable pageable) {
-        return new ResponseEntity<>(electionService.getLiveElectionForVoterOrg(httpServletRequest, pageable), HttpStatus.OK);
+    public ResponseEntity<?> live(Pageable pageable) {
+        return new ResponseEntity<>(electionService.getLiveElectionForVoterOrg(pageable), HttpStatus.OK);
     }
 
     @PutMapping("/update-candidate/{candidateId}")
     public ResponseEntity<?> updateCandidateDuringLiveElection(@RequestBody UpdateCandidateCmd updateCandidateCmd,
-                                                               @PathVariable UUID candidateId){
+            @PathVariable UUID candidateId) {
         AppUser admin = appUserRepository.findById(getUser.getCurrentAuthenticatedUserId())
                 .orElseThrow(() -> new UserNotFound("Invalid org admin not found."));
         return new ResponseEntity<>(candidateService.updateCandidate(
                 candidateId,
                 updateCandidateCmd,
-                admin
-        ), HttpStatus.OK);
+                admin), HttpStatus.OK);
     }
 
     @PostMapping("/live/{electionId}")
@@ -121,20 +124,30 @@ public class ElectionController {
             AppUser user = getUser.getCurrentAuthenticatedUser();
 
             // Verify admin role
-            if (!user.getUserRole().equals(UserRole.ADMIN)) {
+            if (!user.getUserRole().equals(UserRole.ADMIN) && !user.getUserRole().equals(UserRole.SUPER_ADMIN)) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
-                        "message", "Only admins can bring elections live"
-                ));
+                        "message", "Only admins can bring elections live"));
             }
 
             // Verify org access (admin must belong to election's org)
             Organization electionOrg = electionRepository.getElectionOrganization(electionId);
-            if (!user.getAppUserOrganization().equals(electionOrg)) {
+            Organization userOrg = user.getActiveOrganization();
+
+            if (userOrg == null) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
-                        "message", "You cannot manage elections from other organizations"
-                ));
+                        "message", "No active organization. Please join or switch to an organization first."));
+            }
+
+            log.info(String.valueOf(electionOrg.equals(userOrg)));
+            log.info("election org: {}", electionOrg.toString());
+            log.info("user org: {}", userOrg.toString());
+
+            if (!(userOrg.getOrganizationId().equals(electionOrg.getOrganizationId()))) {
+                return ResponseEntity.status(403).body(Map.of(
+                        "status", "forbidden",
+                        "message", "You cannot manage elections from other organizations"));
             }
 
             // Transition to live (anchors config to blockchain)
@@ -151,15 +164,36 @@ public class ElectionController {
             log.warn("Cannot bring election {} live: {}", electionId, e.getMessage());
             return ResponseEntity.status(400).body(Map.of(
                     "status", "error",
-                    "message", e.getMessage()
-            ));
+                    "message", e.getMessage()));
 
         } catch (Exception e) {
             log.error("Failed to bring election {} live", electionId, e);
             return ResponseEntity.status(500).body(Map.of(
                     "status", "error",
-                    "message", "Internal server error: " + e.getMessage()
-            ));
+                    "message", "Internal server error: " + e.getMessage()));
         }
+    }
+
+    /** Dry-run eligibility check — no state mutation. Requires ADMIN+ role. */
+    @GetMapping("/{electionId}/eligibility/check")
+    public ResponseEntity<?> checkEligibility(
+            @PathVariable UUID electionId,
+            @RequestParam UUID voterId) {
+        var result = electionService.checkEligibility(electionId, voterId);
+        return ResponseEntity.ok(Map.of(
+                "allowed", result.isAllowed(),
+                "reason", result.getReason() == null ? "" : result.getReason()));
+    }
+
+    /** Voter turnout stats for an election. Requires ADMIN+ role. */
+    @GetMapping("/{electionId}/turnout")
+    public ResponseEntity<?> getTurnout(@PathVariable UUID electionId) {
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (orgId == null) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "status", "forbidden",
+                    "message", "No active organization. Please join or switch to an organization first."));
+        }
+        return ResponseEntity.ok(voterService.getTurnout(orgId, electionId));
     }
 }

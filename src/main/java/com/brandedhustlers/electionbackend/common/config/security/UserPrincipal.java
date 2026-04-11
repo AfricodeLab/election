@@ -5,11 +5,9 @@ import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.UUID;
 
 @Getter
@@ -24,16 +22,13 @@ public class UserPrincipal implements UserDetails {
         this.appUser = appUser;
     }
 
-
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(
-                new SimpleGrantedAuthority(appUser.getUserRole().name())
-        );
+        return authorities;
     }
 
-    public Organization getUserOrganization(){
-        return appUser.getAppUserOrganization();
+    public Organization getActiveOrganization() {
+        return appUser.getActiveOrganization();
     }
 
     @Override
@@ -41,7 +36,7 @@ public class UserPrincipal implements UserDetails {
         return appUser.getPassword();
     }
 
-    public UUID getAppUserId(){
+    public UUID getAppUserId() {
         return appUser.getAppUserId();
     }
 

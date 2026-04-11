@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.ops.domain.Station;
 import com.brandedhustlers.electionbackend.ops.dto.UpsertStation;
 import com.brandedhustlers.electionbackend.ops.service.StationService;
+import jakarta.validation.Valid;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -17,13 +18,13 @@ public class StationController {
     private final GetUser getUser;
 
     public StationController(StationService svc,
-                             GetUser getUser) {
+            GetUser getUser) {
         this.svc = svc;
         this.getUser = getUser;
     }
 
     @PostMapping("/create")
-    public ResponseEntity<?> create(@RequestBody UpsertStation createStation) {
+    public ResponseEntity<?> create(@Valid @RequestBody UpsertStation createStation) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
         return ResponseEntity.ok(svc.createStation(orgId, createStation));
     }
@@ -42,7 +43,7 @@ public class StationController {
 
     @PutMapping("/update/{stationId}")
     public ResponseEntity<?> update(@PathVariable UUID stationId,
-                                    @RequestBody UpsertStation upsertStation) {
+            @Valid @RequestBody UpsertStation upsertStation) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
         return ResponseEntity.ok(svc.updateStation(orgId, stationId, upsertStation));
     }

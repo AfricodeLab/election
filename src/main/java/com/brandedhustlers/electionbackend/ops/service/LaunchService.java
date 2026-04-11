@@ -2,12 +2,15 @@ package com.brandedhustlers.electionbackend.ops.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
+import com.brandedhustlers.electionbackend.auth.exceptions.ConflictException;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.election.service.EligibilitySnapshotService;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.brandedhustlers.electionbackend.ops.domain.Launch;
 import com.brandedhustlers.electionbackend.ops.domain.LaunchElection;
@@ -50,6 +53,8 @@ public class LaunchService {
     private final ElectionMapper electionMapper;
     private final GetUser getUser;
     private final ElectionService electionService;
+    private final EligibilitySnapshotService eligibilitySnapshotService;
+    private final Util util;
 
 
     public LaunchService(LaunchRepository launchRepository,
@@ -58,7 +63,8 @@ public class LaunchService {
                          RabbitTemplate rabbitTemplate,
                          AuditEmitter auditEmitter,
                          ElectionRepository electionRepository,
-                         ElectionMapper electionMapper, GetUser getUser, ElectionService electionService) {
+                         ElectionMapper electionMapper, GetUser getUser, ElectionService electionService,
+                         EligibilitySnapshotService eligibilitySnapshotService, Util util) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
@@ -68,6 +74,8 @@ public class LaunchService {
         this.electionMapper = electionMapper;
         this.getUser = getUser;
         this.electionService = electionService;
+        this.eligibilitySnapshotService = eligibilitySnapshotService;
+        this.util = util;
     }
 
 
@@ -81,6 +89,13 @@ public class LaunchService {
         }
         if (startAt != null && endAt != null && startAt.isAfter(endAt)) {
             throw new IllegalStateException("OPS-4001 invalid time window");
+        }
+
+        List<String> existingOrgLaunches = launchRepository.findByOrgId(orgId).stream()
+                .map(Launch::getName).toList();
+
+        if (existingOrgLaunches.contains(name)){
+            throw new ConflictException("A launch with this name already exists in this organization");
         }
 
         Launch newLaunch = Launch.builder()
@@ -305,6 +320,7 @@ public class LaunchService {
     @Transactional
     public GetLaunch transitionStatus(UUID orgId, UUID launchId, LaunchStatus status) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
+        util.requireAdmin(actor);
 
         Launch l = launchRepository.findByLaunchId(launchId)
                 .orElseThrow(() -> new NoSuchElementException("OPS-4041 launch not found"));
@@ -329,6 +345,8 @@ public class LaunchService {
             for(Election election : launchElections){
                 electionService.transitionToLive(election.getElectionId(), actor.getAppUserId());
             }
+
+            eligibilitySnapshotService.computeForLaunch(orgId, l.getId(), launchElections);
 
             rabbitTemplate.convertAndSend("notif.email", launchLivePayload);
 
@@ -391,5 +409,3 @@ public class LaunchService {
         );
     }
 }
-
-//todo end election functionality

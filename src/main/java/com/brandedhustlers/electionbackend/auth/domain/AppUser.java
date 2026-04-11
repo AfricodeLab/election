@@ -11,6 +11,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -23,6 +24,7 @@ import java.util.UUID;
 @AllArgsConstructor
 @Builder
 @Table(name = "app_user", schema = "auth")
+@ToString
 public class AppUser {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -37,13 +39,11 @@ public class AppUser {
     @Column(nullable = false, unique = true)
     private String appUserEmail;
 
-    @Column(nullable = false)
-    private String organizationName;
-
     @Column(unique = true)
     private String username;
 
     @Column(nullable = false)
+    @ToString.Exclude
     private String password;
 
     @Enumerated(EnumType.STRING)
@@ -70,14 +70,47 @@ public class AppUser {
     @UpdateTimestamp
     private Timestamp updatedAt;
 
-    @OneToOne
+    @ManyToOne
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 
     private String userProfilePicture;
 
-    @ManyToOne
-    @JoinColumn(name = "organization_id")
-    private Organization appUserOrganization;
+    // ── Email verification ───────────────────────────────────────────────────
+    @Column(nullable = false)
+    private boolean emailVerified = false;
+
+    @Column(unique = true)
+    private String emailVerificationToken;
+
+    private Instant emailVerificationExpiry;
+
+    // ── Password reset ───────────────────────────────────────────────────────
+    @Column(unique = true)
+    private String passwordResetToken;
+
+    private Instant passwordResetExpiry;
+
+    // ── MFA ──────────────────────────────────────────────────────────────────
+    /** When true, a second-factor OTP is required after password login. */
+    @Column(nullable = false)
+    private boolean mfaEnabled = false;
+
+    @OneToMany(mappedBy = "appUser", fetch = FetchType.EAGER)
+    @Builder.Default
+    private Set<UserOrganization> userOrganizations = new HashSet<>();
+
+    public Organization getActiveOrganization() {
+        return userOrganizations.stream()
+                .filter(UserOrganization::isActiveOrg)
+                .map(UserOrganization::getOrganization)
+                .findFirst()
+                .orElse(null);
+    }
+
+    public String getOrganizationName() {
+        Organization active = getActiveOrganization();
+        return active == null ? null : active.getOrganizationName();
+    }
 
 }

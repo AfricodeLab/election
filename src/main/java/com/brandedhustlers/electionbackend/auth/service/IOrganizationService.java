@@ -10,7 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface IOrganizationService {
-    OrganizationDTO createOrganization(CreateOrganizationRequest request);
+    OrganizationDTO createOrganization(CreateOrganizationRequest request, UUID id);
 
     OrganizationDTO updateOrganization(UUID orgId, OrganizationDTO organizationDTO);
 

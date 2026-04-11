@@ -21,6 +21,9 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
     @Query("select e from Election e where e.organization.organizationId = :organizationId")
     List<Election> findByOrganizationId(UUID organizationId);
 
+    @Query("select e.electionTitle from Election e where e.electionId = :electionId")
+    String getElectionTitleById(UUID electionId);
+
     boolean existsByElectionIdAndOrganization_OrganizationId(UUID electionId, UUID organizationOrganizationId);
 
     @Query("""
@@ -68,6 +71,23 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
                                             @Param("status") ElectionStatus status,
                                             @Param("now") Timestamp now);
 
+    @Query("""
+    SELECT e FROM Election e
+    WHERE e.organization.organizationId = :orgId
+      AND e.electionStatus = :status
+      AND NOT EXISTS (
+        SELECT 1 FROM ElectionVoter ev
+        WHERE ev.election.electionId = e.electionId
+          AND ev.voter.voterId = :voterId
+          AND ev.hasVoted = true
+      )
+""")
+    List<Election> findLiveByOrgAndNotVoted(
+            @Param("orgId") UUID orgId,
+            @Param("status") ElectionStatus status,
+            @Param("voterId") UUID voterId
+    );
+
 /*    @Query("""
               select e from Election e
               where e.electionId = :electionId
@@ -98,4 +118,23 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
 
     @Query("select e.organization from Election e where e.electionId = :electionId")
     Organization getElectionOrganization(UUID electionId);
+
+    /**
+     * Finds all LIVE elections that should be automatically closed because either:
+     * 1. Their end time has passed (time-based close), OR
+     * 2. shouldEndAutomatically is true AND totalVotes has reached expectedVoterCount
+     *    (vote-count-based close).
+     */
+    @Query("""
+        SELECT e FROM Election e
+        WHERE e.electionStatus = 'LIVE'
+          AND (
+            (e.electionEndTime IS NOT NULL AND e.electionEndTime <= :now)
+            OR (e.shouldEndAutomatically = true
+                AND e.expectedVoterCount IS NOT NULL
+                AND e.totalVotes IS NOT NULL
+                AND e.totalVotes >= e.expectedVoterCount)
+          )
+    """)
+    List<Election> findElectionsReadyToClose(@Param("now") Timestamp now);
 }

@@ -31,7 +31,7 @@ public class Vote {
     @Column(name = "candidate_id", nullable = false)
     private UUID candidateId;
 
-    @Column(name = "voter_id", unique = true)
+    @Column(name = "voter_id")
     private UUID voterId; // nullable for anon mode
 
     @Column(name = "device_id")

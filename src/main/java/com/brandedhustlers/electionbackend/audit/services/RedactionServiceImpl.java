@@ -1,13 +1,14 @@
 package com.brandedhustlers.electionbackend.audit.services;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class RedactionServiceImpl implements RedactionService {
     private final String salt;
 
-    RedactionServiceImpl() {
-        this.salt = ""; // TODO: inject via @Value or config properties
+    RedactionServiceImpl(@Value("${audit.redaction.salt}") String salt) {
+        this.salt = salt;
     }
 
     @Override
@@ -30,7 +31,9 @@ public class RedactionServiceImpl implements RedactionService {
             var md = java.security.MessageDigest.getInstance("SHA-256");
             byte[] dig = md.digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
-            for (byte b : dig) sb.append(String.format("%02x", b));
+            for (byte b : dig) {
+                sb.append(String.format("%02x", b));
+            }
             return sb.toString();
         } catch (Exception e) {
             return null;

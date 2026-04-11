@@ -2,11 +2,9 @@ package com.brandedhustlers.electionbackend.election.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
-import com.brandedhustlers.electionbackend.auth.domain.Permission;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
-import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
@@ -14,8 +12,8 @@ import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
-import com.brandedhustlers.electionbackend.election.domain.Candidate;
-import com.brandedhustlers.electionbackend.election.domain.Election;
+import com.brandedhustlers.electionbackend.common.util.Util;
+import com.brandedhustlers.electionbackend.election.domain.*;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
 import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
@@ -25,7 +23,12 @@ import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
+import com.brandedhustlers.electionbackend.election.repository.ElectionPresetRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.election.repository.ElectionTypeRepository;
+import com.brandedhustlers.electionbackend.voter.domain.Voter;
+import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
+import com.brandedhustlers.electionbackend.voting.service.ConfigAnchorService;
 import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
@@ -37,20 +40,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Service
 @Slf4j
 public class ElectionService implements IElectionService {
     private final ElectionRepository electionRepository;
-    private final JWTService jwtService;
-    private final AppUserRepository appUserRepository;
     private final ElectionMapper electionMapper;
     private final CloudinaryService cloudinaryService;
     private final CandidateRepository candidateRepository;
@@ -58,7 +55,12 @@ public class ElectionService implements IElectionService {
     private final CandidateMapper candidateMapper;
     private final GetUser getUser;
     private final ConfigSnapshotService configSnapshotService;
-//    private final ConfigAnchorService configAnchorService;
+    private final ConfigAnchorService configAnchorService;
+    private final Util util;
+    private final ElectionTypeRepository electionTypeRepository;
+    private final ElectionPresetRepository electionPresetRepository;
+    private final EligibilityService eligibilityService;
+    private final VoterRepository voterRepository;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -68,10 +70,16 @@ public class ElectionService implements IElectionService {
                            CandidateRepository candidateRepository,
                            AuditEmitter auditEmitter,
                            CandidateMapper candidateMapper,
-                           GetUser getUser, ConfigSnapshotService configSnapshotService) {
+                           GetUser getUser,
+                           ConfigSnapshotService configSnapshotService,
+                           ConfigAnchorService configAnchorService,
+                           HttpServletRequest httpServletRequest,
+                           VoterRepository voterRepository, Util util,
+                           ElectionTypeRepository electionTypeRepository,
+                           ElectionPresetRepository electionPresetRepository,
+                           EligibilityService eligibilityService) {
         this.electionRepository = electionRepository;
-        this.jwtService = jwtService;
-        this.appUserRepository = appUserRepository;
+        this.util = util;
         this.electionMapper = electionMapper;
         this.cloudinaryService = cloudinaryService;
         this.candidateRepository = candidateRepository;
@@ -79,6 +87,11 @@ public class ElectionService implements IElectionService {
         this.candidateMapper = candidateMapper;
         this.getUser = getUser;
         this.configSnapshotService = configSnapshotService;
+        this.configAnchorService = configAnchorService;
+        this.electionTypeRepository = electionTypeRepository;
+        this.electionPresetRepository = electionPresetRepository;
+        this.eligibilityService = eligibilityService;
+        this.voterRepository = voterRepository;
     }
 
     @Override
@@ -86,28 +99,59 @@ public class ElectionService implements IElectionService {
     public ElectionDTO createElection(CreateElectionRequest request) {
         AppUser creator = getUser.getCurrentAuthenticatedUser();
 
-        if (!(authorizeUser(creator, UserRole.ADMIN) || authorizeUser(creator, UserRole.SUPER_ADMIN))) {
-            throw new AccessDeniedException("You do not have authority to create an election");
-        }
+        util.requireAdminOrPermission(creator, PermissionType.CREATE_ELECTION);
 
-        if (creator.getAppUserOrganization() == null) {
+        if (creator.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create an election");
         }
 
-        Organization electionOrg = creator.getAppUserOrganization();
+        Organization electionOrg = creator.getActiveOrganization();
 
+        // Resolve election type
+        if (request.typeId() == null) {
+            throw new InvalidUpdate("An election type must be specified (typeId)");
+        }
+        UUID electionTypeId = UUID.fromString(request.typeId());
+
+        log.debug("Election Type ID: {}", electionTypeId);
+
+        ElectionTypeEntity electionType = electionTypeRepository.findByElectionTypeId(electionTypeId)
+                .orElseThrow(() -> new InvalidUpdate("Election type not found: " + request.typeId()));
+
+        log.debug("election entity: {}", electionType);
+
+        // Resolve preset defaults (if presetId was supplied)
+        ElectionPreset resolvedPreset = null;
+        EligibilityPolicy effectivePolicy = request.electionEligibilityPolicy();
+        Long effectiveVoterCount = request.expectedVoterCount();
+        boolean effectiveShouldEnd = request.shouldEndAutomatically();
+
+        if (request.presetId() != null) {
+            resolvedPreset = electionPresetRepository.findByPresetIdAndDeleteYn(
+                    request.presetId(), DeleteYn.N)
+                    .orElseThrow(() -> new InvalidUpdate("Preset not found: " + request.presetId()));
+
+            // Apply preset defaults only if the caller did not override them
+            if (effectivePolicy == null) {
+                effectivePolicy = resolvedPreset.getDefaultEligibilityPolicy();
+            }
+            if (effectiveVoterCount == null) {
+                effectiveVoterCount = resolvedPreset.getDefaultExpectedVoterCount();
+            }
+        }
 
         Election newElection = Election.builder()
                 .electionTitle(request.electionTitle())
                 .electionDescription(request.electionDescription())
-                .electionType(request.electionType())
+                .electionType(electionType)
+                .presetUsed(resolvedPreset)
                 .electionStatus(ElectionStatus.DRAFT)
                 .electionStartTime(request.startTime())
                 .electionEndTime(request.endtime())
-                .expectedVoterCount(request.expectedVoterCount())
+                .expectedVoterCount(effectiveVoterCount)
                 .isPubliclyVisible(request.isPubliclyVisible())
-                .shouldEndAutomatically(request.shouldEndAutomatically())
-                .eligibilityPolicy(request.electionEligibilityPolicy())
+                .shouldEndAutomatically(effectiveShouldEnd)
+                .eligibilityPolicy(effectivePolicy)
                 .organization(electionOrg)
                 .createdBy(creator)
                 .deleteYn(DeleteYn.N)
@@ -118,7 +162,7 @@ public class ElectionService implements IElectionService {
         }
 
         if (electionRepository.existsByElectionTitleAndOrganization(
-                request.electionTitle(), creator.getAppUserOrganization())) {
+                request.electionTitle(), creator.getActiveOrganization())) {
             throw new InvalidUpdate("An election with this title already exists in your organization");
         }
         Election election = electionRepository.save(newElection);
@@ -134,7 +178,6 @@ public class ElectionService implements IElectionService {
         }
         newElection.setCandidates(electionCandidates);
 
-
         UUID actorId = creator.getAppUserId();
         String actorName = creator.getFirstName() + " " + creator.getLastName();
         String actorRole = creator.getUserRole().name();
@@ -148,13 +191,13 @@ public class ElectionService implements IElectionService {
                 null,
                 "election.new_election_created",
                 null,
-                creator.getAppUserOrganization().getOrganizationId(),
+                creator.getActiveOrganization().getOrganizationId(),
                 "New Election created",
                 actorId,
                 actorName,
                 actorRole,
                 actorType,
-                "Launch",
+                "Create Election",
                 election.getElectionId(),
                 election.getElectionTitle(),
                 source,
@@ -162,12 +205,10 @@ public class ElectionService implements IElectionService {
                 ip,
                 ua,
                 "INFO",
-                1
-        );
+                1);
 
         return electionMapper.entityToDto(
-                election
-        );
+                election);
     }
 
     @Override
@@ -177,16 +218,13 @@ public class ElectionService implements IElectionService {
         Election electionToUpdate = electionRepository.findById(electionID)
                 .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionID + " does not exist"));
 
-        if (!electionToUpdate.getOrganization().getOrganizationId().equals(updater.getAppUserOrganization().getOrganizationId())) {
-            throw new AccessDeniedException("You cannot manage elections outside your organization");
-        }
-
-        requireAdminOrPermission(updater, PermissionType.EDIT_ELECTIONS);
+        util.requireOrgMatch(updater, electionToUpdate.getOrganization().getOrganizationId());
+        util.requireAdminOrPermission(updater, PermissionType.UPDATE_ELECTION);
 
         if (!electionToUpdate.getElectionStatus().equals(ElectionStatus.DRAFT)) {
             throw new InvalidUpdate("The selected election is not in draft and can no longer be updated");
         }
-        //updateStation can happen now all checks have been made
+        // updateStation can happen now all checks have been made
         electionToUpdate.setElectionTitle(request.newElectionName());
         electionToUpdate.setElectionStatus(request.newElectionStatus());
         electionToUpdate.setElectionStartTime(request.newStartTime());
@@ -208,7 +246,7 @@ public class ElectionService implements IElectionService {
                 null,
                 "election.election_updated",
                 null,
-                updater.getAppUserOrganization().getOrganizationId(),
+                updated.getOrganization().getOrganizationId(),
                 "Election details updated",
                 actorId,
                 actorName,
@@ -222,12 +260,10 @@ public class ElectionService implements IElectionService {
                 ip,
                 ua,
                 "INFO",
-                1
-        );
+                1);
 
         return electionMapper.entityToDto(
-                updated
-        );
+                updated);
     }
 
     @Override
@@ -235,23 +271,49 @@ public class ElectionService implements IElectionService {
         AppUser updater = getUser.getCurrentAuthenticatedUser();
 
         Election statusChange = electionRepository.findById(electionId)
-                .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionId + " does not exist."));
+                .orElseThrow(
+                        () -> new ElectionNotFound("An election with this ID: " + electionId + " does not exist."));
 
         ElectionStatus currStatus = statusChange.getElectionStatus();
 
-        if (!statusChange.getOrganization().getOrganizationId().equals(updater.getAppUserOrganization().getOrganizationId())) {
-            throw new AccessDeniedException("You cannot manage elections outside your organization");
-        }
+        util.requireOrgMatch(updater, statusChange.getOrganization().getOrganizationId());
 
-        requireAdminOrPermission(updater, PermissionType.EDIT_ELECTIONS);
+        PermissionType required = switch (newStatus) {
+            case UPCOMING, LIVE     -> PermissionType.PUBLISH_ELECTION;
+            case ENDED              -> PermissionType.END_ELECTION;
+            case RESULTS_RELEASED   -> PermissionType.RELEASE_RESULTS;
+            default                 -> PermissionType.UPDATE_ELECTION;
+        };
+        util.requireAdminOrPermission(updater, required);
 
         if (statusChange.getElectionStatus() == ElectionStatus.ENDED) {
             throw new InvalidUpdate("This election has already ended and cannot be modified.");
         }
 
-        if (!statusChange.getElectionStatus().equals(ElectionStatus.DRAFT)) {
-
+        if (statusChange.getElectionStatus() == ElectionStatus.RESULTS_RELEASED) {
+            throw new InvalidUpdate("Results have already been released for this election.");
         }
+
+        // Enforce valid status transition path:
+        // DRAFT -> UPCOMING -> LIVE -> ENDED -> RESULTS_RELEASED
+        java.util.Map<ElectionStatus, java.util.Set<ElectionStatus>> allowedTransitions = java.util.Map.of(
+                ElectionStatus.DRAFT,            java.util.Set.of(ElectionStatus.UPCOMING, ElectionStatus.LIVE),
+                ElectionStatus.UPCOMING,         java.util.Set.of(ElectionStatus.LIVE, ElectionStatus.DRAFT),
+                ElectionStatus.LIVE,             java.util.Set.of(ElectionStatus.ENDED),
+                ElectionStatus.ENDED,            java.util.Set.of(ElectionStatus.RESULTS_RELEASED),
+                ElectionStatus.RESULTS_RELEASED, java.util.Set.of()
+        );
+
+        java.util.Set<ElectionStatus> validNext = allowedTransitions.getOrDefault(
+                statusChange.getElectionStatus(), java.util.Set.of());
+
+        if (!validNext.contains(newStatus)) {
+            throw new InvalidUpdate(
+                    "Invalid status transition: cannot move from "
+                    + statusChange.getElectionStatus() + " to " + newStatus
+                    + ". Allowed transitions: " + validNext);
+        }
+
         statusChange.setElectionStatus(newStatus);
 
         Election statChange = electionRepository.save(statusChange);
@@ -265,12 +327,11 @@ public class ElectionService implements IElectionService {
         String ip = null;
         String ua = null;
 
-
         auditEmitter.emit(
                 null,
                 "election.status_change",
                 null,
-                updater.getAppUserOrganization().getOrganizationId(),
+                statChange.getOrganization().getOrganizationId(),
                 "Election status updated from " + currStatus + " to: " + statChange.getElectionStatus(),
                 actorId,
                 actorName,
@@ -284,26 +345,76 @@ public class ElectionService implements IElectionService {
                 ip,
                 ua,
                 "INFO",
-                1
-        );
+                1);
 
         return electionMapper.entityToDto(statChange);
     }
 
+    /**
+     * System-initiated election close — no authenticated user required.
+     * Called by {@link com.brandedhustlers.electionbackend.election.scheduler.ElectionAutoCloseScheduler}
+     * when an election's end time has passed or its vote-count threshold has been reached.
+     *
+     * <p>Bypasses the auth/org ownership checks that {@link #changeElectionStatus} enforces,
+     * but still validates the LIVE → ENDED transition and emits a full audit event
+     * with actor type "SYSTEM".</p>
+     */
     @Override
     @Transactional
-    public ElectionDTO addCandidate(UUID electionId, CandidateDTO newCandidate, MultipartFile candidateImage) throws IOException {
+    public void endElectionSystemAuto(UUID electionId, String reason) {
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() ->
+                        new ElectionNotFound("Auto-close: election not found — " + electionId));
+
+        // Guard: only LIVE elections can be moved to ENDED
+        if (election.getElectionStatus() != ElectionStatus.LIVE) {
+            log.warn("Auto-close skipped for election {} — status is {} (expected LIVE)",
+                    electionId, election.getElectionStatus());
+            return;
+        }
+
+        election.setElectionStatus(ElectionStatus.ENDED);
+        Election saved = electionRepository.save(election);
+
+        log.info("Election auto-closed [id={}, title='{}', reason={}]",
+                saved.getElectionId(), saved.getElectionTitle(), reason);
+
+        auditEmitter.emit(
+                null,
+                "election.auto_closed",
+                null,
+                saved.getOrganization().getOrganizationId(),
+                "Election automatically closed by system scheduler — reason: " + reason,
+                null,              // no human actor
+                "SYSTEM_SCHEDULER",
+                "SYSTEM",
+                "SYSTEM",
+                "Election",
+                saved.getElectionId(),
+                saved.getElectionTitle(),
+                "SCHEDULER",
+                null,
+                null,
+                null,
+                "INFO",
+                1);
+    }
+
+    @Override
+    @Transactional
+    public ElectionDTO addCandidate(UUID electionId, CandidateDTO newCandidate, MultipartFile candidateImage)
+            throws IOException {
         AppUser creator = getUser.getCurrentAuthenticatedUser();
 
         Election election = electionRepository.findById(electionId)
-                .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionId + " does not exist."));
+                .orElseThrow(
+                        () -> new ElectionNotFound("An election with this ID: " + electionId + " does not exist."));
 
-        requireAdminOrPermission(creator, PermissionType.EDIT_ELECTIONS);
+        util.requireAdminOrPermission(creator, PermissionType.EDIT_ELECTIONS);
 
         if (!election.getElectionStatus().equals(ElectionStatus.DRAFT)) {
             throw new InvalidUpdate("Cannot add candidates to an election that is not in the drafting stage.");
         }
-
 
         Candidate candidate = Candidate.builder()
                 .affiliation(newCandidate.affiliation() == null ? "Independent Candidate" : newCandidate.affiliation())
@@ -314,10 +425,9 @@ public class ElectionService implements IElectionService {
                 .createdBy(creator)
                 .deleteYn(DeleteYn.N)
                 .build();
-        //add to election
+        // add to election
         List<Candidate> electionCandidates = election.getCandidates();
         candidate.setElection(election);
-
 
         electionCandidates.add(candidate);
         election.setCandidates(electionCandidates);
@@ -334,11 +444,12 @@ public class ElectionService implements IElectionService {
         String ip = null;
         String ua = null;
 
+        Organization creatorOrg = creator.getActiveOrganization();
         auditEmitter.emit(
                 null,
                 "election.election_updated",
                 null,
-                creator.getAppUserOrganization().getOrganizationId(),
+                creatorOrg != null ? creatorOrg.getOrganizationId() : null,
                 "Election details updated",
                 actorId,
                 actorName,
@@ -352,58 +463,45 @@ public class ElectionService implements IElectionService {
                 ip,
                 ua,
                 "INFO",
-                1
-        );
+                1);
 
         return electionMapper.entityToDto(
-                addCandidate
-        );
+                addCandidate);
     }
 
+//    @org.springframework.cache.annotation.Cacheable(value = "elections", key = "#organizationId")
     public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable) {
         List<ElectionDTO> elections = electionRepository.findByOrganizationId(organizationId)
                 .stream()
-                .map(election -> {
-                    List<CandidateDTO> candidates = election.getCandidates()
-                            .stream()
-                            .map(candidateMapper::entityToDTO)
-                            .toList();
-
-                    return new ElectionDTO(
-                            //electionDTO, functional call ::
-                            election.getElectionId(),
-                            election.getElectionTitle(),
-                            election.getElectionDescription(),
-                            election.getElectionType(),
-                            election.getElectionStatus(),
-                            election.getElectionStartTime(),
-                            election.getElectionEndTime(),
-                            election.getTotalVoters(),
-                            election.getTotalVotes(),
-                            election.getCreatedAt(),
-                            election.getOrganization(),
-                            election.getDeleteYn(),
-                            election.isPubliclyVisible(),
-                            candidates,
-                            election.getEligibilityPolicy()
-                    );
-                })
+                .map(electionMapper::entityToDto)
                 .toList();
         return new PageImpl<>(elections, pageable, elections.size());
     }
 
-    public Page<ElectionDTO> getLiveElectionForVoterOrg(HttpServletRequest httpServletRequest, Pageable pageable) {
-        String token = httpServletRequest.getHeader("Authorization").substring(7);
-        //I need the voterId and the org Id
-        UUID voterOrgId = UUID.fromString(jwtService.extractVoterOrgId(token));
+//    @org.springframework.cache.annotation.Cacheable(value = "liveElections")
+    public Page<ElectionDTO> getLiveElectionForVoterOrg(Pageable pageable) {
 
-        List<ElectionDTO> assignedElections = electionRepository.findLiveByOrgAndAssigned(
-                        voterOrgId, ElectionStatus.LIVE, Timestamp.from(Instant.now())
-                ).stream()
+        Voter currentVoter = getUser.getCurrentAuthenticatedVoter();
+        UUID voterOrgId = currentVoter.getOrganization().getOrganizationId();
+        UUID voterId = currentVoter.getVoterId();
+
+        List<ElectionDTO> eligibleElections = electionRepository.findLiveByOrgAndNotVoted(
+                voterOrgId,
+                ElectionStatus.LIVE,
+                voterId)
+                .stream()
+                .filter(election -> {
+                    if (election.getEligibilityPolicy() == null) {
+                        return true;
+                    }
+                    return eligibilityService
+                            .evaluate(currentVoter.getAttributes(), election.getEligibilityPolicy())
+                            .isAllowed();
+                })
                 .map(electionMapper::entityToDto)
                 .toList();
 
-        return new PageImpl<>(assignedElections, pageable, assignedElections.size());
+        return new PageImpl<>(eligibleElections, pageable, eligibleElections.size());
     }
 
     /**
@@ -427,15 +525,14 @@ public class ElectionService implements IElectionService {
                 electionId,
                 "GO_LIVE",
                 adminId,
-                "Initial config snapshot at go-live"
-        );
+                "Initial config snapshot at go-live");
 
         /**
          * Step 2: Anchor config to blockchain.
          * This creates cryptographic proof of what the config was.
          * (Implementation in next section)
          */
-//        configAnchorService.anchorConfig(electionId);
+        configAnchorService.anchorConfig(electionId);
 
         /**
          * Step 3: Update election status.
@@ -443,35 +540,38 @@ public class ElectionService implements IElectionService {
         election.setElectionStatus(ElectionStatus.LIVE);
         electionRepository.save(election);
 
-        //todo emit election live even so participants reverive email
+        // todo emit election live event so participants receive email ~~ I don't have to do this here...because in the launch transition that calls this method
+        // todo the messaging listener picks the launch up, fetches the election and then send to the voters
+        // todo think about which path is better though...
         log.info("Election {} transitioned to LIVE, config anchored", electionId);
 
-//        return electionMapper.entityToDto(election);
+        // return electionMapper.entityToDto(election);
     }
 
-    private boolean authorityCheck(UUID appUserId, PermissionType allowedPermission) {
-        AppUser updatingUser = appUserRepository.findById(appUserId)
-                .orElseThrow(() -> new UserNotFound("User not found"));
+    /**
+     * Dry-run eligibility check — lets admins verify a voter's eligibility before go-live.
+     * Does not cast any vote or mutate any state.
+     *
+     * @return {allowed, reason} — reason is null when allowed=true
+     */
+    public EligibilityService.EligibilityResult checkEligibility(UUID electionId, UUID voterId) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+        util.requireAdminOrPermission(actor, PermissionType.CHECK_ELIGIBILITY);
 
-        Set<PermissionType> userPermissions = updatingUser.getRoles()
-                .stream()
-                .flatMap(role -> role.getRolePermissions().stream())
-                .map(Permission::getPermissionType)
-                .collect(Collectors.toSet());
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() -> new ElectionNotFound("Election not found: " + electionId));
 
-        return userPermissions.contains(allowedPermission);
+        util.requireOrgMatch(actor, election.getOrganization().getOrganizationId());
+
+        com.brandedhustlers.electionbackend.voter.domain.Voter voter = voterRepository.findById(voterId)
+                .orElseThrow(() -> new IllegalArgumentException("Voter not found: " + voterId));
+
+        util.requireOrgMatch(actor, voter.getOrganization().getOrganizationId());
+
+        if (election.getEligibilityPolicy() == null) {
+            return EligibilityService.EligibilityResult.allow();
+        }
+
+        return eligibilityService.evaluate(voter.getAttributes(), election.getEligibilityPolicy());
     }
-
-    private boolean authorizeUser(AppUser user, UserRole userType) {
-        return user.getUserRole().equals(userType);
-    }
-
-    private void requireAdminOrPermission(AppUser user, PermissionType permission) {
-        boolean hasRole = authorizeUser(user, UserRole.ADMIN) || authorizeUser(user, UserRole.SUPER_ADMIN);
-        boolean hasPermission = authorityCheck(user.getAppUserId(), permission);
-
-        if (!hasRole && !hasPermission)
-            throw new AccessDeniedException("You lack sufficient privileges for this action");
-    }
-
 }

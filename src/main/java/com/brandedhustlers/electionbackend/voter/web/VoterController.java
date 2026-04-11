@@ -1,14 +1,15 @@
 package com.brandedhustlers.electionbackend.voter.web;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
-import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.voter.dto.AssignVotersCmd;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import com.brandedhustlers.electionbackend.voter.dto.ImportStatusDTO;
+import com.brandedhustlers.electionbackend.voter.dto.UpdateVoterContactCmd;
 import com.brandedhustlers.electionbackend.voter.service.VoterImportService;
 import com.brandedhustlers.electionbackend.voter.service.VoterService;
 import jakarta.validation.Valid;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -28,20 +29,15 @@ import java.util.UUID;
 public class VoterController {
     private final VoterService voterService;
     private final VoterImportService importService;
-    private final AppUserRepository appUserRepository;
-    private final JWTService jwtService;
     private final GetUser getUser;
 
     private static final String UPLOAD_DIR = "uploads/voter-imports/";
 
     public VoterController(VoterService voterService,
                            VoterImportService importService,
-                           AppUserRepository appUserRepository,
-                           JWTService jwtService, GetUser getUser) {
+                           GetUser getUser) {
         this.voterService = voterService;
         this.importService = importService;
-        this.appUserRepository = appUserRepository;
-        this.jwtService = jwtService;
         this.getUser = getUser;
     }
 
@@ -60,28 +56,17 @@ public class VoterController {
         return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
     }
 
-    @GetMapping
-    public ResponseEntity<?> search(@RequestParam String q,
-                                    @RequestParam(defaultValue = "20") int limit) {
-        UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
-        if (actorOrgId != null) {
-            return ResponseEntity.ok(voterService.search(actorOrgId, q, limit));
-        }
-        return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
-    }
 
-/*    @PostMapping("/assign")
+
+    @PostMapping("/assign")
     public ResponseEntity<?> assign(@Valid @RequestBody AssignVotersCmd cmd) {
         UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
-        if (actorOrgId != null) {
-            voterService.assignToElection(actorOrgId, cmd);
-            return new ResponseEntity<>("Voter Assigned Successfully", HttpStatus.OK);
-        }
-        return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
-    }*/
+        voterService.assignToElection(actorOrgId, cmd);
+        return new ResponseEntity<>("Voters assigned successfully", HttpStatus.OK);
+    }
 
     @PostMapping("/import")
-    public ResponseEntity<Map<String, Object>> uploadFile(
+    public ResponseEntity<?> uploadFile(
             @RequestParam("file") MultipartFile file) {
 
         AppUser creator = getUser.getCurrentAuthenticatedUser();
@@ -104,7 +89,8 @@ public class VoterController {
                     Files.createDirectories(uploadPath);
                 }
 
-                String uniqueFileName = UUID.randomUUID() + "_" + fileName;
+                String uniqueFileName = UUID.
+                        randomUUID() + "_" + fileName;
                 Path filePath = uploadPath.resolve(uniqueFileName);
                 Files.copy(file.getInputStream(),
                         filePath,
@@ -142,5 +128,32 @@ public class VoterController {
         } else {
             return new ResponseEntity<>("User not found", HttpStatus.NOT_FOUND);
         }
+    }
+
+    @GetMapping("/org/voters")
+    public ResponseEntity<?> getOrgVoters(Pageable pageable){
+        return new ResponseEntity<>(voterService.getOrgVoters(pageable), HttpStatus.OK);
+    }
+
+    @PatchMapping("/{voterId}/contact")
+    public ResponseEntity<?> updateContact(
+            @PathVariable UUID voterId,
+            @Valid @RequestBody UpdateVoterContactCmd cmd) {
+        UUID actorOrgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (actorOrgId == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("status", "forbidden", "message", "No active organization. Please join or switch to an organization first."));
+        }
+        return ResponseEntity.ok(voterService.updateContact(actorOrgId, voterId, cmd));
+    }
+
+    @GetMapping("/search")
+    public ResponseEntity<?> search(
+            @RequestParam(required = false) String q,
+            @RequestParam(defaultValue = "20") int limit) {
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (orgId == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("status", "forbidden", "message", "No active organization. Please join or switch to an organization first."));
+        }
+        return ResponseEntity.ok(voterService.search(orgId, q, limit));
     }
 }

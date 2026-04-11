@@ -1,13 +1,16 @@
-/*
 package com.brandedhustlers.electionbackend.chain.service;
 
 import com.brandedhustlers.electionbackend.chain.domain.Batch;
 import com.brandedhustlers.electionbackend.chain.repository.ChainBatchRepository;
 import com.brandedhustlers.electionbackend.chain.util.Merkle;
+import com.brandedhustlers.electionbackend.common.flags.Feature;
+import com.brandedhustlers.electionbackend.common.flags.FeatureFlagService;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.domain.OutBox;
 import com.brandedhustlers.electionbackend.voting.repository.OutBoxRepository;
 import lombok.extern.slf4j.Slf4j;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,46 +22,44 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-
 @Slf4j
 @Service
 public class AnchorService {
 
     private final ElectionRepository electionRepo;
-    private final OutBoxRepository outbox;  // Changed from VoteRepository
+    private final OutBoxRepository outbox;
     private final ChainBatchRepository batchRepo;
-    private final BlockchainService chain;
+    private final BlockchainProvider chain;
+    private final FeatureFlagService featureFlags;
 
     public AnchorService(
             ElectionRepository electionRepo,
             OutBoxRepository outbox,
             ChainBatchRepository batchRepo,
-            BlockchainService chain
-    ) {
+            BlockchainProvider chain,
+            FeatureFlagService featureFlags) {
         this.electionRepo = electionRepo;
         this.outbox = outbox;
         this.batchRepo = batchRepo;
         this.chain = chain;
+        this.featureFlags = featureFlags;
     }
 
-    */
-/**
+    /**
      * Run every 30 seconds (changed from 10s for cost efficiency).
      * Anchors all validated votes that are pending anchor.
-     *//*
-
-//    @Scheduled(fixedDelay = 30000)
-    @Transactional
+     */
+    @Scheduled(fixedDelay = 30000)
+    @SchedulerLock(name = "anchorPendingVotes", lockAtMostFor = "25s", lockAtLeastFor = "5s")
+    @Transactional()
     public void anchorPendingVotes() {
         Timestamp now = Timestamp.from(Instant.now());
 
-        */
-/**
+        /**
          * Fetch all outbox entries where:
          * - anchor_pending = true (validated and ready to anchor)
          * - anchored = false (not yet included in a batch)
-         *//*
-
+         */
         List<OutBox> pendingEntries = outbox.findByAnchorPendingTrueAndAnchoredFalse();
 
         if (pendingEntries.isEmpty()) {
@@ -68,12 +69,10 @@ public class AnchorService {
 
         log.info("Found {} votes pending anchor", pendingEntries.size());
 
-        */
-/**
+        /**
          * Group by election ID.
          * We create one batch per election per cycle.
-         *//*
-
+         */
         Map<UUID, List<OutBox>> byElection = pendingEntries.stream()
                 .collect(Collectors.groupingBy(o -> {
                     // Extract electionId from the vote (via aggregateId)
@@ -81,11 +80,9 @@ public class AnchorService {
                     return extractElectionId(o);
                 }));
 
-        */
-/**
+        /**
          * Process each election's batch.
-         *//*
-
+         */
         byElection.forEach((electionId, entries) -> {
             try {
                 anchorElectionBatch(electionId, entries, now);
@@ -96,20 +93,23 @@ public class AnchorService {
         });
     }
 
-    */
-/**
+    /**
      * Anchor a single batch for one election.
      *
      * @param electionId The election
-     * @param entries Outbox entries to include in this batch
-     * @param now Current timestamp
-     *//*
-
+     * @param entries    Outbox entries to include in this batch
+     * @param now        Current timestamp
+     */
     private void anchorElectionBatch(UUID electionId, List<OutBox> entries, Timestamp now) {
         UUID orgId = electionRepo.findOrgId(electionId);
 
-        */
-/**
+        if (!featureFlags.isEnabled(orgId, Feature.BLOCKCHAIN_ANCHORING)) {
+            log.info("BLOCKCHAIN_ANCHORING not enabled for org {}, skipping batch for election {}",
+                    orgId, electionId);
+            return;
+        }
+
+        /**
          * CRITICAL CHANGE:
          * Build Merkle tree from OUTBOX HASHES, not from re-reading votes table.
          *
@@ -120,8 +120,7 @@ public class AnchorService {
          * 1. Were cast originally
          * 2. Passed validation (or were restored)
          * 3. Are guaranteed to be in their original state
-         *//*
-
+         */
         List<byte[]> leaves = entries.stream()
                 .map(o -> hexToBytes(o.getVoteHash()))
                 .toList();
@@ -136,18 +135,15 @@ public class AnchorService {
         log.info("Anchoring batch for election {}: {} votes, root: {}",
                 electionId, entries.size(), merkleRoot);
 
-        */
-/**
+        /**
          * Submit to blockchain.
          * This calls AnchorContract:AnchorBatch (your existing method).
-         *//*
-
+         */
         String batchIdStr = chain.anchorBatch(
                 electionId.toString(),
                 orgId.toString(),
                 merkleRoot,
-                now.toInstant().toString()
-        );
+                now.toInstant().toString());
 
         UUID batchId = tryParseUuidOrRandom(batchIdStr);
 
@@ -161,7 +157,7 @@ public class AnchorService {
                 .electionId(electionId)
                 .orgId(orgId)
                 .merkleRoot(merkleRoot)
-                .voteCount(entries.size())  // NEW field
+                .voteCount(entries.size()) // NEW field
                 .fromTs(earliestVote)
                 .toTs(now)
                 .status("ANCHORED")
@@ -171,11 +167,9 @@ public class AnchorService {
 
         batchRepo.save(batch);
 
-        */
-/**
+        /**
          * Mark all outbox entries as anchored.
-         *//*
-
+         */
         entries.forEach(o -> {
             o.setAnchorPending(false);
             o.setAnchored(true);
@@ -188,20 +182,17 @@ public class AnchorService {
                 batchId, electionId, entries.size());
     }
 
-    */
-/**
+    /**
      * Extract election ID from outbox payload.
-     * Your payload format: {"id":"...","electionId":"...","candidateId":"...","orgId":"..."}
-     *//*
-
+     * Your payload format:
+     * {"id":"...","electionId":"...","candidateId":"...","orgId":"..."}
+     */
     private UUID extractElectionId(OutBox outboxEntry) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper =
-                    new com.fasterxml.jackson.databind.ObjectMapper();
+            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
             Map<String, String> payload = mapper.readValue(
                     outboxEntry.getPayload(),
-                    Map.class
-            );
+                    Map.class);
             return UUID.fromString(payload.get("electionId"));
         } catch (Exception e) {
             log.error("Failed to extract electionId from outbox {}", outboxEntry.getId(), e);
@@ -209,11 +200,9 @@ public class AnchorService {
         }
     }
 
-    */
-/**
+    /**
      * Convert hex string to byte array.
-     *//*
-
+     */
     private byte[] hexToBytes(String hex) {
         int len = hex.length();
         byte[] data = new byte[len / 2];
@@ -231,4 +220,4 @@ public class AnchorService {
             return UUID.randomUUID();
         }
     }
-}*/
+}

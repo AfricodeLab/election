@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.voter.service;
 
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
 import com.brandedhustlers.electionbackend.voter.domain.VerificationToken;
@@ -10,7 +11,9 @@ import com.brandedhustlers.electionbackend.voter.dto.OtpSendResponse;
 import com.brandedhustlers.electionbackend.voter.repository.VerificationTokenRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import jakarta.mail.MessagingException;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseCookie;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,10 +37,9 @@ public class VerificationService {
     public static final String SESSION_KEY = "STEP_UP_VERIFIED_AT";
     private final SecureRandom rnd = new SecureRandom();
 
-
     public VerificationService(VoterRepository voters,
-                               VerificationTokenRepository tokens,
-                               MessagingService notif, JWTService jwtService) {
+            VerificationTokenRepository tokens,
+            MessagingService notif, JWTService jwtService) {
         this.voters = voters;
         this.tokens = tokens;
         this.notif = notif;
@@ -50,48 +52,57 @@ public class VerificationService {
                 .orElseThrow(() -> new NoSuchElementException("VOTER-404 not found"));
 
         var now = Instant.now();
-        var last = tokens.findFirstByVoterIdAndCreatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(voter.getVoterId(), now).orElse(null);
+        var last = tokens.findValidToken(voter.getVoterId(), now)
+                .orElse(null);
 
         if (last != null && Duration.between(last.getCreatedAt(), now).compareTo(RESEND_COOLDOWN) < 0) {
+            last.setDeleteYn(DeleteYn.Y);
+            tokens.save(last);
             throw new IllegalStateException("OTP-429 resend too soon, please wait");
         }
 
+        String channel = req.resolvedChannel();
+        if (!channel.equals("EMAIL") && !channel.equals("SMS")) {
+            throw new IllegalArgumentException("Invalid channel '" + channel + "'. Supported: EMAIL, SMS");
+        }
+        if (channel.equals("SMS") && (voter.getPhone() == null || voter.getPhone().isBlank())) {
+            throw new IllegalStateException("Voter has no phone number on file. Use EMAIL channel instead.");
+        }
 
         String otp = generateOtp6();
-        log.info("otp generated for voter with email: {}", voter.getEmail());
+        log.info("otp generated for voter with email: {} via channel: {}", voter.getEmail(), channel);
         String hash = sha256(otp);
-
 
         var t = VerificationToken.builder()
                 .voterId(voter.getVoterId())
                 .tokenHash(hash)
                 .type("OTP")
-                .channel("EMAIL")
+                .channel(channel)
                 .attempts(0)
                 .createdAt(now)
                 .expiresAt(now.plus(OTP_TTL))
+                .isUsed(false)
                 .build();
         tokens.save(t);
 
-
-        // Send email directly
-        notif.sendOtpEmail(voter.getEmail(), voter.getName(), otp);
-
+        if (channel.equals("SMS")) {
+            notif.sendOtpSms(voter.getPhone(), voter.getName(), otp);
+        } else {
+            notif.sendOtpEmail(voter.getEmail(), voter.getName(), otp);
+        }
 
         // todo emit audit log here
 
         return new OtpSendResponse(t.getId(), "EMAIL");
     }
 
-
-    public OtpConfirmResponse confirmOtp(OtpConfirmRequest req) {
+    public OtpConfirmResponse confirmOtp(OtpConfirmRequest req, HttpServletResponse response) {
         var voter = voters.findByEmailIgnoreCase(req.email())
                 .orElseThrow(() -> new NoSuchElementException("Voter not found"));
 
         var now = Instant.now();
-        var tok = tokens.findFirstByVoterIdAndCreatedAtIsNullAndExpiresAtAfterOrderByCreatedAtDesc(voter.getVoterId(), now)
+        var tok = tokens.findValidToken(voter.getVoterId(), now)
                 .orElseThrow(() -> new NoSuchElementException("No active code"));
-
 
         if (tok.getAttempts() >= MAX_ATTEMPTS) {
             throw new IllegalStateException("Too many attempts");
@@ -100,19 +111,29 @@ public class VerificationService {
         if (!hash.equals(tok.getTokenHash())) {
             tok.setAttempts(tok.getAttempts() + 1);
             tokens.save(tok);
-            return new OtpConfirmResponse(false, "Incorrect code. Attempts left: " + (MAX_ATTEMPTS - tok.getAttempts()), null);
+            return new OtpConfirmResponse(false, "Incorrect code. Attempts left: " + (MAX_ATTEMPTS - tok.getAttempts()),
+                    null);
         }
 
-        tok.setCreatedAt(now);
+        tok.setUsed(true);
+        tok.setDeleteYn(DeleteYn.Y);
         tokens.save(tok);
 
         String voterToken = jwtService.generateVoterToken(voter.getEmail());
+
+        ResponseCookie jwtCookie = ResponseCookie.from("voterToken", voterToken)
+                .httpOnly(true)
+                .secure(true)
+                .sameSite("Strict")
+                .path("/")
+                .maxAge(3600)
+                .build();
+        response.setHeader("Set-Cookie", jwtCookie.toString());
 
         return new OtpConfirmResponse(true,
                 "Voter verified",
                 voterToken);
     }
-
 
     private String generateOtp6() {
         int code = rnd.nextInt(900000) + 100000;
@@ -124,7 +145,8 @@ public class VerificationService {
             var md = java.security.MessageDigest.getInstance("SHA-256");
             byte[] dig = md.digest(s.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
-            for (byte b : dig) sb.append(String.format("%02x", b));
+            for (byte b : dig)
+                sb.append(String.format("%02x", b));
             return sb.toString();
         } catch (Exception e) {
             throw new RuntimeException(e);

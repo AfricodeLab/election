@@ -151,7 +151,7 @@ public class DeviceService {
             devices.save(d);
 
             // Realtime push after state change: station-scoped topic reduces noise and enforces auth scopes at subscribe time
-            realtimeGateway.sendDeviceStatus(d.getStationId().toString(), Map.of(
+            realtimeGateway.sendDeviceStatus(d.getOrgId(), d.getStationId().toString(), Map.of(
                     "deviceId", d.getId().toString(),
                     "status", d.getStatus().name(),
                     "lastSeen", d.getLastSeen().toString(),

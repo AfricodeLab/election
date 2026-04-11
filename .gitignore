@@ -41,3 +41,8 @@ build/
 /socket.html
 
 /src/main/resources/fabric
+
+/load_tests
+/.claude/
+/SYSTEM_DOCS.md
+/stitch_electchain_management_platform/

@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.voter.domain;
 
+import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -39,5 +40,16 @@ public class VerificationToken {
     private Instant createdAt;
 
     private String channel;
+
+    @Column(nullable = true)
+    private boolean isUsed;
+
+    @Enumerated(EnumType.STRING)
+    private DeleteYn deleteYn;
+
+    @PrePersist
+    void onCreate(){
+        deleteYn = DeleteYn.N;
+    }
 
 }

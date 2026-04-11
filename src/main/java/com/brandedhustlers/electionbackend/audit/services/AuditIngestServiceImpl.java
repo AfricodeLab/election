@@ -3,6 +3,9 @@ package com.brandedhustlers.electionbackend.audit.services;
 import com.brandedhustlers.electionbackend.audit.domain.DomainEvent;
 import com.brandedhustlers.electionbackend.audit.dto.AuditEnvelope;
 import com.brandedhustlers.electionbackend.audit.repository.DomainEventRepository;
+import com.brandedhustlers.electionbackend.common.flags.Feature;
+import com.brandedhustlers.electionbackend.common.flags.FeatureFlagService;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,15 +18,20 @@ import java.util.Objects;
  * AuditIngestServiceImpl — validates, redacts, maps to DomainEvent, idempotent by eventId.
  * Justification: ingestion must never explode the pipeline; duplicates are tolerated (unique constraint).
  */
+@Slf4j
 @Service
 public class AuditIngestServiceImpl implements AuditIngestService {
     private final DomainEventRepository repo;
     private final RedactionService redact;
+    private final FeatureFlagService featureFlags;
     private final Clock clock;
 
-    AuditIngestServiceImpl(DomainEventRepository repo, RedactionService redact) {
+    public AuditIngestServiceImpl(DomainEventRepository repo,
+                           RedactionService redact,
+                           FeatureFlagService featureFlags) {
         this.repo = repo;
         this.redact = redact;
+        this.featureFlags = featureFlags;
         this.clock = Clock.systemUTC();
     }
 
@@ -42,9 +50,20 @@ public class AuditIngestServiceImpl implements AuditIngestService {
             throw new IllegalArgumentException("actionLabel is required");
         }
 
+        // Feature gate: silently skip if AUDIT_TRAIL is not in this org's tier
+        if (!featureFlags.isEnabled(env.getOrgId(), Feature.AUDIT_TRAIL)) {
+            log.debug("AUDIT_TRAIL not enabled for org {}, skipping event {}", env.getOrgId(), env.getEventId());
+            return;
+        }
+
         AuditEnvelope.Actor actor = env.getActor();
         AuditEnvelope.Target target = env.getTarget();
         AuditEnvelope.Context ctx = env.getContext();
+
+        // Only hash PII if PII_REDACTION is enabled; otherwise omit IP/UA entirely
+        boolean piiEnabled = featureFlags.isEnabled(env.getOrgId(), Feature.PII_REDACTION);
+        String ipHash = (piiEnabled && ctx != null) ? redact.hashIp(ctx.getIp()) : null;
+        String uaHash = (piiEnabled && ctx != null) ? redact.hashUa(ctx.getUa()) : null;
 
         DomainEvent row = DomainEvent.builder()
                 .eventId(env.getEventId())
@@ -63,8 +82,8 @@ public class AuditIngestServiceImpl implements AuditIngestService {
                 .severity(env.getSeverity() == null ? "INFO" : env.getSeverity())
                 .source(ctx == null ? null : ctx.getSource())
                 .correlationId(ctx == null ? null : ctx.getCorrelationId())
-                .ipHash(ctx == null ? null : redact.hashIp(ctx.getIp()))
-                .uaHash(ctx == null ? null : redact.hashUa(ctx.getUa()))
+                .ipHash(ipHash)
+                .uaHash(uaHash)
                 .build();
 
         try {

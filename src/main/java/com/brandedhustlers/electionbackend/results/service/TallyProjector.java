@@ -1,5 +1,7 @@
 package com.brandedhustlers.electionbackend.results.service;
 
+import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
+import com.brandedhustlers.electionbackend.realtime.gateway.RealtimeGateway;
 import com.brandedhustlers.electionbackend.results.domain.Tally;
 import com.brandedhustlers.electionbackend.results.domain.TallyId;
 import com.brandedhustlers.electionbackend.results.repository.TallyRepository;
@@ -12,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -19,11 +22,17 @@ import java.util.UUID;
 public class TallyProjector {
     private final TallyRepository repo;
     private final ObjectMapper om;
+    private final RealtimeGateway realtimeGateway;
+    private final ElectionRepository electionRepository;
 
     public TallyProjector(TallyRepository repo,
-                          ObjectMapper om) {
+                          ObjectMapper om,
+                          RealtimeGateway realtimeGateway,
+                          ElectionRepository electionRepository) {
         this.repo = repo;
         this.om = om;
+        this.realtimeGateway = realtimeGateway;
+        this.electionRepository = electionRepository;
     }
 
     @Transactional
@@ -46,7 +55,22 @@ public class TallyProjector {
 
         repo.save(t);
 
-        // TODO push websocket updateStation via RealtimeGateway
+        // Resolve the org that owns this election so the feature flag check
+        // in RealtimeGateway can enforce tier enforcement without a SecurityContext.
+        UUID orgId = electionRepository.findOrgId(electionId);
+
+        // Push live tally update to all subscribers watching this election
+        realtimeGateway.sendResultsUpdate(
+                orgId,
+                electionId.toString(),
+                Map.of(
+                        "electionId",  electionId.toString(),
+                        "candidateId", candidateId.toString(),
+                        "count",       t.getCount(),
+                        "updatedAt",   t.getUpdatedAt().toInstant().toString()
+                ));
+        log.debug("Pushed tally update for election {} candidate {} count={}",
+                electionId, candidateId, t.getCount());
     }
 }
 

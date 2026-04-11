@@ -1,7 +1,6 @@
-/*
 package com.brandedhustlers.electionbackend.voting.service;
 
-import com.brandedhustlers.electionbackend.chain.service.BlockchainService;
+import com.brandedhustlers.electionbackend.chain.service.BlockchainProvider;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.domain.ElectionResultsAnchor;
@@ -35,7 +34,7 @@ public class ReleaseService {
     private final TamperingLogRepository tamperingLog;
     private final ElectionResultsAnchorRepository resultsAnchorRepo;
     private final ReleaseValidationService validationService;
-    private final BlockchainService chain;
+    private final BlockchainProvider chain;
     private final ObjectMapper objectMapper;
 
     public ReleaseService(
@@ -44,9 +43,8 @@ public class ReleaseService {
             TamperingLogRepository tamperingLog,
             ElectionResultsAnchorRepository resultsAnchorRepo,
             ReleaseValidationService validationService,
-            BlockchainService chain,
-            ObjectMapper objectMapper
-    ) {
+            BlockchainProvider chain,
+            ObjectMapper objectMapper) {
         this.electionRepo = electionRepo;
         this.voteRepo = voteRepo;
         this.tamperingLog = tamperingLog;
@@ -56,60 +54,48 @@ public class ReleaseService {
         this.objectMapper = objectMapper;
     }
 
-    */
-/**
+    /**
      * Release election results after validation.
      *
-     * @param electionId The election
-     * @param adminUserId Admin releasing the results
+     * @param electionId   The election
+     * @param adminUserId  Admin releasing the results
      * @param forceRelease True to override validation warnings/errors
      * @return Release result with anchored data
-     *//*
-
+     */
     @Transactional
     public ReleaseResult releaseResults(UUID electionId, UUID adminUserId, boolean forceRelease) {
 
         log.info("Starting release for election {}, admin={}, force={}",
                 electionId, adminUserId, forceRelease);
 
-        */
-/**
+        /**
          * Step 1: Run validation.
-         *//*
-
-        ReleaseValidationService.ReleaseValidationReport validation =
-                validationService.validate(electionId, null);
+         */
+        ReleaseValidationService.ReleaseValidationReport validation = validationService.validate(electionId, null);
 
         if (validation.isAutoReleaseBlocked() && !forceRelease) {
             throw new ReleaseBlockedException(
                     "Release blocked due to validation errors. Use forceRelease=true to override.",
-                    validation
-            );
+                    validation);
         }
 
-        */
-/**
+        /**
          * Step 2: Get excluded votes (unrestorable tampering).
-         *//*
-
+         */
         List<UUID> excludedVoteIds = tamperingLog
                 .findByElectionIdAndIncidentType(electionId, "ARCHIVE_TAMPERED")
                 .stream()
                 .map(TamperingLog::getVoteId)
                 .toList();
 
-        */
-/**
+        /**
          * Step 3: Compute final tally (excluding bad votes).
-         *//*
-
+         */
         Map<UUID, Long> tally = computeTally(electionId, excludedVoteIds);
 
-        */
-/**
+        /**
          * Step 4: Build results object.
-         *//*
-
+         */
         ElectionResults results = ElectionResults.builder()
                 .electionId(electionId)
                 .orgId(electionRepo.findOrgId(electionId))
@@ -129,11 +115,9 @@ public class ReleaseService {
         log.info("Computed results for election {}: {} valid votes, {} excluded, hash={}",
                 electionId, results.getValidVotes(), results.getExcludedVoteCount(), resultsHash);
 
-        */
-/**
+        /**
          * Step 5: Anchor to blockchain.
-         *//*
-
+         */
         String txId = chain.anchorResults(
                 electionId.toString(),
                 results.getOrgId().toString(),
@@ -141,14 +125,11 @@ public class ReleaseService {
                 results.getExcludedVoteCount(),
                 forceRelease,
                 adminUserId.toString(),
-                Instant.now().toString()
-        );
+                Instant.now().toString());
 
-        */
-/**
+        /**
          * Step 6: Store anchor record locally.
-         *//*
-
+         */
         ElectionResultsAnchor anchor = ElectionResultsAnchor.builder()
                 .electionId(electionId)
                 .resultsJson(resultsJson)
@@ -162,11 +143,9 @@ public class ReleaseService {
 
         resultsAnchorRepo.save(anchor);
 
-        */
-/**
+        /**
          * Step 7: Update election status.
-         *//*
-
+         */
         var election = electionRepo.findById(electionId).orElseThrow();
         election.setElectionStatus(ElectionStatus.RESULTS_RELEASED);
         electionRepo.save(election);
@@ -176,11 +155,9 @@ public class ReleaseService {
         return new ReleaseResult(results, validation, txId);
     }
 
-    */
-/**
+    /**
      * Compute tally excluding specific votes.
-     *//*
-
+     */
     private Map<UUID, Long> computeTally(UUID electionId, List<UUID> excludedVoteIds) {
         // Get all votes for this election
         List<Vote> allVotes = voteRepo.findByElectionId(electionId);
@@ -190,8 +167,7 @@ public class ReleaseService {
                 .filter(v -> !excludedVoteIds.contains(v.getId()))
                 .collect(Collectors.groupingBy(
                         Vote::getCandidateId,
-                        Collectors.counting()
-                ));
+                        Collectors.counting()));
     }
 
     private String serializeResults(ElectionResults results) {
@@ -209,7 +185,8 @@ public class ReleaseService {
             StringBuilder hexString = new StringBuilder();
             for (byte b : hash) {
                 String hex = Integer.toHexString(0xff & b);
-                if (hex.length() == 1) hexString.append('0');
+                if (hex.length() == 1)
+                    hexString.append('0');
                 hexString.append(hex);
             }
             return hexString.toString();
@@ -218,11 +195,9 @@ public class ReleaseService {
         }
     }
 
-    */
-/**
+    /**
      * Exception thrown when release is blocked.
-     *//*
-
+     */
     public static class ReleaseBlockedException extends RuntimeException {
         private final ReleaseValidationService.ReleaseValidationReport validationReport;
 
@@ -236,11 +211,9 @@ public class ReleaseService {
         }
     }
 
-    */
-/**
+    /**
      * Results object (stored in DB and anchored to chain).
-     *//*
-
+     */
     @Data
     @Builder
     public static class ElectionResults {
@@ -249,21 +222,19 @@ public class ReleaseService {
         private long totalVotesCast;
         private long validVotes;
         private int excludedVoteCount;
-        private Map<UUID, Long> tally;  // candidateId → vote count
+        private Map<UUID, Long> tally; // candidateId → vote count
         private ReleaseValidationService.ReleaseValidationReport validationReport;
         private Instant releasedAt;
         private UUID releasedBy;
         private boolean forceReleased;
     }
 
-    */
-/**
+    /**
      * Release result returned to caller.
-     *//*
-
+     */
     public record ReleaseResult(
             ElectionResults results,
             ReleaseValidationService.ReleaseValidationReport validation,
-            String chainTxId
-    ) {}
-}*/
+            String chainTxId) {
+    }
+}
