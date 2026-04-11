@@ -1,6 +1,5 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
-import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -17,8 +16,7 @@ public class WebConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
-        String origins = dotenv.get("CORS_ALLOWED_ORIGINS", "http://localhost:5176");
+        String origins = System.getenv("CORS_ALLOWED_ORIGINS");
 
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));

@@ -1,6 +1,5 @@
 package com.brandedhustlers.electionbackend.common.config.websocket;
 
-import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
@@ -27,8 +26,7 @@ public class WebsocketConfig implements WebSocketMessageBrokerConfigurer {
     private String rabbitPassword;
 
     public WebsocketConfig() {
-        Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
-        this.allowedOrigins = dotenv.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",");
+        this.allowedOrigins = new String[]{System.getenv("CORS_ALLOWED_ORIGINS")};
     }
 
     @Override
