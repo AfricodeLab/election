@@ -119,6 +119,11 @@ public class AuthService implements IAuthService {
             username = baseUsername + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
         }
 
+        // Resolve org request — userOrg may be null if the frontend sends organizationName as a flat field.
+        CreateOrganizationRequest orgRequest = registrationRequest.userOrg() != null
+                ? registrationRequest.userOrg()
+                : new CreateOrganizationRequest(registrationRequest.organizationName(), null);
+
         // Generate email verification token
         String verificationToken = UUID.randomUUID().toString();
 
@@ -128,6 +133,7 @@ public class AuthService implements IAuthService {
                 .lastName(registrationRequest.lastName())
                 .appUserEmail(registrationRequest.email())
                 .username(username)
+                .organizationName(orgRequest.organizationName())
                 .password(passwordEncoder.encode(registrationRequest.password()))
                 .userRole(UserRole.ORG_ADMIN)
                 .emailVerified(false)
@@ -139,10 +145,6 @@ public class AuthService implements IAuthService {
 
         // Create organization — this also creates a UserOrganization row
         // linking the creator as ORG_ADMIN with activeOrg=true.
-        // userOrg may be null if the frontend sends organizationName as a flat field.
-        CreateOrganizationRequest orgRequest = registrationRequest.userOrg() != null
-                ? registrationRequest.userOrg()
-                : new CreateOrganizationRequest(registrationRequest.organizationName(), null);
         organizationService.createOrganization(orgRequest, newUser.getAppUserId());
 
         // Send verification email asynchronously (fire-and-forget; log on failure)
@@ -306,11 +308,15 @@ public class AuthService implements IAuthService {
         Role userRole = roleRepository.findByRoleName(createUserRequest.userRole())
                 .orElseThrow(() -> new InvalidRole("Role not found"));
 
+        String creatorOrgName = creator.getActiveOrganization() != null
+                ? creator.getActiveOrganization().getOrganizationName() : "";
+
         AppUser newUser = AppUser.builder()
                 .firstName(createUserRequest.firstName())
                 .lastName(createUserRequest.lastName())
                 .username(createUserRequest.username() == null ? null : createUserRequest.username())
                 .appUserEmail(createUserRequest.companyEmail())
+                .organizationName(creatorOrgName)
                 .password(passwordEncoder.encode(createUserRequest.defaultPassword()))
                 .userRole(UserRole.valueOf(createUserRequest.userRole()))
                 .userPreferences(null)
