@@ -111,9 +111,12 @@ public class AuthService implements IAuthService {
             throw new UserAlreadyExists("An account with this email already exists");
         }
 
-        // Check for duplicate username
-        if (appUserRepository.existsByUsername(registrationRequest.username())) {
-            throw new UserAlreadyExists("Username already taken");
+        // Derive a unique username from the email prefix (e.g. "alice" from "alice@example.com")
+        String baseUsername = registrationRequest.email().split("@")[0].toLowerCase()
+                .replaceAll("[^a-z0-9._-]", "");
+        String username = baseUsername;
+        if (appUserRepository.existsByUsername(username)) {
+            username = baseUsername + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
         }
 
         // Generate email verification token
@@ -124,7 +127,7 @@ public class AuthService implements IAuthService {
                 .firstName(registrationRequest.firstName())
                 .lastName(registrationRequest.lastName())
                 .appUserEmail(registrationRequest.email())
-                .username(registrationRequest.username())
+                .username(username)
                 .password(passwordEncoder.encode(registrationRequest.password()))
                 .userRole(UserRole.ORG_ADMIN)
                 .emailVerified(false)
