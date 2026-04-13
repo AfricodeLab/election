@@ -18,9 +18,12 @@ import java.net.URISyntaxException;
  *
  * <p>Priority order:
  * <ol>
- *   <li>{@code CLOUDAMQP_URL} — full AMQP URI, provided by the Heroku CloudAMQP add-on
+ *   <li>{@code CLOUDAMQP_URL} — full AMQP URI set by the Heroku CloudAMQP add-on
  *       (e.g. {@code amqps://user:pass@hostname/vhost}).
- *   <li>Individual {@code RABBITMQ_HOST / PORT / USERNAME / PASSWORD} env vars.
+ *       <strong>Must be an AMQP URI — do not store a Redis URL here.</strong>
+ *   <li>{@code RABBITMQ_URL} — full AMQP URI set manually
+ *       (e.g. {@code amqps://user:pass@hostname/vhost}).
+ *   <li>Individual {@code RABBITMQ_HOST / PORT / USERNAME / PASSWORD / VHOST} env vars.
  *   <li>Localhost defaults ({@code guest/guest}) — starts the app cleanly but
  *       messaging will be a no-op until a real broker is wired up.
  * </ol>
@@ -45,42 +48,49 @@ public class RabbitConnectionConfig {
     public CachingConnectionFactory rabbitConnectionFactory() {
         CachingConnectionFactory factory = new CachingConnectionFactory();
 
-        String cloudAmqpUrl = System.getenv("CLOUDAMQP_URL");
+        // Resolve the AMQP URI: CLOUDAMQP_URL → RABBITMQ_URL → individual vars → localhost
+        String amqpUrl = resolveAmqpUrl();
 
-        if (cloudAmqpUrl != null && !cloudAmqpUrl.isBlank()) {
-            // ── Heroku CloudAMQP add-on path ──────────────────────────────────
-            log.info("RabbitMQ: configuring from CLOUDAMQP_URL");
+        if (amqpUrl != null) {
+            log.info("RabbitMQ: configuring from URL (scheme={})", amqpUrl.substring(0, amqpUrl.indexOf("://")));
             try {
-                URI uri = new URI(cloudAmqpUrl);
+                URI uri = new URI(amqpUrl);
 
-                factory.setHost(uri.getHost());
-                factory.setPort(uri.getPort() > 0 ? uri.getPort() : 5672);
+                // Guard: reject non-AMQP URLs (e.g. someone accidentally set CLOUDAMQP_URL
+                // to a Redis URL — that was the bug that caused the redis-host-dialing issue).
+                String scheme = uri.getScheme();
+                if (scheme == null || (!scheme.startsWith("amqp"))) {
+                    log.error("RabbitMQ: URL has non-AMQP scheme '{}' — ignoring and falling back to individual vars. " +
+                              "Check that CLOUDAMQP_URL / RABBITMQ_URL contain an amqp:// or amqps:// URI.", scheme);
+                    applyIndividualVars(factory);
+                } else {
+                    factory.setHost(uri.getHost());
+                    factory.setPort(uri.getPort() > 0 ? uri.getPort() : 5672);
 
-                String userInfo = uri.getUserInfo(); // "user:password"
-                if (userInfo != null) {
-                    String[] parts = userInfo.split(":", 2);
-                    factory.setUsername(parts[0]);
-                    if (parts.length > 1) factory.setPassword(parts[1]);
-                }
+                    String userInfo = uri.getUserInfo(); // "user:password"
+                    if (userInfo != null) {
+                        String[] parts = userInfo.split(":", 2);
+                        factory.setUsername(parts[0]);
+                        if (parts.length > 1) factory.setPassword(parts[1]);
+                    }
 
-                // Path component is the vhost, e.g. "/myvhost" → "myvhost"
-                String path = uri.getPath();
-                if (path != null && path.length() > 1) {
-                    factory.setVirtualHost(path.substring(1));
-                }
+                    // Path component is the vhost, e.g. "/myvhost" → "myvhost"
+                    String path = uri.getPath();
+                    if (path != null && path.length() > 1) {
+                        factory.setVirtualHost(path.substring(1));
+                    }
 
-                // Enable TLS for amqps:// (CloudAMQP free tier uses plain amqp,
-                // paid tiers use amqps)
-                if ("amqps".equalsIgnoreCase(uri.getScheme())) {
-                    try {
-                        factory.getRabbitConnectionFactory().useSslProtocol();
-                    } catch (Exception e) {
-                        log.warn("RabbitMQ: could not enable SSL — {}", e.getMessage());
+                    if ("amqps".equalsIgnoreCase(scheme)) {
+                        try {
+                            factory.getRabbitConnectionFactory().useSslProtocol();
+                        } catch (Exception e) {
+                            log.warn("RabbitMQ: could not enable SSL — {}", e.getMessage());
+                        }
                     }
                 }
 
             } catch (URISyntaxException e) {
-                log.error("RabbitMQ: CLOUDAMQP_URL is malformed — falling back to defaults. {}", e.getMessage());
+                log.error("RabbitMQ: URL is malformed — falling back to individual vars. {}", e.getMessage());
                 applyIndividualVars(factory);
             }
 
@@ -93,6 +103,15 @@ public class RabbitConnectionConfig {
         factory.setConnectionTimeout(6_000);
 
         return factory;
+    }
+
+    /** Returns the first non-blank AMQP URL found, or null if none are set. */
+    private String resolveAmqpUrl() {
+        String v = System.getenv("CLOUDAMQP_URL");
+        if (v != null && !v.isBlank()) { log.info("RabbitMQ: using CLOUDAMQP_URL"); return v; }
+        v = System.getenv("RABBITMQ_URL");
+        if (v != null && !v.isBlank()) { log.info("RabbitMQ: using RABBITMQ_URL"); return v; }
+        return null;
     }
 
     private void applyIndividualVars(CachingConnectionFactory factory) {
@@ -139,6 +158,22 @@ public class RabbitConnectionConfig {
         factory.setMessageConverter(messageConverter);
         factory.setMissingQueuesFatal(false);
         factory.setDefaultRequeueRejected(false);
+
+        // Cap consumer threads: 1 concurrent consumer per listener, max 1.
+        // Prevents the "failed → restart → new thread → failed" loop from
+        // blowing up memory when the broker is unreachable.
+        factory.setConcurrentConsumers(1);
+        factory.setMaxConcurrentConsumers(1);
+
+        // Exponential back-off on consumer restart: 5s → 10s → 20s … max 60s.
+        // Without this, a broken connection spawns a new consumer thread every
+        // few milliseconds, exhausting heap and causing R14 on Heroku.
+        org.springframework.retry.backoff.ExponentialBackOffPolicy backOff =
+                new org.springframework.retry.backoff.ExponentialBackOffPolicy();
+        backOff.setInitialInterval(5_000);
+        backOff.setMultiplier(2.0);
+        backOff.setMaxInterval(60_000);
+        factory.setRecoveryBackOff(backOff);
 
         boolean autoStart = !"false".equalsIgnoreCase(
                 System.getenv().getOrDefault("RABBITMQ_LISTENERS_ENABLED", "true"));
