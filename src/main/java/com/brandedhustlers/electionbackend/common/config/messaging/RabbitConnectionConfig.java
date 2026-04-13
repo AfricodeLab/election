@@ -9,6 +9,7 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.util.backoff.BackOff;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -173,7 +174,7 @@ public class RabbitConnectionConfig {
         backOff.setInitialInterval(5_000);
         backOff.setMultiplier(2.0);
         backOff.setMaxInterval(60_000);
-        factory.setRecoveryBackOff(backOff);
+        factory.setRecoveryBackOff((BackOff) backOff);
 
         boolean autoStart = !"false".equalsIgnoreCase(
                 System.getenv().getOrDefault("RABBITMQ_LISTENERS_ENABLED", "true"));
