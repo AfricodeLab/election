@@ -9,7 +9,7 @@ import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.util.backoff.BackOff;
+import org.springframework.util.backoff.ExponentialBackOff;
 
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -169,12 +169,11 @@ public class RabbitConnectionConfig {
         // Exponential back-off on consumer restart: 5s → 10s → 20s … max 60s.
         // Without this, a broken connection spawns a new consumer thread every
         // few milliseconds, exhausting heap and causing R14 on Heroku.
-        org.springframework.retry.backoff.ExponentialBackOffPolicy backOff =
-                new org.springframework.retry.backoff.ExponentialBackOffPolicy();
-        backOff.setInitialInterval(5_000);
-        backOff.setMultiplier(2.0);
-        backOff.setMaxInterval(60_000);
-        factory.setRecoveryBackOff((BackOff) backOff);
+        // Uses spring-core's ExponentialBackOff (not spring-retry's ExponentialBackOffPolicy).
+        ExponentialBackOff backOff =
+                new ExponentialBackOff(5_000L, 2.0);
+        backOff.setMaxInterval(60_000L);
+        factory.setRecoveryBackOff(backOff);
 
         boolean autoStart = !"false".equalsIgnoreCase(
                 System.getenv().getOrDefault("RABBITMQ_LISTENERS_ENABLED", "true"));
