@@ -138,9 +138,12 @@ public class AuthService implements IAuthService {
         appUserRepository.save(newUser);
 
         // Create organization — this also creates a UserOrganization row
-        // linking the creator as ORG_ADMIN with activeOrg=true
-        organizationService.createOrganization(
-                registrationRequest.userOrg(), newUser.getAppUserId());
+        // linking the creator as ORG_ADMIN with activeOrg=true.
+        // userOrg may be null if the frontend sends organizationName as a flat field.
+        CreateOrganizationRequest orgRequest = registrationRequest.userOrg() != null
+                ? registrationRequest.userOrg()
+                : new CreateOrganizationRequest(registrationRequest.organizationName(), null);
+        organizationService.createOrganization(orgRequest, newUser.getAppUserId());
 
         // Send verification email asynchronously (fire-and-forget; log on failure)
         String verificationUrl = appBaseUrl + "/api/v1/auth/verify-email?token=" + verificationToken;
