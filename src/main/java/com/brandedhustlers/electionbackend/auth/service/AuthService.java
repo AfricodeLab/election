@@ -148,7 +148,7 @@ public class AuthService implements IAuthService {
         organizationService.createOrganization(orgRequest, newUser.getAppUserId());
 
         // Send verification email asynchronously (fire-and-forget; log on failure)
-        String verificationUrl = appBaseUrl + "/api/v1/auth/verify-email?token=" + verificationToken;
+        String verificationUrl = appBaseUrl + "/verify-email?token=" + verificationToken;
         try {
             messagingService.sendVerificationEmail(
                     newUser.getAppUserEmail(),
@@ -194,7 +194,7 @@ public class AuthService implements IAuthService {
         user.setEmailVerificationExpiry(Instant.now().plus(24, ChronoUnit.HOURS));
         appUserRepository.save(user);
 
-        String verificationUrl = appBaseUrl + "/api/v1/auth/verify-email?token=" + verificationToken;
+        String verificationUrl = appBaseUrl + "/verify-email?token=" + verificationToken;
         try {
             messagingService.sendVerificationEmail(
                     user.getAppUserEmail(),
