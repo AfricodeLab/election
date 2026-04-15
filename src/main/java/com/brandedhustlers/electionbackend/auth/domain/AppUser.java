@@ -39,6 +39,9 @@ public class AppUser {
     @Column(nullable = false, unique = true)
     private String appUserEmail;
 
+    @Column(name = "organization_name", nullable = false)
+    private String organizationName;
+
     @Column(unique = true)
     private String username;
 

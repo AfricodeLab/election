@@ -111,22 +111,37 @@ public class AuthService implements IAuthService {
             throw new UserAlreadyExists("An account with this email already exists");
         }
 
-        // Check for duplicate username
-        if (appUserRepository.existsByUsername(registrationRequest.username())) {
-            throw new UserAlreadyExists("Username already taken");
+        // Derive a unique username from the email prefix (e.g. "alice" from "alice@example.com")
+        String baseUsername = registrationRequest.email().split("@")[0].toLowerCase()
+                .replaceAll("[^a-z0-9._-]", "");
+        String username = baseUsername;
+        if (appUserRepository.existsByUsername(username)) {
+            username = baseUsername + "_" + UUID.randomUUID().toString().replace("-", "").substring(0, 6);
         }
+
+        // Resolve org request — userOrg may be null if the frontend sends organizationName as a flat field.
+        CreateOrganizationRequest orgRequest = registrationRequest.userOrg() != null
+                ? registrationRequest.userOrg()
+                : new CreateOrganizationRequest(registrationRequest.organizationName(), null);
 
         // Generate email verification token
         String verificationToken = UUID.randomUUID().toString();
+
+        // Resolve the ORG_ADMIN Role entity so Spring Security sees it in app_user_roles
+        Set<Role> orgAdminRoles = roleRepository.findByRoleName(UserRole.ORG_ADMIN.name())
+                .map(r -> new HashSet<>(Set.of(r)))
+                .orElse(new HashSet<>());
 
         // Create user
         AppUser newUser = AppUser.builder()
                 .firstName(registrationRequest.firstName())
                 .lastName(registrationRequest.lastName())
                 .appUserEmail(registrationRequest.email())
-                .username(registrationRequest.username())
+                .username(username)
+                .organizationName(orgRequest.organizationName())
                 .password(passwordEncoder.encode(registrationRequest.password()))
                 .userRole(UserRole.ORG_ADMIN)
+                .roles(orgAdminRoles)
                 .emailVerified(false)
                 .emailVerificationToken(verificationToken)
                 .emailVerificationExpiry(Instant.now().plus(24, ChronoUnit.HOURS))
@@ -135,9 +150,8 @@ public class AuthService implements IAuthService {
         appUserRepository.save(newUser);
 
         // Create organization — this also creates a UserOrganization row
-        // linking the creator as ORG_ADMIN with activeOrg=true
-        organizationService.createOrganization(
-                registrationRequest.userOrg(), newUser.getAppUserId());
+        // linking the creator as ORG_ADMIN with activeOrg=true.
+        organizationService.createOrganization(orgRequest, newUser.getAppUserId());
 
         // Send verification email asynchronously (fire-and-forget; log on failure)
         String verificationUrl = appBaseUrl + "/verify-email?token=" + verificationToken;
