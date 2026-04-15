@@ -57,6 +57,11 @@ public class CustomUserDetailsService implements UserDetailsService {
                 .map(StringBuilder::toString)//converting stringbuilder to tring
                 .map(SimpleGrantedAuthority::new)
                 .collect(Collectors.toSet());
+
+        if (user.getUserRole() != null) {
+            set.add(new SimpleGrantedAuthority("ROLE_" + user.getUserRole().name()));
+        }
+
         log.info("user roles: {}", set);
         return set;
     }

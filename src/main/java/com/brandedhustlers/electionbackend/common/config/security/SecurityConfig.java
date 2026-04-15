@@ -113,7 +113,7 @@ public class SecurityConfig {
                         .hasAnyRole("SUPER_ADMIN", "AUDITOR")
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/integrity-summary")
                         .hasAnyRole("SUPER_ADMIN", "AUDITOR")
-                        .requestMatchers("/api/v1/audit/**").hasAnyRole("ADMIN", "SUPER_ADMIN", "AUDITOR")
+                        .requestMatchers("/api/v1/audit/**").hasAnyRole(ADMINS_AUDIT)
 
                         // ── Auth: user management (write) ───────────────────────
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/create-user").hasAnyRole(ADMINS)
