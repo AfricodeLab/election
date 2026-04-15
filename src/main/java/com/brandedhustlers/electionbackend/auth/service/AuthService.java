@@ -127,6 +127,11 @@ public class AuthService implements IAuthService {
         // Generate email verification token
         String verificationToken = UUID.randomUUID().toString();
 
+        // Resolve the ORG_ADMIN Role entity so Spring Security sees it in app_user_roles
+        Set<Role> orgAdminRoles = roleRepository.findByRoleName(UserRole.ORG_ADMIN.name())
+                .map(r -> new HashSet<>(Set.of(r)))
+                .orElse(new HashSet<>());
+
         // Create user
         AppUser newUser = AppUser.builder()
                 .firstName(registrationRequest.firstName())
@@ -136,6 +141,7 @@ public class AuthService implements IAuthService {
                 .organizationName(orgRequest.organizationName())
                 .password(passwordEncoder.encode(registrationRequest.password()))
                 .userRole(UserRole.ORG_ADMIN)
+                .roles(orgAdminRoles)
                 .emailVerified(false)
                 .emailVerificationToken(verificationToken)
                 .emailVerificationExpiry(Instant.now().plus(24, ChronoUnit.HOURS))
