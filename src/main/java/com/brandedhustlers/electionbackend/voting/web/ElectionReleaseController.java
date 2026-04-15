@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.voting.web;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
@@ -64,10 +65,12 @@ public class ElectionReleaseController {
         this.outboxRepo = outboxRepo;
     }
 
-    /**
+    */
+/**
      * NEW: Validate release readiness (without streaming).
      * Quick check for UI to show status before starting full validation.
-     */
+     *//*
+
     @GetMapping("/{electionId}/validate")
     public ResponseEntity<?> quickValidate(@PathVariable UUID electionId) {
         try {
@@ -90,10 +93,12 @@ public class ElectionReleaseController {
         }
     }
 
-    /**
+    */
+/**
      * Stream validation progress (Server-Sent Events).
      * Real-time updates as each check completes.
-     */
+     *//*
+
     @GetMapping(value = "/{electionId}/validate-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamValidation(@PathVariable UUID electionId) {
         SseEmitter emitter = new SseEmitter(60000L);
@@ -138,10 +143,12 @@ public class ElectionReleaseController {
         return emitter;
     }
 
-    /**
+    */
+/**
      * Release election results.
      * Anchors final results to blockchain.
-     */
+     *//*
+
     @PostMapping("/{electionId}/release")
     public ResponseEntity<?> releaseResults(
             @PathVariable UUID electionId,
@@ -191,10 +198,12 @@ public class ElectionReleaseController {
         }
     }
 
-    /**
+    */
+/**
      * Get audit trail for an election.
      * Shows complete history: config, batches, tampering, results.
-     */
+     *//*
+
     @GetMapping("/{electionId}/audit")
     public ResponseEntity<?> getAuditTrail(@PathVariable UUID electionId) {
         try {
@@ -234,10 +243,12 @@ public class ElectionReleaseController {
         }
     }
 
-    /**
+    */
+/**
      * NEW: Get summary statistics for an election's integrity.
      * Useful for dashboard display.
-     */
+     *//*
+
     @GetMapping("/{electionId}/integrity-summary")
     public ResponseEntity<?> getIntegritySummary(@PathVariable UUID electionId) {
         try {
@@ -293,12 +304,14 @@ public class ElectionReleaseController {
         }
     }
 
-    /**
+    */
+/**
      * Helper: Verify admin has access to this election.
      *
      * @return The authenticated admin user
      * @throws IllegalArgumentException if not authorized
-     */
+     *//*
+
     private AppUser verifyAdminAccess(UUID electionId) {
         Organization electionOrg = electionRepository.getElectionOrganization(electionId);
         AppUser admin = getUser.getCurrentAuthenticatedUser();
@@ -307,17 +320,21 @@ public class ElectionReleaseController {
             throw new IllegalArgumentException("You do not have the authority to access this resource.");
         }
 
-       /* if (!admin.getAppUserOrganization().equals(electionOrg)) {
+       */
+/* if (!admin.getAppUserOrganization().equals(electionOrg)) {
             throw new IllegalArgumentException("You do not belong to this organization and cannot access this election.");
-        }*/ //todo change this to org admin access
+        }*//*
+ //todo change this to org admin access
 
         return admin;
     }
 
-    /**
+    */
+/**
      * Sanitize tampering log for public audit trail.
      * Removes voter PII.
-     */
+     *//*
+
     private Map<String, Object> sanitizeTamperingLog(TamperingLog log) {
         return Map.of(
                 "voteId", log.getVoteId().toString(),
@@ -328,12 +345,14 @@ public class ElectionReleaseController {
         );
     }
 
-    /**
+    */
+/**
      * Cleanup executor on shutdown.
-     */
+     *//*
+
     @PreDestroy
     public void shutdown() {
         executor.shutdown();
         log.info("Executor service shut down");
     }
-}
+}*/

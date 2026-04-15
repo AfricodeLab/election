@@ -45,6 +45,9 @@ public class AppUser {
     @Column(unique = true)
     private String username;
 
+    @Column(name = "organization_name", nullable = false)
+    private String organizationName;
+
     @Column(nullable = false)
     @ToString.Exclude
     private String password;
@@ -111,9 +114,9 @@ public class AppUser {
                 .orElse(null);
     }
 
-    public String getOrganizationName() {
+    public String resolveOrganizationName() {
         Organization active = getActiveOrganization();
-        return active == null ? null : active.getOrganizationName();
+        return active == null ? organizationName : active.getOrganizationName();
     }
 
 }

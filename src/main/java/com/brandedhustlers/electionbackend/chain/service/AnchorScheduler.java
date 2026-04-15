@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.chain.service;
 
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
@@ -16,12 +17,15 @@ public class AnchorScheduler {
         this.anchorService = anchorService;
     }
 
-/*//    @Scheduled(fixedDelay = 10000)
+*/
+/*//*
+/    @Scheduled(fixedDelay = 10000)
     public void tick() {
         Timestamp nowTs = Timestamp.from(Instant.now());
         elections.findLive(nowTs).forEach(e ->
                 anchorService.anchorElectionWindow(e.getElectionId(), nowTs.toInstant()));
         log.info("pushing anchor to chain....");
-    }*/
+    }*//*
 
-}
+
+}*/

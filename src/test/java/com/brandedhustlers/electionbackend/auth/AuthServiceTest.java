@@ -135,8 +135,7 @@ class AuthServiceTest {
                 // Arrange
                 CreateOrganizationRequest orgRequest = new CreateOrganizationRequest("New Org", "Description");
                 RegistrationRequest request = new RegistrationRequest(
-                                "John", "Doe", "john@test.com", "johndoe",
-                                "New Org", "password123", orgRequest);
+                                "John", "Doe", "john@test.com", "johndoe", "password123", orgRequest);
 
                 OrganizationDTO orgDto = new OrganizationDTO(orgId, "New Org", "Description", true, null, null, null);
 
@@ -168,8 +167,7 @@ class AuthServiceTest {
                 // Arrange
                 CreateOrganizationRequest orgRequest = new CreateOrganizationRequest("New Org", "Description");
                 RegistrationRequest request = new RegistrationRequest(
-                                "John", "Doe", "john@test.com", "johndoe",
-                                "New Org", "password123", orgRequest);
+                                "John", "Doe", "john@test.com", "johndoe", "password123", orgRequest);
 
                 when(appUserRepository.findByAppUserEmail("john@test.com")).thenReturn(Optional.of(testUser));
 
@@ -188,7 +186,7 @@ class AuthServiceTest {
                 CreateOrganizationRequest orgRequest = new CreateOrganizationRequest("New Org", "Description");
                 RegistrationRequest request = new RegistrationRequest(
                                 "John", "Doe", "newemail@test.com", "johndoe",
-                                "New Org", "password123", orgRequest);
+                        "password123", orgRequest);
 
                 when(appUserRepository.findByAppUserEmail("newemail@test.com")).thenReturn(Optional.empty());
                 when(appUserRepository.existsByUsername("johndoe")).thenReturn(true);

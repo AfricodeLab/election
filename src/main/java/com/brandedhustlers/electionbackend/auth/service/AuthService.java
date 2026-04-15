@@ -314,11 +314,15 @@ public class AuthService implements IAuthService {
         Role userRole = roleRepository.findByRoleName(createUserRequest.userRole())
                 .orElseThrow(() -> new InvalidRole("Role not found"));
 
+        String creatorOrgName = creator.getActiveOrganization() != null
+                ? creator.getActiveOrganization().getOrganizationName() : "";
+
         AppUser newUser = AppUser.builder()
                 .firstName(createUserRequest.firstName())
                 .lastName(createUserRequest.lastName())
                 .username(createUserRequest.username() == null ? null : createUserRequest.username())
                 .appUserEmail(createUserRequest.companyEmail())
+                .organizationName(creatorOrgName)
                 .password(passwordEncoder.encode(createUserRequest.defaultPassword()))
                 .userRole(UserRole.valueOf(createUserRequest.userRole()))
                 .userPreferences(null)

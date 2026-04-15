@@ -275,6 +275,8 @@ public class GlobalExceptionHandler {
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
                 .reduce((a, b) -> a + "; " + b)
                 .orElse("Validation failed");
+        log.warn("Validation failed [{}] {}: {}",
+                request.getMethod(), request.getRequestURI(), message);
         APIException apiException = new APIException(
                 HttpStatus.BAD_REQUEST.value(),
                 new APIException.APIError(

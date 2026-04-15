@@ -8,7 +8,6 @@ import com.brandedhustlers.electionbackend.voter.domain.EligibleVoterElection;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.EligibleVoterElectionRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
-import io.github.cdimascio.dotenv.Dotenv;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -36,8 +35,7 @@ public class MessagingService {
     private final LaunchRepository launchRepository;
     private final EligibleVoterElectionRepository eligibleVoterElectionRepository;
 
-    Dotenv dotenv = Dotenv.configure().load();
-    private final String appEmail = dotenv.get("SPRING_MAIL_USERNAME");
+    private final String appEmail = System.getenv("SPRING_MAIL_USERNAME");
 
     public MessagingService(JavaMailSender mailSender,
                             VoterRepository voterRepository,
