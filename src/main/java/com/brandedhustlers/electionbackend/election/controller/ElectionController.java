@@ -5,9 +5,9 @@ import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
+import com.brandedhustlers.electionbackend.common.flags.Feature;
+import com.brandedhustlers.electionbackend.common.flags.RequiresFeature;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
-import com.brandedhustlers.electionbackend.voter.dto.TurnoutDTO;
-import com.brandedhustlers.electionbackend.voter.service.VoterService;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.CreateElectionRequest;
 import com.brandedhustlers.electionbackend.election.dto.UpdateCandidateCmd;
@@ -16,6 +16,7 @@ import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.election.service.CandidateService;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
+import com.brandedhustlers.electionbackend.voter.service.VoterService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
@@ -54,12 +55,14 @@ public class ElectionController {
         this.voterService = voterService;
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PostMapping("/create")
     public ResponseEntity<?> createElection(
             @RequestBody @Valid CreateElectionRequest request) {
         return new ResponseEntity<>(electionService.createElection(request), HttpStatus.CREATED);
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PutMapping("/update/{electionId}")
     public ResponseEntity<?> updateElection(
             @Valid @RequestBody UpdateElection election,
@@ -67,6 +70,7 @@ public class ElectionController {
         return new ResponseEntity<>(electionService.updateElection(electionId, election), HttpStatus.OK);
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PutMapping("/update-status/{electionId}")
     public ResponseEntity<?> changeStatus(
             @PathVariable UUID electionId,
@@ -74,6 +78,7 @@ public class ElectionController {
         return new ResponseEntity<>(electionService.changeElectionStatus(electionId, electionStatus), HttpStatus.OK);
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PostMapping("/candidate-add/{electionId}")
     public ResponseEntity<?> addCandidate(
             @PathVariable UUID electionId,
@@ -87,10 +92,18 @@ public class ElectionController {
                 HttpStatus.CREATED);
     }
 
+    @GetMapping("/{electionId}")
+    public ResponseEntity<?> getElection(@PathVariable UUID electionId) {
+        return ResponseEntity.ok(electionService. getElectionById(electionId));
+    }
+
     @GetMapping("/get-all")
     public ResponseEntity<?> getOrgElection(Pageable pageable) {
-        AppUser launchCreator = appUserRepository.findById(getUser.getCurrentAuthenticatedUserId())
-                .orElseThrow(() -> new UserNotFound("User not found."));
+        // Use the AppUser from the security context — it was loaded by JWTAuthFilter →
+        // loadUserByUsername (@Transactional) which force-initialized userOrganizations.
+        // Calling appUserRepository.findById() here returns a NEW detached AppUser with
+        // cold lazy collections, causing LazyInitializationException on getActiveOrganization().
+        AppUser launchCreator = getUser.getCurrentAuthenticatedUser();
 
         Organization creatorOrg = launchCreator.getActiveOrganization();
         if (creatorOrg == null) {
@@ -106,6 +119,7 @@ public class ElectionController {
         return new ResponseEntity<>(electionService.getLiveElectionForVoterOrg(pageable), HttpStatus.OK);
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PutMapping("/update-candidate/{candidateId}")
     public ResponseEntity<?> updateCandidateDuringLiveElection(@RequestBody UpdateCandidateCmd updateCandidateCmd,
             @PathVariable UUID candidateId) {
@@ -117,14 +131,17 @@ public class ElectionController {
                 admin), HttpStatus.OK);
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PostMapping("/live/{electionId}")
     public ResponseEntity<?> bringElectionLive(@PathVariable UUID electionId) {
         try {
             // Get authenticated user
             AppUser user = getUser.getCurrentAuthenticatedUser();
 
-            // Verify admin role
-            if (!user.getUserRole().equals(UserRole.ADMIN) && !user.getUserRole().equals(UserRole.SUPER_ADMIN)) {
+            // Verify admin role — SUPER_ADMIN, ADMIN, and ORG_ADMIN can all bring elections live
+            if (!user.getUserRole().equals(UserRole.ADMIN)
+                    && !user.getUserRole().equals(UserRole.SUPER_ADMIN)
+                    && !user.getUserRole().equals(UserRole.ORG_ADMIN)) {
                 return ResponseEntity.status(403).body(Map.of(
                         "status", "forbidden",
                         "message", "Only admins can bring elections live"));
@@ -175,6 +192,7 @@ public class ElectionController {
     }
 
     /** Dry-run eligibility check — no state mutation. Requires ADMIN+ role. */
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @GetMapping("/{electionId}/eligibility/check")
     public ResponseEntity<?> checkEligibility(
             @PathVariable UUID electionId,
@@ -186,6 +204,7 @@ public class ElectionController {
     }
 
     /** Voter turnout stats for an election. Requires ADMIN+ role. */
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @GetMapping("/{electionId}/turnout")
     public ResponseEntity<?> getTurnout(@PathVariable UUID electionId) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();

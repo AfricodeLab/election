@@ -9,7 +9,7 @@ import java.util.UUID;
 /**
  * Org-scoped search & get for dashboard
  */
-public interface AuditQueryService {
+public interface    AuditQueryService {
     PageResponse<AuditEventDTO> search(AuditSearchFilter filter);
 
     AuditEventDTO get(UUID orgId, UUID auditId);

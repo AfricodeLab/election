@@ -11,10 +11,22 @@ import java.util.UUID;
 
 @Repository
 public interface VerificationTokenRepository extends JpaRepository<VerificationToken, UUID> {
-    @Query("select vr from VerificationToken vr where  vr.voterId = :voterId")
-    Optional<VerificationToken> findTopByVoterIdAndElectionIdOrderByCreatedAtDesc(UUID voterId, UUID electionId);
 
-    @Query("select vr from VerificationToken vr where vr.voterId = :voterId and vr.isUsed = false and vr.deleteYn = 'N' and vr.expiresAt > :now order by vr.createdAt desc limit 1")
-    Optional<VerificationToken> findValidToken(UUID voterId, Instant now);
-
+    /**
+     * Find the most recent valid (non-used, non-deleted, not-yet-expired) token
+     * for a specific voter + election combination.
+     *
+     * <p>Covers both OTP tokens (remote) and STATION_PIN tokens (in-person).</p>
+     */
+    @Query("""
+            SELECT vr FROM VerificationToken vr
+            WHERE vr.voterId = :voterId
+              AND vr.electionId = :electionId
+              AND vr.isUsed = false
+              AND vr.deleteYn = 'N'
+              AND vr.expiresAt > :now
+            ORDER BY vr.createdAt DESC
+            LIMIT 1
+            """)
+    Optional<VerificationToken> findValidToken(UUID voterId, UUID electionId, Instant now);
 }

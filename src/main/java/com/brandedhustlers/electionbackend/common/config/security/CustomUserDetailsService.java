@@ -12,6 +12,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
+import jakarta.transaction.Transactional;
 
 import java.util.Collection;
 import java.util.HashSet;
@@ -30,6 +31,7 @@ public class CustomUserDetailsService implements UserDetailsService {
     }
 
     @Override
+    @Transactional
     public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
         Optional<AppUser> appUser = appUserRepository.findByUsernameOrEmail(username);
         if (appUser.isPresent()) {
@@ -42,9 +44,10 @@ public class CustomUserDetailsService implements UserDetailsService {
                 log.warn("Login attempt for unverified account: {}", username);
                 throw new UsernameNotFoundException("Email address not verified. Please check your inbox for the verification link.");
             }
+
             return new UserPrincipal(getAuthorities(user), user);
         }
-        throw new UserNotFound("User account not found.");
+        throw  new UserNotFound("User account not found.");
     }
 
     private Collection<? extends GrantedAuthority> getAuthorities(AppUser user){

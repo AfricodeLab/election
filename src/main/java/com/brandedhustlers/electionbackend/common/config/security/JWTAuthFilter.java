@@ -18,9 +18,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 
 @Component
@@ -113,10 +111,13 @@ public class JWTAuthFilter extends OncePerRequestFilter {
                 return;
             }
 
-            var authorities = Collections
-                    .singletonList(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase(Locale.ROOT)));
-            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(userDetails, null,
-                    authorities);
+            // Use the full authority set built by loadUserByUsername() — it includes
+            // both the system UserRole (e.g. ROLE_CONTRIBUTOR) AND every custom org
+            // role (e.g. ROLE_SENIOR_AUDITOR) from the user's roles Set.
+            // Previously this was overwritten with a single-role list from the JWT
+            // claim, which silently dropped all custom role authorities.
+            UsernamePasswordAuthenticationToken authToken = new UsernamePasswordAuthenticationToken(
+                    userDetails, null, userDetails.getAuthorities());
             authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
             SecurityContextHolder.getContext().setAuthentication(authToken);
 

@@ -4,7 +4,6 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
-import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
@@ -469,7 +468,16 @@ public class ElectionService implements IElectionService {
                 addCandidate);
     }
 
+    @Transactional
+    public ElectionDTO getElectionById(UUID electionId) {
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() -> new com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound(
+                        "Election not found: " + electionId));
+        return electionMapper.entityToDto(election);
+    }
+
 //    @org.springframework.cache.annotation.Cacheable(value = "elections", key = "#organizationId")
+    @Transactional
     public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable) {
         List<ElectionDTO> elections = electionRepository.findByOrganizationId(organizationId)
                 .stream()

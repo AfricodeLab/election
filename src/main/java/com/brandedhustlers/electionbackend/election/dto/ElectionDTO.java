@@ -1,6 +1,6 @@
 package com.brandedhustlers.electionbackend.election.dto;
 
-import com.brandedhustlers.electionbackend.auth.domain.Organization;
+import com.brandedhustlers.electionbackend.auth.dto.OrganizationDTO;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.election.domain.EligibilityPolicy;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
@@ -20,7 +20,7 @@ public record ElectionDTO(
                 Long totalVoters,
                 Long totalVotes,
                 Timestamp createdAt,
-                Organization organization,
+                OrganizationDTO organization,
                 DeleteYn deleteYn,
                 boolean isPubliclyVisible,
                 List<CandidateDTO> candidates,

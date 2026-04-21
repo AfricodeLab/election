@@ -87,7 +87,7 @@ public class VotingService implements IVotingService {
     public VoteAckDTO cast(UUID orgId, UUID voterId, CastVoteCmd cmd, HttpServletRequest httpServletRequest) {
 
         try {
-            Voter actor = voterRepository.findById(voterId)
+            Voter actor = voterRepository.findVoterByIdAndOrgId(voterId, orgId)
                     .orElseThrow(() -> new UserNotFound(
                             "Voter with ID: " + voterId + " not found."));
 
@@ -115,6 +115,14 @@ public class VotingService implements IVotingService {
             if (existingEv.isPresent() && existingEv.get().isHasVoted()) {
                 return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED",
                         "You have already cast your vote in this election. Each voter may only vote once.");
+            }
+
+            // Fast-path verification check before taking the row lock.
+            // The authoritative check is repeated after lockByIds below.
+            if (existingEv.isPresent() && !existingEv.get().isVerified()) {
+                return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
+                        "Identity verification is required before voting. " +
+                        "Please complete the verification step and try again.");
             }
 
             /**
@@ -147,8 +155,13 @@ public class VotingService implements IVotingService {
             if (existingEv.isEmpty()) {
                 try {
                     ElectionVoterId embeddedId = new ElectionVoterId(cmd.electionId(), actor.getVoterId());
-                    evRepository.save(new ElectionVoter(embeddedId, actor, election, null, null,
-                            Timestamp.from(Instant.now()), false));
+                    evRepository.save(ElectionVoter.builder()
+                            .id(embeddedId)
+                            .voter(actor)
+                            .election(election)
+                            .hasVoted(false)
+                            .verified(false) // voter has not been verified — lockByIds will reject them
+                            .build());
                 } catch (DataIntegrityViolationException e) {
                     // Concurrent insert won the race — the row now exists.
                     // The lockByIds call below will acquire the pessimistic lock and proceed normally.
@@ -183,6 +196,14 @@ public class VotingService implements IVotingService {
                         "You have already cast your vote in this election. Each voter may only vote once.");
             }
 
+            // Authoritative verification check (post-lock — this is the one that matters
+            // under concurrency; the fast-path above is just an optimisation).
+            if (!ev.isVerified()) {
+                return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
+                        "Identity verification is required before voting. " +
+                        "Please complete the verification step and try again.");
+            }
+
             // save the vote and flip hasVoted=true
             Vote vote = Vote.builder()
                     .id(UUID.randomUUID())
@@ -197,6 +218,8 @@ public class VotingService implements IVotingService {
                     .castAt(Instant.now())
                     .build();
             votes.saveAndFlush(vote);
+
+            //todo db trigger to prevent updates
 
             ev.setHasVoted(true);
             evRepo.save(ev);

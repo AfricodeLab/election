@@ -22,7 +22,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.header.writers.XXssProtectionHeaderWriter;
 
 @Configuration
-@EnableWebSecurity
+@EnableWebSecurity(debug = true)
 @EnableMethodSecurity
 public class SecurityConfig {
     private final JWTAuthFilter jwtFilter;
@@ -95,8 +95,10 @@ public class SecurityConfig {
                         // ── Voter-only ──────────────────────────────────────────
                         .requestMatchers("/api/v1/verification/send").permitAll()
                         .requestMatchers("/api/v1/verification/confirm").permitAll()
+                        // In-person verification — official must be authenticated
+                        .requestMatchers("/api/v1/verification/in-person/**").hasAnyRole(ADMINS)
+                        .requestMatchers("/api/v1/election/live").hasAnyRole(ADMINS)
                         .requestMatchers("/api/v1/votes/cast","/api/v1/election/live").hasRole("VOTER")
-                        .requestMatchers("/api/v1/election/live").hasRole("VOTER")
 
                         // ── SUPER_ADMIN-only ────────────────────────────────────
                         .requestMatchers("/api/v1/organization/all").hasRole("SUPER_ADMIN")
@@ -143,7 +145,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/election/candidate-add/**").hasAnyRole(DOERS)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/election/update-candidate/**")
                         .hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/election/live/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/election/live/**").hasAnyRole(ADMINS)
                         // Election (read) — includes OBSERVER
                         .requestMatchers(HttpMethod.GET, "/api/v1/election/get-all").hasAnyRole(ALL_INTERNAL)
                         .requestMatchers(HttpMethod.GET, "/api/v1/election/live").hasAnyRole(ALL_INTERNAL)
@@ -211,7 +213,19 @@ public class SecurityConfig {
 
                         // ── Default: deny unauthenticated ───────────────────────
                         .anyRequest().authenticated())
-                .httpBasic(Customizer.withDefaults())
+                // Disable HTTP Basic — this is a JWT-only API. Basic auth adds a
+                // WWW-Authenticate: Basic header to every 401, which causes browsers
+                // to show their native "sign in" popup dialog.
+                .httpBasic(AbstractHttpConfigurer::disable)
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(401);
+                            response.setContentType("application/json");
+                            response.getWriter().write(
+                                    "{\"statusCode\":401,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"Authentication required.\"}}"
+                            );
+                        })
+                )
                 .sessionManagement(
                         session -> session
                                 .sessionCreationPolicy(SessionCreationPolicy.STATELESS))

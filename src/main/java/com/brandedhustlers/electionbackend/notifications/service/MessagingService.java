@@ -8,6 +8,7 @@ import com.brandedhustlers.electionbackend.voter.domain.EligibleVoterElection;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.EligibleVoterElectionRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
+import io.github.cdimascio.dotenv.Dotenv;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -27,6 +28,8 @@ import java.util.stream.Collectors;
 
 @Service
 public class MessagingService {
+    Dotenv dotenv = Dotenv.configure().load();
+
     private static final Logger log = LoggerFactory.getLogger(MessagingService.class);
 
     private final JavaMailSender mailSender;
@@ -35,7 +38,7 @@ public class MessagingService {
     private final LaunchRepository launchRepository;
     private final EligibleVoterElectionRepository eligibleVoterElectionRepository;
 
-    private final String appEmail = System.getenv("SPRING_MAIL_USERNAME");
+    private final String appEmail = dotenv.get("SPRING_MAIL_USERNAME");
 
     public MessagingService(JavaMailSender mailSender,
                             VoterRepository voterRepository,
@@ -279,6 +282,41 @@ public class MessagingService {
         // OTPs are authentication secrets — never log the value itself.
         log.info("[SMS-STUB] OTP requested for {} ({}) — wire up an SMS gateway to deliver this",
                 recipientName, phoneNumber);
+    }
+
+    /**
+     * Sends an admin-provisioned account welcome email containing the user's
+     * temporary credentials and a prompt to change their password on first login.
+     */
+    @Async
+    public void sendWelcomeEmail(String recipientEmail, String firstName,
+                                 String createdByName, String organizationName,
+                                 String role, String tempPassword, String loginUrl) {
+        try {
+            MimeMessage mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+
+            Context ctx = new Context();
+            ctx.setVariable("firstName", firstName);
+            ctx.setVariable("email", recipientEmail);
+            ctx.setVariable("createdByName", createdByName);
+            ctx.setVariable("organizationName", organizationName);
+            ctx.setVariable("role", role);
+            ctx.setVariable("tempPassword", tempPassword);
+            ctx.setVariable("loginUrl", loginUrl);
+
+            String html = templateEngine.process("UserWelcome", ctx);
+
+            helper.setFrom(appEmail);
+            helper.setTo(recipientEmail);
+            helper.setSubject("Your account has been created — " + organizationName);
+            helper.setText(html, true);
+
+            mailSender.send(mime);
+            log.info("Welcome email sent to {} (provisioned by {})", recipientEmail, createdByName);
+        } catch (Exception e) {
+            log.error("Failed to send welcome email to {}: {}", recipientEmail, e.getMessage());
+        }
     }
 
     @Async

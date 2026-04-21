@@ -24,6 +24,10 @@ public class VerificationToken {
 
     private UUID voterId;
 
+    /** Election this token is scoped to. Null only for legacy tokens. */
+    @Column(name = "election_id")
+    private UUID electionId;
+
     @Column(nullable = false)
     private String tokenHash;
 

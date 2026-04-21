@@ -2,6 +2,8 @@ package com.brandedhustlers.electionbackend.chain.controller;
 
 import com.brandedhustlers.electionbackend.chain.util.Merkle;
 import com.brandedhustlers.electionbackend.chain.service.BlockchainProvider;
+import com.brandedhustlers.electionbackend.common.flags.Feature;
+import com.brandedhustlers.electionbackend.common.flags.RequiresFeature;
 import com.brandedhustlers.electionbackend.voting.repository.VoteRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +30,7 @@ public class ChainValidateController {
         this.chain = chain;
     }
 
+    @RequiresFeature(Feature.MERKLE_VERIFICATION)
     @GetMapping("/validate")
     public Map<String, Object> validate(
             @RequestParam UUID electionId,

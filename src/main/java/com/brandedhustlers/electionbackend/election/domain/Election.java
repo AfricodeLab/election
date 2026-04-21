@@ -82,17 +82,21 @@ public class Election {
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn = DeleteYn.N;
 
-    @ManyToOne
+    // LAZY: neither field is projected by ElectionMapper.entityToDto().
+    // Leaving them EAGER caused two full AppUser graphs (roles + permissions
+    // + userOrganizations) to be loaded on every election fetch.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "updated_by")
     private AppUser updatedBy;
 
     private boolean isPubliclyVisible = false;
 
-    @ManyToOne
+    // LAZY: not used in DTO mapping, no need to load the full Launch graph.
+    @ManyToOne(fetch = FetchType.LAZY)
     private Launch launch;
 
     private boolean shouldEndAutomatically = true; // if true election will end automatically if the total expected

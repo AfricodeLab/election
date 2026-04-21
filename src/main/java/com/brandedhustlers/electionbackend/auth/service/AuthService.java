@@ -17,6 +17,7 @@ import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepos
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
+import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.RefreshTokenException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
@@ -172,11 +173,18 @@ public class AuthService implements IAuthService {
     @Override
     public void verifyEmail(String token) {
         AppUser user = appUserRepository.findByEmailVerificationToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid or expired verification token"));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "This verification link is invalid or has already been used."));
+
+        // Idempotent: if already verified (e.g. duplicate request), succeed silently.
+        if (user.isEmailVerified()) {
+            log.info("Email already verified for user {} — duplicate request ignored", user.getAppUserId());
+            return;
+        }
 
         if (user.getEmailVerificationExpiry() == null
                 || Instant.now().isAfter(user.getEmailVerificationExpiry())) {
-            throw new IllegalArgumentException("Verification token has expired. Please request a new one.");
+            throw new IllegalArgumentException("TOKEN_EXPIRED: This verification link has expired. Please request a new one.");
         }
 
         user.setEmailVerified(true);
@@ -267,14 +275,17 @@ public class AuthService implements IAuthService {
     }
 
     @Override
+    @Transactional
     public LoginResponse login(LoginRequest loginRequest, HttpServletResponse response) {
 
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(getIdentity(loginRequest), loginRequest.password()));
         UserPrincipal authenticationPrincipal = (UserPrincipal) authentication.getPrincipal();
 
-        AppUser authenticatedUser = appUserRepository.findById(authenticationPrincipal.getAppUserId())
-                .orElseThrow(() -> new UserNotFound("user not found."));
+        // Use the AppUser already loaded (and lazy-collections initialized) by
+        // loadUserByUsername — avoids a redundant DB round-trip and ensures
+        // userOrganizations / roles are in memory for the rest of this method.
+        AppUser authenticatedUser = authenticationPrincipal.getAppUser();
 
         // If MFA is enabled, issue a short-lived pending token and ask for OTP
         if (authenticatedUser.isMfaEnabled()) {
@@ -299,6 +310,15 @@ public class AuthService implements IAuthService {
                 .build();
         response.setHeader("Set-Cookie", jwtCookie.toString());
 
+        if (authenticatedUser.isMustChangePassword()) {
+            return LoginResponse.mustChangePassword(
+                    true,
+                    token,
+                    refreshToken,
+                    authenticatedUser.getUsername(),
+                    authenticatedUser.getAppUserEmail());
+        }
+
         return LoginResponse.standard(
                 true,
                 token,
@@ -310,6 +330,32 @@ public class AuthService implements IAuthService {
     @Override
     public CreateUserResponse createUser(CreateUserRequest createUserRequest) {
         AppUser creator = getUser.getCurrentAuthenticatedUser();
+        UserRole callerRole = creator.getUserRole();
+
+        // Parse role early so we can validate before any DB work
+        UserRole requestedRole;
+        try {
+            requestedRole = UserRole.valueOf(createUserRequest.userRole());
+        } catch (IllegalArgumentException e) {
+            throw new InvalidRole("Unknown role: " + createUserRequest.userRole());
+        }
+
+        // Privilege-escalation guard — mirrors the same rules enforced in updateUserRole()
+        if (callerRole == UserRole.ORG_ADMIN) {
+            if (requestedRole == UserRole.ADMIN
+                    || requestedRole == UserRole.SUPER_ADMIN
+                    || requestedRole == UserRole.ORG_ADMIN) {
+                throw new AccessDeniedException(
+                        "ORG_ADMIN cannot create users with admin-level roles. " +
+                        "Allowed roles: CONTRIBUTOR, AUDITOR, OBSERVER, VOTER.");
+            }
+        } else if (callerRole == UserRole.ADMIN) {
+            if (requestedRole == UserRole.SUPER_ADMIN) {
+                throw new AccessDeniedException(
+                        "ADMIN cannot create SUPER_ADMIN accounts. Contact a SUPER_ADMIN.");
+            }
+        }
+        // SUPER_ADMIN: no restriction
 
         Role userRole = roleRepository.findByRoleName(createUserRequest.userRole())
                 .orElseThrow(() -> new InvalidRole("Role not found"));
@@ -331,6 +377,8 @@ public class AuthService implements IAuthService {
                 .deleteYn(DeleteYn.N)
                 // Admin-provisioned accounts are pre-verified — the admin owns the email
                 .emailVerified(true)
+                // Force password change on first login
+                .mustChangePassword(true)
                 .build();
 
         appUserRepository.save(newUser);
@@ -345,6 +393,19 @@ public class AuthService implements IAuthService {
                     .activeOrg(true)
                     .build());
         }
+
+        // Send welcome email with temporary credentials (async — never blocks the response)
+        String creatorFullName = creator.getFirstName() + " " + creator.getLastName();
+        String orgName = creatorOrg != null ? creatorOrg.getOrganizationName() : creatorOrgName;
+        messagingService.sendWelcomeEmail(
+                newUser.getAppUserEmail(),
+                newUser.getFirstName(),
+                creatorFullName,
+                orgName,
+                newUser.getUserRole().name(),
+                createUserRequest.defaultPassword(),   // plain-text — user must change it immediately
+                appBaseUrl + "/login"
+        );
 
         return new CreateUserResponse(
                 true,
@@ -449,9 +510,12 @@ public class AuthService implements IAuthService {
             throw new BadCredentialsException("User provided the same password");
         }
         currUser.setPassword(passwordEncoder.encode(changePasswordCmd.newPassword()));
+        // If this was an admin-provisioned account, the forced change is now satisfied
+        currUser.setMustChangePassword(false);
         appUserRepository.save(currUser);
     }
 
+    @Transactional
     @Override
     public TokenRefreshResponse refreshToken(TokenRefreshRequest request) {
         return refreshTokenService.findByToken(request.refreshToken())

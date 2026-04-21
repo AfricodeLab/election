@@ -6,7 +6,7 @@ import com.brandedhustlers.electionbackend.ops.enums.LaunchStatus;
 import java.time.Instant;
 import java.util.UUID;
 
-public record LaunchDto(
+public record  LaunchDto(
         UUID id,
         UUID orgId,
         String name,
