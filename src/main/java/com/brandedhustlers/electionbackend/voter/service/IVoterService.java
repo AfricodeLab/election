@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public interface IVoterService {
     VoterDTO create(UUID orgId, CreateVoterCmd cmd);
+    VoterDTO getById(UUID orgId, UUID voterId);
     List<VoterDTO> search(UUID orgId, String q, int limit);
     void assignToElection(UUID orgId, AssignVotersCmd cmd);
 }

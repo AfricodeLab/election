@@ -153,6 +153,14 @@ public class VoterService implements IVoterService {
     }
 
     @Override
+    public VoterDTO getById(UUID orgId, UUID voterId) {
+        // findVoterByIdAndOrgId enforces org isolation via JPQL — no separate check needed
+        Voter voter = voterRepository.findVoterByIdAndOrgId(voterId, orgId)
+                .orElseThrow(() -> new EntityNotFoundException("Voter not found: " + voterId));
+        return voterMapper.entityToDto(voter);
+    }
+
+    @Override
     public List<VoterDTO> search(UUID orgId, String q, int limit) {
         if (q == null || q.isBlank()) {
             return List.of();

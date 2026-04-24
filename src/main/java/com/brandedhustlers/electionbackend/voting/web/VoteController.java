@@ -77,7 +77,8 @@ public class VoteController {
                     .body(new VoteAckDTO(null, "REJECTED", "Step up required, please verify again to vote."));
         }
 
-        VoteAckDTO ack = votingService.cast(auth.getVoterOrganizationId(), auth.getVoterId(), body, httpServletRequest);
+        // stepUpVerified=true: step-up JWT claim was already validated above
+        VoteAckDTO ack = votingService.cast(auth.getVoterOrganizationId(), auth.getVoterId(), body, httpServletRequest, true);
 
         HttpStatus httpStatus = switch (ack.reason()) {
             case "NEW_VOTE" -> HttpStatus.CREATED;

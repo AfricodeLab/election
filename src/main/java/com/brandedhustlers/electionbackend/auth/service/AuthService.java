@@ -342,12 +342,13 @@ public class AuthService implements IAuthService {
 
         // Privilege-escalation guard — mirrors the same rules enforced in updateUserRole()
         if (callerRole == UserRole.ORG_ADMIN) {
+            // ORG_ADMIN may provision ORG_ADMIN peers within their own org,
+            // but cannot create platform-level accounts (ADMIN / SUPER_ADMIN).
             if (requestedRole == UserRole.ADMIN
-                    || requestedRole == UserRole.SUPER_ADMIN
-                    || requestedRole == UserRole.ORG_ADMIN) {
+                    || requestedRole == UserRole.SUPER_ADMIN) {
                 throw new AccessDeniedException(
-                        "ORG_ADMIN cannot create users with admin-level roles. " +
-                        "Allowed roles: CONTRIBUTOR, AUDITOR, OBSERVER, VOTER.");
+                        "ORG_ADMIN cannot create platform-level accounts. " +
+                        "Allowed roles: CONTRIBUTOR, AUDITOR, OBSERVER, VOTER, ORG_ADMIN.");
             }
         } else if (callerRole == UserRole.ADMIN) {
             if (requestedRole == UserRole.SUPER_ADMIN) {
@@ -453,11 +454,12 @@ public class AuthService implements IAuthService {
                     "ADMIN cannot assign platform-level roles. Contact a SUPER_ADMIN.");
         }
 
-        // ORG_ADMIN can only reassign within their own org
+        // ORG_ADMIN can reassign within their own org, including promoting to ORG_ADMIN,
+        // but cannot assign platform-level roles (ADMIN / SUPER_ADMIN).
         if (callerRole == UserRole.ORG_ADMIN) {
-            if (newRole == UserRole.ADMIN || newRole == UserRole.SUPER_ADMIN || newRole == UserRole.ORG_ADMIN) {
+            if (newRole == UserRole.ADMIN || newRole == UserRole.SUPER_ADMIN) {
                 throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
-                        "ORG_ADMIN cannot assign admin-level roles");
+                        "ORG_ADMIN cannot assign platform-level roles (ADMIN / SUPER_ADMIN)");
             }
             // Ensure target belongs to caller's org
             Organization callerOrg = caller.getActiveOrganization();

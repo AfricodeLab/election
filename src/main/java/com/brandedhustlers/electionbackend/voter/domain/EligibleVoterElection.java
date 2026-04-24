@@ -29,7 +29,9 @@ public class EligibleVoterElection {
     @Column(name = "election_id", nullable = false)
     private UUID electionId;
 
-    @Column(name = "launch_id", nullable = false)
+    // Nullable: set when the election is part of a Launch; null for standalone elections
+    // brought live individually via POST /election/live/{id}.
+    @Column(name = "launch_id", nullable = true)
     private UUID launchId;
 
     @Column(name = "computed_at", nullable = false)

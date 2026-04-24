@@ -1,8 +1,10 @@
 package com.brandedhustlers.electionbackend.notifications.service;
 
 import com.brandedhustlers.electionbackend.election.domain.Election;
-import com.brandedhustlers.electionbackend.ops.domain.Launch;
+import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
+import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.ops.exception.LaunchNotfound;
+import com.brandedhustlers.electionbackend.ops.repository.LaunchElectionRepository;
 import com.brandedhustlers.electionbackend.ops.repository.LaunchRepository;
 import com.brandedhustlers.electionbackend.voter.domain.EligibleVoterElection;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
@@ -13,6 +15,7 @@ import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.scheduling.annotation.Async;
@@ -33,132 +36,232 @@ public class MessagingService {
     private final VoterRepository voterRepository;
     private final TemplateEngine templateEngine;
     private final LaunchRepository launchRepository;
+    private final LaunchElectionRepository launchElectionRepository;
+    private final ElectionRepository electionRepository;
     private final EligibleVoterElectionRepository eligibleVoterElectionRepository;
 
     private final String appEmail = System.getenv("SPRING_MAIL_USERNAME");
+
+    /**
+     * Frontend base URL — used to construct the per-election voting deep-link
+     * sent in election-live emails.  Defaults to http://localhost:3000 for dev;
+     * override via APP_BASE_URL env var in production.
+     */
+    @Value("${app.base-url:http://localhost:3000}")
+    private String appBaseUrl;
 
     public MessagingService(JavaMailSender mailSender,
                             VoterRepository voterRepository,
                             TemplateEngine templateEngine,
                             LaunchRepository launchRepository,
+                            LaunchElectionRepository launchElectionRepository,
+                            ElectionRepository electionRepository,
                             EligibleVoterElectionRepository eligibleVoterElectionRepository) {
         this.mailSender = mailSender;
         this.voterRepository = voterRepository;
         this.templateEngine = templateEngine;
         this.launchRepository = launchRepository;
+        this.launchElectionRepository = launchElectionRepository;
+        this.electionRepository = electionRepository;
         this.eligibleVoterElectionRepository = eligibleVoterElectionRepository;
     }
 
+    /**
+     * Central voter notification listener on the notif.email queue.
+     *
+     * Two payload shapes are accepted:
+     *
+     *   Launch path (multiple elections at once):
+     *     { "launchId": "<uuid>", "orgId": "<uuid>" }
+     *     Sent by LaunchService when a Launch transitions PLANNED → ACTIVE.
+     *     Snapshot already computed by EligibilitySnapshotService.computeForLaunch().
+     *
+     *   Standalone path (single election):
+     *     { "electionId": "<uuid>", "orgId": "<uuid>" }
+     *     Sent by ElectionService.transitionToLive() when a standalone election
+     *     (not part of any Launch) is brought live directly.
+     *     Snapshot already computed by EligibilitySnapshotService.computeForElection().
+     *
+     * The guard in ElectionService.transitionToLive() ensures elections that belong
+     * to a Launch never emit a standalone notification, preventing double-emails.
+     */
     @RabbitListener(queues = "notif.email")
     public void sendElectionLiveEmail(Map<String, Object> payload) {
         try {
-            // Validate and extract payload
-            if (payload == null || !payload.containsKey("launchId") || !payload.containsKey("orgId")) {
-                log.error("Invalid payload: missing required fields (launchId or orgId)");
+            if (payload == null) {
+                log.error("Received null payload on notif.email queue — ignoring");
                 return;
             }
 
-            UUID launchId = UUID.fromString(payload.get("launchId").toString());
-            UUID orgId = UUID.fromString(payload.get("orgId").toString());
-
-            if (launchId == null || orgId == null) {
-                log.error("Invalid payload: launchId or orgId is null");
-                return;
+            if (payload.containsKey("launchId")) {
+                handleLaunchNotification(payload);
+            } else if (payload.containsKey("electionId")) {
+                handleStandaloneElectionNotification(payload);
+            } else {
+                log.error("Unknown payload shape on notif.email — missing both 'launchId' and 'electionId': {}", payload.keySet());
             }
 
-            log.info("Processing election notification for launchId: {}, orgId: {}", launchId, orgId);
-
-            Launch electionLaunch = launchRepository.findById(launchId)
-                    .orElseThrow(() -> new LaunchNotfound("Launch not found with id: " + launchId));
-
-            List<Election> elections = electionLaunch.getElection();
-
-            if (elections.isEmpty()) {
-                log.warn("No elections found for launch: {}", launchId);
-                return;
-            }
-
-            // Build election lookup by ID from the launch
-            Map<UUID, Election> electionMap = elections.stream()
-                    .collect(Collectors.toMap(Election::getElectionId, Function.identity()));
-
-            // Get all distinct eligible voter IDs from pre-computed snapshot
-            List<UUID> eligibleVoterIds = eligibleVoterElectionRepository
-                    .findDistinctVoterIdsByLaunchId(launchId);
-
-            if (eligibleVoterIds.isEmpty()) {
-                log.warn("No eligible voters found for launch: {}", launchId);
-                return;
-            }
-
-            // Fetch eligible voters in bulk
-            List<Voter> voters = voterRepository.findAllById(eligibleVoterIds);
-
-            // Group eligible election IDs by voter
-            Map<UUID, Set<UUID>> voterEligibleElections = eligibleVoterElectionRepository
-                    .findByLaunchId(launchId)
-                    .stream()
-                    .collect(Collectors.groupingBy(
-                            EligibleVoterElection::getVoterId,
-                            Collectors.mapping(EligibleVoterElection::getElectionId, Collectors.toSet())));
-
-            log.info("Sending emails to {} eligible voters for {} elections", voters.size(), elections.size());
-
-            int successCount = 0;
-            int failureCount = 0;
-
-            for (Voter voter : voters) {
-                Set<UUID> eligibleElectionIds = voterEligibleElections
-                        .getOrDefault(voter.getVoterId(), Collections.emptySet());
-
-                List<Election> voterElections = eligibleElectionIds.stream()
-                        .map(electionMap::get)
-                        .filter(Objects::nonNull)
-                        .toList();
-
-                if (voterElections.isEmpty()) {
-                    continue;
-                }
-
-                List<String> electionTitles = voterElections.stream()
-                        .map(Election::getElectionTitle)
-                        .toList();
-
-                Timestamp earliestStartTime = voterElections.stream()
-                        .map(Election::getElectionStartTime)
-                        .min(Timestamp::compareTo)
-                        .orElse(null);
-
-                Timestamp latestEndTime = voterElections.stream()
-                        .map(Election::getElectionEndTime)
-                        .max(Timestamp::compareTo)
-                        .orElse(null);
-
-                try {
-                    sendSingleEmail(voter, electionTitles, earliestStartTime, latestEndTime);
-                    successCount++;
-                } catch (Exception e) {
-                    failureCount++;
-                    log.error("Failed to send email to voter {}: {}", voter.getEmail(), e.getMessage(), e);
-                }
-            }
-
-            log.info("Email sending completed. Success: {}, Failures: {}", successCount, failureCount);
-
-        } catch (LaunchNotfound e) {
-            log.error("Entity not found: {}", e.getMessage());
-        } catch (ClassCastException e) {
-            log.error("Invalid payload format: {}", e.getMessage());
         } catch (Exception e) {
             log.error("Unexpected error processing election notification", e);
             throw new RuntimeException("Failed to process election notification", e);
         }
     }
 
+    // ── Launch path ───────────────────────────────────────────────────────────
+
+    private void handleLaunchNotification(Map<String, Object> payload) {
+        if (!payload.containsKey("orgId")) {
+            log.error("Launch payload missing orgId");
+            return;
+        }
+
+        UUID launchId = UUID.fromString(payload.get("launchId").toString());
+        UUID orgId    = UUID.fromString(payload.get("orgId").toString());
+
+        log.info("Processing launch notification: launchId={}, orgId={}", launchId, orgId);
+
+        // Verify launch exists
+        launchRepository.findById(launchId)
+                .orElseThrow(() -> new LaunchNotfound("Launch not found: " + launchId));
+
+        // Fetch elections via the join table (avoids touching the LAZY Launch.election collection)
+        List<UUID> electionIds = launchElectionRepository.findByIdLaunchId(launchId)
+                .stream()
+                .map(le -> le.getId().getElectionId())
+                .toList();
+
+        List<Election> elections = electionRepository.findAllById(electionIds);
+        if (elections.isEmpty()) {
+            log.warn("No elections found for launch {} — skipping notification", launchId);
+            return;
+        }
+
+        Map<UUID, Election> electionMap = elections.stream()
+                .collect(Collectors.toMap(Election::getElectionId, Function.identity()));
+
+        // Read pre-computed eligible voter snapshot (keyed by launchId)
+        List<UUID> eligibleVoterIds = eligibleVoterElectionRepository
+                .findDistinctVoterIdsByLaunchId(launchId);
+
+        if (eligibleVoterIds.isEmpty()) {
+            log.warn("No eligible voters found for launch {} — skipping notification", launchId);
+            return;
+        }
+
+        List<Voter> voters = voterRepository.findAllById(eligibleVoterIds);
+
+        Map<UUID, Set<UUID>> voterEligibleElections = eligibleVoterElectionRepository
+                .findByLaunchId(launchId)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        EligibleVoterElection::getVoterId,
+                        Collectors.mapping(EligibleVoterElection::getElectionId, Collectors.toSet())));
+
+        log.info("Sending launch emails to {} voters across {} elections", voters.size(), elections.size());
+        dispatchEmails(voters, voterEligibleElections, electionMap);
+    }
+
+    // ── Standalone election path ──────────────────────────────────────────────
+
+    private void handleStandaloneElectionNotification(Map<String, Object> payload) {
+        if (!payload.containsKey("orgId")) {
+            log.error("Standalone election payload missing orgId");
+            return;
+        }
+
+        UUID electionId = UUID.fromString(payload.get("electionId").toString());
+        UUID orgId      = UUID.fromString(payload.get("orgId").toString());
+
+        log.info("Processing standalone election notification: electionId={}, orgId={}", electionId, orgId);
+
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() -> new ElectionNotFound("Election not found: " + electionId));
+
+        // Read pre-computed eligible voter snapshot (launchId IS NULL for standalone)
+        List<UUID> eligibleVoterIds = eligibleVoterElectionRepository
+                .findDistinctVoterIdsByElectionId(electionId);
+
+        if (eligibleVoterIds.isEmpty()) {
+            log.warn("No eligible voters found for standalone election {} — skipping notification", electionId);
+            return;
+        }
+
+        List<Voter> voters = voterRepository.findAllById(eligibleVoterIds);
+
+        // Every eligible voter gets the same single election
+        Map<UUID, Set<UUID>> voterEligibleElections = voters.stream()
+                .collect(Collectors.toMap(
+                        Voter::getVoterId,
+                        v -> Set.of(electionId)));
+
+        Map<UUID, Election> electionMap = Map.of(electionId, election);
+
+        log.info("Sending standalone election emails to {} voters", voters.size());
+        dispatchEmails(voters, voterEligibleElections, electionMap);
+    }
+
+    // ── Shared dispatch logic ─────────────────────────────────────────────────
+
+    private void dispatchEmails(List<Voter> voters,
+                                Map<UUID, Set<UUID>> voterEligibleElections,
+                                Map<UUID, Election> electionMap) {
+        int successCount = 0;
+        int failureCount = 0;
+
+        for (Voter voter : voters) {
+            Set<UUID> eligibleElectionIds = voterEligibleElections
+                    .getOrDefault(voter.getVoterId(), Collections.emptySet());
+
+            List<Election> voterElections = eligibleElectionIds.stream()
+                    .map(electionMap::get)
+                    .filter(Objects::nonNull)
+                    .toList();
+
+            if (voterElections.isEmpty()) continue;
+
+            Timestamp earliestStart = voterElections.stream()
+                    .map(Election::getElectionStartTime)
+                    .filter(Objects::nonNull)
+                    .min(Timestamp::compareTo)
+                    .orElse(null);
+
+            Timestamp latestEnd = voterElections.stream()
+                    .map(Election::getElectionEndTime)
+                    .filter(Objects::nonNull)
+                    .max(Timestamp::compareTo)
+                    .orElse(null);
+
+            try {
+                sendSingleEmail(voter, voterElections, earliestStart, latestEnd);
+                successCount++;
+            } catch (Exception e) {
+                failureCount++;
+                log.error("Failed to send email to voter {}: {}", voter.getEmail(), e.getMessage(), e);
+            }
+        }
+
+        log.info("Email dispatch complete — success: {}, failures: {}", successCount, failureCount);
+    }
+
+    /**
+     * Compose and send a single election-live notification email to one voter.
+     *
+     * @param voter          the recipient
+     * @param elections      elections this voter is eligible to vote in
+     * @param startTime      earliest election start across the batch
+     * @param endTime        latest election end across the batch
+     */
     @Async
-    public void sendSingleEmail(Voter voter, List<String> electionTitles,
+    public void sendSingleEmail(Voter voter, List<Election> elections,
                                 Timestamp startTime, Timestamp endTime)
             throws MessagingException {
+
+        List<String> electionTitles = elections.stream()
+                .map(Election::getElectionTitle)
+                .toList();
+
+        // Single portal link — voters authenticate once and see all eligible elections.
+        String portalUrl = appBaseUrl + "/portal";
 
         MimeMessage mime = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
@@ -166,6 +269,7 @@ public class MessagingService {
         Context context = new Context();
         context.setVariable("voterName", voter.getName());
         context.setVariable("electionTitles", electionTitles);
+        context.setVariable("portalUrl", portalUrl);
         context.setVariable("startTime", startTime);
         context.setVariable("endTime", endTime);
 
@@ -242,7 +346,7 @@ public class MessagingService {
 
             // HTML-escape dynamic values to prevent HTML injection in outbound email.
             // summary is plain text (newline-delimited); convert \n to <br/> after escaping.
-            String safeName    = org.springframework.web.util.HtmlUtils.htmlEscape(recipientName);
+            String safeName = org.springframework.web.util.HtmlUtils.htmlEscape(recipientName);
             String safeSummary = org.springframework.web.util.HtmlUtils.htmlEscape(summary)
                     .replace("\n", "<br/>");
             String headerColor = "CRITICAL".equals(severity) ? "#c0392b" : "#e67e22";
@@ -318,11 +422,11 @@ public class MessagingService {
 
     @Async
     public void sendOtpEmail(String recipientEmail, String recipientName, String otp) throws MessagingException {
-        jakarta.mail.internet.MimeMessage mime = mailSender.createMimeMessage();
-        org.springframework.mail.javamail.MimeMessageHelper helper =
+        MimeMessage mime = mailSender.createMimeMessage();
+        MimeMessageHelper helper =
                 new MimeMessageHelper(mime, true, "UTF-8");
 
-        org.thymeleaf.context.Context ctx = new org.thymeleaf.context.Context();
+        Context ctx = new Context();
         ctx.setVariable("recipient_name", recipientName);
         ctx.setVariable("otp", otp);
 
