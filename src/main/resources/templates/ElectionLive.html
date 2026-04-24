@@ -112,7 +112,8 @@
         <p><b>End:</b> <span th:text="${endTime}"></span></p>
     </div>
 
-    <a href="https://africodelab.net/" class="cta">Cast Your Vote Now</a>
+    <!-- Single portal link — voter authenticates once and sees all eligible elections -->
+    <a th:href="${portalUrl}" class="cta">Cast Your Vote Now</a>
 
     <p class="message">
         Please make sure to submit your vote before the election closes.

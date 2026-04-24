@@ -25,4 +25,11 @@ public interface EligibleVoterElectionRepository extends JpaRepository<EligibleV
     List<EligibleVoterElection> findByLaunchId(UUID launchId);
 
     void deleteByLaunchId(UUID launchId);
+
+    // ── Standalone-election snapshot queries (launchId IS NULL) ──────────────
+    @Query("SELECT DISTINCT e.voterId FROM EligibleVoterElection e WHERE e.electionId = :electionId AND e.launchId IS NULL")
+    List<UUID> findDistinctVoterIdsByElectionId(@Param("electionId") UUID electionId);
+
+    @Query("SELECT e FROM EligibleVoterElection e WHERE e.electionId = :electionId AND e.launchId IS NULL")
+    List<EligibleVoterElection> findByElectionIdAndNoLaunch(@Param("electionId") UUID electionId);
 }

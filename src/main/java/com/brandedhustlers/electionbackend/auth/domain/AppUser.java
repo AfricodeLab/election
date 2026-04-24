@@ -39,7 +39,7 @@ public class AppUser {
     @Column(nullable = false, unique = true)
     private String appUserEmail;
 
-    @Column(name = "organization_name", nullable = false)
+    @Column(name = "organization_name")
     private String organizationName;
 
     @Column(unique = true)

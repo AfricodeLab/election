@@ -53,7 +53,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 
-        // Shorthand arrays for role groups
+        // Shorthand arrays for role groups (used with hasAnyRole — Spring auto-prepends ROLE_)
         String[] ADMINS       = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN"};
         String[] ADMINS_AUDIT = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR"};
         String[] READERS      = {"ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR"};
@@ -92,13 +92,22 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers("/ws/**", "/ws-raw/**").permitAll()
 
-                        // ── Voter-only ──────────────────────────────────────────
+                        // ── Voter portal (public — voters have no admin JWT) ────
                         .requestMatchers("/api/v1/verification/send").permitAll()
                         .requestMatchers("/api/v1/verification/confirm").permitAll()
                         // In-person verification — official must be authenticated
                         .requestMatchers("/api/v1/verification/in-person/**").hasAnyRole(ADMINS)
-                        .requestMatchers("/api/v1/election/live").hasAnyRole(ADMINS)
-                        .requestMatchers("/api/v1/votes/cast","/api/v1/election/live").hasRole("VOTER")
+                        // After OTP, voter fetches their eligible live elections.
+                        // MUST be listed before the broad GET /election/* permitAll below,
+                        // and before the ALL_INTERNAL rule later, which excludes VOTER.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/election/live").hasAnyRole("VOTER", "ADMIN", "SUPER_ADMIN", "ORG_ADMIN", "AUDITOR", "CONTRIBUTOR", "OBSERVER")
+                        // Admin list endpoint — keep restricted before the permitAll wildcard.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/election/get-all").hasAnyRole(ALL_INTERNAL)
+                        // GET /election/{id}: public so the voter portal can display election
+                        // details before the voter authenticates via OTP.
+                        // Specific rules above must precede this wildcard (first-match wins).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/election/*").permitAll()
+                        .requestMatchers("/api/v1/votes/cast").hasRole("VOTER")
 
                         // ── SUPER_ADMIN-only ────────────────────────────────────
                         .requestMatchers("/api/v1/organization/all").hasRole("SUPER_ADMIN")
@@ -108,34 +117,45 @@ public class SecurityConfig {
                         .requestMatchers("/api/debug/**").hasRole("SUPER_ADMIN")
 
                         // ── SUPER_ADMIN + AUDITOR (audit / integrity) ───────────
+                        // Also accepts PERM_VIEW_AUDIT_LOG so ORG_ADMINs can delegate
+                        // audit access to a custom role (e.g. "Compliance Auditor").
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/validate")
-                        .hasAnyRole("SUPER_ADMIN", "AUDITOR")
+                        .hasAnyAuthority(roleOrPerm(new String[]{"SUPER_ADMIN", "AUDITOR"}, "VIEW_AUDIT_LOG"))
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/validate-stream")
-                        .hasAnyRole("SUPER_ADMIN", "AUDITOR")
+                        .hasAnyAuthority(roleOrPerm(new String[]{"SUPER_ADMIN", "AUDITOR"}, "VIEW_AUDIT_LOG"))
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/audit")
-                        .hasAnyRole("SUPER_ADMIN", "AUDITOR")
+                        .hasAnyAuthority(roleOrPerm(new String[]{"SUPER_ADMIN", "AUDITOR"}, "VIEW_AUDIT_LOG"))
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/integrity-summary")
-                        .hasAnyRole("SUPER_ADMIN", "AUDITOR")
-                        .requestMatchers("/api/v1/audit/**").hasAnyRole(ADMINS_AUDIT)
+                        .hasAnyAuthority(roleOrPerm(new String[]{"SUPER_ADMIN", "AUDITOR"}, "VIEW_AUDIT_LOG"))
+                        .requestMatchers("/api/v1/audit/**")
+                        .hasAnyAuthority(roleOrPerm(ADMINS_AUDIT, "VIEW_AUDIT_LOG"))
 
                         // ── Auth: user management (write) ───────────────────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/create-user").hasAnyRole(ADMINS)
+                        // PERM_CREATE_USER lets an ORG_ADMIN delegate user-creation to a trusted custom role.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/create-user")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "CREATE_USER"))
                         // Role update: ADMIN/SUPER_ADMIN can update any user; ORG_ADMIN can update
-                        // users within their own org (service layer enforces the org boundary)
-                        .requestMatchers(HttpMethod.PATCH, "/api/v1/auth/users/*/role").hasAnyRole(ADMINS)
+                        // users within their own org (service layer enforces the org boundary).
+                        // PERM_UPDATE_USER allows the same delegation pattern.
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/auth/users/*/role")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "UPDATE_USER"))
+                        // Deactivate/activate intentionally restricted to platform admins only —
+                        // the service layer has no org-boundary guard here yet.
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/deactivate/**")
                         .hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/auth/activate/**")
                         .hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        // Auth: user list (read)
-                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/get-users").hasAnyRole(ADMINS_AUDIT)
+                        // Auth: user list (read) — PERM_VIEW_USERS unlocks for delegated roles.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/auth/get-users")
+                        .hasAnyAuthority(roleOrPerm(ADMINS_AUDIT, "VIEW_USERS"))
 
                         // ── Organization (write) ────────────────────────────────
                         // Only BH platform team creates / configures organizations
                         .requestMatchers(HttpMethod.POST, "/api/v1/organization/create").hasAnyRole("ADMIN", "SUPER_ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/organization/update/**").hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        // ORG_ADMIN may add users to their own org
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/organization/add-user").hasAnyRole(ADMINS)
+                        // ORG_ADMIN may add users to their own org; PERM_UPDATE_USER delegates this.
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/organization/add-user")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "UPDATE_USER"))
 
                         // ── Election (write) ────────────────────────────────────
                         // DOERS: service layer enforces specific PermissionType
@@ -145,7 +165,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/election/candidate-add/**").hasAnyRole(DOERS)
                         .requestMatchers(HttpMethod.PUT, "/api/v1/election/update-candidate/**")
                         .hasAnyRole("ADMIN", "SUPER_ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/election/live/**").hasAnyRole(ADMINS)
+                        // PERM_PUBLISH_ELECTION: an ORG_ADMIN can delegate "bring to live" to
+                        // a trusted custom role (e.g. "Senior Election Manager").
+                        .requestMatchers(HttpMethod.POST, "/api/v1/election/live/**")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "PUBLISH_ELECTION"))
                         // Election (read) — includes OBSERVER
                         .requestMatchers(HttpMethod.GET, "/api/v1/election/get-all").hasAnyRole(ALL_INTERNAL)
                         .requestMatchers(HttpMethod.GET, "/api/v1/election/live").hasAnyRole(ALL_INTERNAL)
@@ -167,16 +190,24 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/voters/**").hasAnyRole(READERS)
 
                         // ── Verification: attribute coverage (read) ─────────────
-                        .requestMatchers(HttpMethod.GET, "/api/v1/verification/voters/**").hasAnyRole(ADMINS_AUDIT)
+                        .requestMatchers(HttpMethod.GET, "/api/v1/verification/voters/**")
+                        .hasAnyAuthority(roleOrPerm(ADMINS_AUDIT, "VIEW_VOTERS"))
 
-                        // ── Roles (write) — only admins can manage roles ────────
-                        .requestMatchers(HttpMethod.POST, "/api/v1/roles").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.PUT, "/api/v1/roles/**").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.DELETE, "/api/v1/roles/**").hasAnyRole(ADMINS)
-                        .requestMatchers(HttpMethod.POST, "/api/v1/roles/users/**").hasAnyRole(ADMINS)
-                        // Roles (read) — all internal roles can view
-                        .requestMatchers(HttpMethod.GET, "/api/v1/roles/**").hasAnyRole(ALL_INTERNAL)
-                        .requestMatchers(HttpMethod.GET, "/api/v1/roles").hasAnyRole(ALL_INTERNAL)
+                        // ── Roles (write) — PERM_ variants allow ORG_ADMINs to delegate
+                        //    role management to a trusted custom role (e.g. "HR Manager").
+                        .requestMatchers(HttpMethod.POST, "/api/v1/roles")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "CREATE_ROLE"))
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/roles/**")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "UPDATE_ROLE"))
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/roles/**")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "DELETE_ROLE"))
+                        .requestMatchers(HttpMethod.POST, "/api/v1/roles/users/**")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "ASSIGN_ROLE"))
+                        // Roles (read) — all internal roles can view; PERM_VIEW_ROLES unlocks for delegated roles.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/roles/**")
+                        .hasAnyAuthority(roleOrPerm(ALL_INTERNAL, "VIEW_ROLES"))
+                        .requestMatchers(HttpMethod.GET, "/api/v1/roles")
+                        .hasAnyAuthority(roleOrPerm(ALL_INTERNAL, "VIEW_ROLES"))
 
                         // ── Stations (write) ────────────────────────────────────
                         .requestMatchers(HttpMethod.POST, "/api/v1/stations/**").hasAnyRole(DOERS)
@@ -247,6 +278,35 @@ public class SecurityConfig {
         authenticationProvider.setPasswordEncoder(passwordEncoder);
 
         return new ProviderManager(authenticationProvider);
+    }
+
+    /**
+     * Builds a combined authority array for use with {@code hasAnyAuthority()}.
+     *
+     * <p>Role names are prefixed with {@code "ROLE_"} (matching what
+     * {@code getAuthorities()} emits for role-based authorities).
+     * Permission names are prefixed with {@code "PERM_"} (matching what
+     * {@code getAuthorities()} emits for permission-based authorities).</p>
+     *
+     * <p>Use this instead of {@code hasAnyRole()} on endpoints that should be
+     * accessible to users who hold the permission via a custom org role, even
+     * when their base system role alone would not satisfy the check.</p>
+     *
+     * <pre>
+     *   // Allows ADMIN/SUPER_ADMIN/ORG_ADMIN via system role,
+     *   // OR any user whose custom role includes PUBLISH_ELECTION.
+     *   .hasAnyAuthority(roleOrPerm(ADMINS, "PUBLISH_ELECTION"))
+     * </pre>
+     */
+    private static String[] roleOrPerm(String[] roles, String... permissionNames) {
+        String[] result = new String[roles.length + permissionNames.length];
+        for (int i = 0; i < roles.length; i++) {
+            result[i] = "ROLE_" + roles[i];
+        }
+        for (int i = 0; i < permissionNames.length; i++) {
+            result[roles.length + i] = "PERM_" + permissionNames[i];
+        }
+        return result;
     }
 
 }

@@ -7,6 +7,7 @@ import com.brandedhustlers.electionbackend.auth.domain.Role;
 import com.brandedhustlers.electionbackend.auth.dto.CreateRoleRequest;
 import com.brandedhustlers.electionbackend.auth.dto.RoleDTO;
 import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
+import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.PermissionRepository;
@@ -80,6 +81,17 @@ public class RoleManagementService {
 
         if (req.name() == null || req.name().isBlank()) {
             throw new IllegalArgumentException("Role name must not be blank");
+        }
+
+        // Reject names that shadow system role enum constants.
+        // getAuthorities() uppercases every role name before building the ROLE_ authority,
+        // so "super_admin", "Super_Admin" etc. would all produce ROLE_SUPER_ADMIN and
+        // silently pass the HTTP gate's hasRole("SUPER_ADMIN") check.
+        boolean isReserved = Arrays.stream(UserRole.values())
+                .anyMatch(ur -> ur.name().equalsIgnoreCase(req.name().trim()));
+        if (isReserved) {
+            throw new IllegalArgumentException(
+                    "'" + req.name() + "' is a reserved system role name and cannot be used for custom roles");
         }
 
         if (roleRepository.existsByRoleNameAndOrgId(req.name(), org.getOrganizationId())) {

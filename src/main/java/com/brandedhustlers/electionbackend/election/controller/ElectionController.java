@@ -157,9 +157,9 @@ public class ElectionController {
                         "message", "No active organization. Please join or switch to an organization first."));
             }
 
-            log.info(String.valueOf(electionOrg.equals(userOrg)));
-            log.info("election org: {}", electionOrg.toString());
-            log.info("user org: {}", userOrg.toString());
+            log.info("org match: {}", electionOrg.getOrganizationId().equals(userOrg.getOrganizationId()));
+            log.info("election org id: {}", electionOrg.getOrganizationId());
+            log.info("user org id: {}", userOrg.getOrganizationId());
 
             if (!(userOrg.getOrganizationId().equals(electionOrg.getOrganizationId()))) {
                 return ResponseEntity.status(403).body(Map.of(

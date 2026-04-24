@@ -29,4 +29,20 @@ public interface VerificationTokenRepository extends JpaRepository<VerificationT
             LIMIT 1
             """)
     Optional<VerificationToken> findValidToken(UUID voterId, UUID electionId, Instant now);
+
+    /**
+     * Find the most recent valid token for a voter where no election is scoped
+     * (identity-only OTP flow — electionId IS NULL).
+     */
+    @Query("""
+            SELECT vr FROM VerificationToken vr
+            WHERE vr.voterId = :voterId
+              AND vr.electionId IS NULL
+              AND vr.isUsed = false
+              AND vr.deleteYn = 'N'
+              AND vr.expiresAt > :now
+            ORDER BY vr.createdAt DESC
+            LIMIT 1
+            """)
+    Optional<VerificationToken> findValidTokenForVoter(UUID voterId, Instant now);
 }

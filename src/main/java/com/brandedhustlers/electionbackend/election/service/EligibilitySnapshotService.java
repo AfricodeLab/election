@@ -76,4 +76,47 @@ public class EligibilitySnapshotService {
         log.info("Pre-computed {} eligible voter-election pairs for launch {}", batch.size(), launchId);
         return batch.size();
     }
+
+    /**
+     * Pre-compute eligible voter-election pairs for a single standalone election
+     * (one brought live directly via POST /election/live/{id}, not via a Launch).
+     *
+     * Stored with launchId = null to distinguish from launch-scoped snapshots.
+     * Called immediately before the voter notification is queued.
+     */
+    @Transactional
+    public int computeForElection(UUID orgId, UUID electionId, Election election) {
+        Organization org = organizationRepository.findById(orgId)
+                .orElseThrow(() -> new IllegalArgumentException("Organization not found: " + orgId));
+
+        List<Voter> voters = voterRepository.findByOrganization(org);
+        Timestamp now = Timestamp.from(Instant.now());
+
+        List<EligibleVoterElection> batch = new ArrayList<>();
+
+        for (Voter voter : voters) {
+            boolean eligible;
+            if (election.getEligibilityPolicy() == null) {
+                eligible = true;
+            } else {
+                eligible = eligibilityService
+                        .evaluate(voter.getAttributes(), election.getEligibilityPolicy())
+                        .isAllowed();
+            }
+
+            if (eligible) {
+                batch.add(EligibleVoterElection.builder()
+                        .voterId(voter.getVoterId())
+                        .electionId(electionId)
+                        .launchId(null)   // null = standalone, not part of a launch
+                        .computedAt(now)
+                        .build());
+            }
+        }
+
+        eligibleVoterElectionRepository.saveAll(batch);
+        log.info("Pre-computed {} eligible voter-election pairs for standalone election {}",
+                batch.size(), electionId);
+        return batch.size();
+    }
 }

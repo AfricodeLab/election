@@ -85,13 +85,18 @@ public class VerificationService implements IVerificationService {
             throw new IllegalArgumentException("Email and National ID do not match our records");
         }
 
-        // 3. Confirm the election exists
-        electionRepository.findById(req.electionId())
-                .orElseThrow(() -> new NoSuchElementException("Election not found"));
+        // 3. Confirm the election exists (only when scoped to a specific election)
+        if (req.electionId() != null) {
+            electionRepository.findById(req.electionId())
+                    .orElseThrow(() -> new NoSuchElementException("Election not found"));
+        }
 
         // 4. Resend cooldown — prevent spam
         var now = Instant.now();
-        tokens.findValidToken(voter.getVoterId(), req.electionId(), now).ifPresent(last -> {
+        Optional<VerificationToken> lastToken = req.electionId() != null
+                ? tokens.findValidToken(voter.getVoterId(), req.electionId(), now)
+                : tokens.findValidTokenForVoter(voter.getVoterId(), now);
+        lastToken.ifPresent(last -> {
             if (Duration.between(last.getCreatedAt(), now).compareTo(RESEND_COOLDOWN) < 0) {
                 throw new IllegalStateException("Please wait before requesting a new code");
             }
@@ -164,9 +169,11 @@ public class VerificationService implements IVerificationService {
         Voter voter = voters.findByEmailIgnoreCase(req.email())
                 .orElseThrow(() -> new NoSuchElementException("Voter not found"));
 
-        // 2. Find valid token for this voter + election
+        // 2. Find valid token — election-scoped or voter-level depending on flow
         var now = Instant.now();
-        VerificationToken tok = tokens.findValidToken(voter.getVoterId(), req.electionId(), now)
+        VerificationToken tok = (req.electionId() != null
+                ? tokens.findValidToken(voter.getVoterId(), req.electionId(), now)
+                : tokens.findValidTokenForVoter(voter.getVoterId(), now))
                 .orElseThrow(() -> new NoSuchElementException(
                         "No active code found — please request a new one"));
 
@@ -190,12 +197,15 @@ public class VerificationService implements IVerificationService {
         tok.setDeleteYn(DeleteYn.Y);
         tokens.save(tok);
 
-        // 6. Mark voter as verified for this election
-        //    - OTP flow → REMOTE_OTP, verifiedBy = null
-        //    - Station-PIN flow (in-person) → ElectionVoter already marked by official;
-        //      we just ensure verified=true and don't overwrite the mode or verifiedBy.
+        // 6. Mark voter as verified for this election (only when electionId was provided).
+        //    - Election-scoped OTP → mark verified on the specific ElectionVoter row.
+        //    - Identity-only OTP (electionId == null) → skip here; VotingService will
+        //      auto-verify when the voter casts their vote (step-up already validated
+        //      by VoteController before calling the service).
         String mode = "STATION_PIN".equals(tok.getType()) ? "IN_PERSON" : "REMOTE_OTP";
-        markVoterVerified(voter, req.electionId(), null, mode);
+        if (req.electionId() != null) {
+            markVoterVerified(voter, req.electionId(), null, mode);
+        }
 
         // 7. Issue short-lived voter JWT (carries stepUpVerifiedAt for the vote-gate)
         String voterToken = jwtService.generateVoterToken(voter.getEmail());
@@ -290,6 +300,9 @@ public class VerificationService implements IVerificationService {
         Optional<ElectionVoter> existing =
                 evRepo.findByVoterIdAndElectionId(voter.getVoterId(), electionId);
 
+        // verifiedBy is null for the OTP (self-service) path; only set for in-person
+        UUID verifiedById = (verifiedBy != null) ? verifiedBy.getAppUserId() : null;
+
         if (existing.isPresent()) {
             ElectionVoter ev = existing.get();
             ev.setVerified(true);
@@ -299,7 +312,7 @@ public class VerificationService implements IVerificationService {
             // Don't overwrite verifiedBy / verificationMode if already set by the
             // in-person endpoint — that record is more authoritative.
             if (ev.getVerificationMode() == null) {
-                ev.setVerifiedBy(verifiedBy.getAppUserId());
+                ev.setVerifiedBy(verifiedById);
                 ev.setVerificationMode(mode);
             }
             evRepo.save(ev);
@@ -314,7 +327,7 @@ public class VerificationService implements IVerificationService {
                     .hasVoted(false)
                     .verified(true)
                     .verifiedAt(Timestamp.from(Instant.now()))
-                    .verifiedBy(verifiedBy.getAppUserId())
+                    .verifiedBy(verifiedById)
                     .verificationMode(mode)
                     .build();
             evRepo.save(ev);

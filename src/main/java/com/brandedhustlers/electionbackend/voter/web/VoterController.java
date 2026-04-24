@@ -135,6 +135,16 @@ public class VoterController {
         return new ResponseEntity<>(voterService.getOrgVoters(pageable), HttpStatus.OK);
     }
 
+    @GetMapping("/{voterId}")
+    public ResponseEntity<?> getById(@PathVariable UUID voterId) {
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (orgId == null) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("message", "No active organization."));
+        }
+        return ResponseEntity.ok(voterService.getById(orgId, voterId));
+    }
+
     @PatchMapping("/{voterId}/contact")
     public ResponseEntity<?> updateContact(
             @PathVariable UUID voterId,

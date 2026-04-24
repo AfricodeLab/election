@@ -84,7 +84,7 @@ public class VotingService implements IVotingService {
     @Transactional
     @RateLimiter(name = "critical")
     @Bulkhead(name = "critical")
-    public VoteAckDTO cast(UUID orgId, UUID voterId, CastVoteCmd cmd, HttpServletRequest httpServletRequest) {
+    public VoteAckDTO cast(UUID orgId, UUID voterId, CastVoteCmd cmd, HttpServletRequest httpServletRequest, boolean stepUpVerified) {
 
         try {
             Voter actor = voterRepository.findVoterByIdAndOrgId(voterId, orgId)
@@ -119,7 +119,9 @@ public class VotingService implements IVotingService {
 
             // Fast-path verification check before taking the row lock.
             // The authoritative check is repeated after lockByIds below.
-            if (existingEv.isPresent() && !existingEv.get().isVerified()) {
+            // When stepUpVerified=true the controller already validated the JWT step-up
+            // claim, so we skip the NOT_VERIFIED rejection.
+            if (existingEv.isPresent() && !existingEv.get().isVerified() && !stepUpVerified) {
                 return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
                         "Identity verification is required before voting. " +
                         "Please complete the verification step and try again.");
@@ -160,7 +162,11 @@ public class VotingService implements IVotingService {
                             .voter(actor)
                             .election(election)
                             .hasVoted(false)
-                            .verified(false) // voter has not been verified — lockByIds will reject them
+                            // If step-up was validated by the controller (identity-only OTP flow),
+                            // treat the voter as verified — they proved their identity via OTP.
+                            .verified(stepUpVerified)
+                            .verificationMode(stepUpVerified ? "REMOTE_OTP" : null)
+                            .verifiedAt(stepUpVerified ? Timestamp.from(Instant.now()) : null)
                             .build());
                 } catch (DataIntegrityViolationException e) {
                     // Concurrent insert won the race — the row now exists.
@@ -199,9 +205,16 @@ public class VotingService implements IVotingService {
             // Authoritative verification check (post-lock — this is the one that matters
             // under concurrency; the fast-path above is just an optimisation).
             if (!ev.isVerified()) {
-                return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
-                        "Identity verification is required before voting. " +
-                        "Please complete the verification step and try again.");
+                if (!stepUpVerified) {
+                    return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
+                            "Identity verification is required before voting. " +
+                            "Please complete the verification step and try again.");
+                }
+                // Auto-verify: step-up JWT was valid (controller already checked).
+                ev.setVerified(true);
+                ev.setVerifiedAt(Timestamp.from(Instant.now()));
+                ev.setVerificationMode("REMOTE_OTP");
+                evRepo.save(ev);
             }
 
             // save the vote and flip hasVoted=true
@@ -218,6 +231,11 @@ public class VotingService implements IVotingService {
                     .castAt(Instant.now())
                     .build();
             votes.saveAndFlush(vote);
+
+            // Increment the denormalized totalVotes counter on the Election row.
+            // Using a single atomic UPDATE avoids the read-modify-write race that would
+            // occur if we fetched election.getTotalVotes(), incremented, and saved.
+            electionRepository.incrementTotalVotes(cmd.electionId());
 
             //todo db trigger to prevent updates
 

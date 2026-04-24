@@ -7,5 +7,12 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 
 public interface IVotingService {
-    VoteAckDTO cast(UUID orgId, UUID userId, CastVoteCmd cmd, HttpServletRequest httpServletRequest);
+    /**
+     * @param stepUpVerified true when the caller (VoteController) has already validated
+     *                       the voter's step-up JWT claim. When true, the service will
+     *                       auto-verify unverified ElectionVoter records rather than
+     *                       rejecting them, supporting the identity-only OTP flow where
+     *                       verification is not pre-scoped to a specific election.
+     */
+    VoteAckDTO cast(UUID orgId, UUID userId, CastVoteCmd cmd, HttpServletRequest httpServletRequest, boolean stepUpVerified);
 }

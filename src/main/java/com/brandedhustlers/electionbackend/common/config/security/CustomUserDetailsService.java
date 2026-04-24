@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
+import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.domain.Role;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
@@ -18,7 +19,7 @@ import java.util.Collection;
 import java.util.HashSet;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -50,22 +51,44 @@ public class CustomUserDetailsService implements UserDetailsService {
         throw  new UserNotFound("User account not found.");
     }
 
-    private Collection<? extends GrantedAuthority> getAuthorities(AppUser user){
-        String prefix = "ROLE_";
-        Set<SimpleGrantedAuthority> set = user.getRoles()
-                .stream()
+    private Collection<? extends GrantedAuthority> getAuthorities(AppUser user) {
+        Set<SimpleGrantedAuthority> set = new HashSet<>();
+
+        // 1. ROLE_ authorities — every role entity the user holds (system + custom org roles).
+        //    getAuthorities() uppercases the stored name so "Election_Manager" → ROLE_ELECTION_MANAGER.
+        user.getRoles().stream()
                 .map(Role::getRoleName)
                 .map(String::toUpperCase)
-                .map(StringBuilder::new)//convert to stringbuilder so I can prepend
-                .map(authRole -> authRole.insert(0, prefix)) //prepend role prefix
-                .map(StringBuilder::toString)//converting stringbuilder to tring
+                .map(name -> "ROLE_" + name)
                 .map(SimpleGrantedAuthority::new)
-                .collect(Collectors.toCollection(HashSet::new));
+                .forEach(set::add);
 
-        if(user.getUserRole() != null){
+        // 2. The userRole enum field is always included as a safety floor — it guarantees
+        //    the base system role authority even if the roles Set is somehow empty.
+        if (user.getUserRole() != null) {
             set.add(new SimpleGrantedAuthority("ROLE_" + user.getUserRole().name()));
         }
-        log.info("user roles: {}", set);
+
+        // 3. PERM_ authorities — collected from every role that applies to the user's
+        //    current org context. System roles (orgId = null) apply everywhere; org-scoped
+        //    custom roles apply only while the user is active in that org.
+        //    These authorities let SecurityConfig grant HTTP-gate access based on a
+        //    specific permission rather than a hardcoded system role name, allowing
+        //    ORG_ADMINs to delegate access to trusted CONTRIBUTOR/AUDITOR/OBSERVER users
+        //    via custom roles without changing compiled code.
+        UUID activeOrgId = Optional.ofNullable(user.getActiveOrganization())
+                .map(Organization::getOrganizationId)
+                .orElse(null);
+
+        user.getRoles().stream()
+                .filter(role -> role.getOrgId() == null
+                        || role.getOrgId().equals(activeOrgId))
+                .flatMap(role -> role.getRolePermissions().stream())
+                .map(perm -> "PERM_" + perm.getPermissionType().name())
+                .map(SimpleGrantedAuthority::new)
+                .forEach(set::add);
+
+        log.info("user authorities: {}", set);
         return set;
     }
 }

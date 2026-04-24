@@ -2,7 +2,6 @@ package com.brandedhustlers.electionbackend.voter.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 
 import java.util.UUID;
 
@@ -12,8 +11,10 @@ import java.util.UUID;
  * @param email      Voter's registered email — used as the primary lookup key.
  * @param nationalId Voter's national ID — must match the record on file to
  *                   confirm identity before an OTP is dispatched.
- * @param electionId The election this verification is for. OTPs are scoped
- *                   per-election so one code cannot be reused across elections.
+ * @param electionId Optional. When provided the OTP is scoped to that election
+ *                   (legacy/deep-link flow). When null the OTP is a general
+ *                   identity proof — the voter will see all eligible elections
+ *                   after confirming their code.
  * @param channel    Delivery channel: {@code EMAIL} (default) or {@code SMS}.
  */
 public record OtpSendRequest(
@@ -24,8 +25,7 @@ public record OtpSendRequest(
         @NotBlank(message = "National ID is required")
         String nationalId,
 
-        @NotNull(message = "Election ID is required")
-        UUID electionId,
+        UUID electionId,   // nullable — null = identity-only (no election scope)
 
         String channel) {
 
