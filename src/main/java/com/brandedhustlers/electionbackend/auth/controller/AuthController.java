@@ -7,6 +7,7 @@ import com.brandedhustlers.electionbackend.auth.dto.MfaVerifyRequest;
 import com.brandedhustlers.electionbackend.auth.dto.PasswordResetCmd;
 import com.brandedhustlers.electionbackend.auth.dto.RegistrationRequest;
 import com.brandedhustlers.electionbackend.auth.dto.TokenRefreshRequest;
+import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.service.AuthService;
 import com.brandedhustlers.electionbackend.auth.service.MfaService;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
@@ -74,6 +75,19 @@ public class AuthController {
     public ResponseEntity<?> getOrgUser(Pageable pageable) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
         return new ResponseEntity<>(authService.getUsers(orgId, pageable), HttpStatus.OK);
+    }
+
+    /**
+     * Update a user's base system role.
+     * SUPER_ADMIN: any role. ADMIN: any role except ADMIN/SUPER_ADMIN.
+     * ORG_ADMIN: CONTRIBUTOR/AUDITOR/OBSERVER/VOTER only, within their org.
+     */
+    @PatchMapping("/users/{userId}/role")
+    public ResponseEntity<?> updateUserRole(
+            @PathVariable UUID userId,
+            @RequestParam UserRole role) {
+        authService.updateUserRole(userId, role);
+        return ResponseEntity.ok("User role updated to " + role.name());
     }
 
     @DeleteMapping("/deactivate/{userId}")

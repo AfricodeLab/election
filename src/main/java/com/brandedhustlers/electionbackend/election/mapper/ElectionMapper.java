@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.election.mapper;
 
+import com.brandedhustlers.electionbackend.auth.dto.OrganizationDTO;
 import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
@@ -46,7 +47,15 @@ public class ElectionMapper {
                 election.getTotalVoters(),
                 election.getTotalVotes(),
                 election.getCreatedAt(),
-                election.getOrganization(),
+                new OrganizationDTO(
+                        election.getOrganization().getOrganizationId(),
+                        election.getOrganization().getOrganizationName(),
+                        election.getOrganization().getOrganizationDescription(),
+                        election.getOrganization().isEnabled(),   // was incorrectly calling getCreatedBy().isMfaEnabled()
+                        election.getOrganization().getCreatedAt(),
+                        election.getOrganization().getUpdatedAt(),
+                        election.getOrganization().getDeleteYn()
+                ),
                 election.getDeleteYn(),
                 election.isPubliclyVisible(),
                 candidateDTOs,

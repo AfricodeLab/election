@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.election.service;
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
@@ -37,7 +38,7 @@ public class ElectionPresetService {
      */
     public ElectionPresetDTO createPreset(CreateElectionPresetRequest request) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        util.requireAdmin(caller);
+        util.requireAdminOrPermission(caller, PermissionType.CREATE_ELECTION);
 
         if (caller.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create presets");
@@ -86,18 +87,12 @@ public class ElectionPresetService {
      */
     public ElectionPresetDTO updatePreset(UUID presetId, UpdateElectionPresetRequest request) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        util.requireAdmin(caller);
+        util.requireAdminOrPermission(caller, PermissionType.UPDATE_ELECTION);
 
         ElectionPreset preset = electionPresetRepository.findByPresetIdAndDeleteYn(presetId, DeleteYn.N)
                 .orElseThrow(() -> new InvalidUpdate("Preset not found: " + presetId));
 
-        Organization callerOrg = caller.getActiveOrganization();
-        if (callerOrg == null) {
-            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
-        }
-        if (!preset.getOrganization().getOrganizationId().equals(callerOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You can only edit presets from your own organization");
-        }
+        util.requireOrgMatch(caller, preset.getOrganization().getOrganizationId());
 
         if (request.name() != null) {
             preset.setName(request.name());
@@ -130,19 +125,12 @@ public class ElectionPresetService {
      */
     public void deletePreset(UUID presetId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
-        util.requireAdmin(caller);
+        util.requireAdminOrPermission(caller, PermissionType.CREATE_ELECTION);
 
         ElectionPreset preset = electionPresetRepository.findByPresetIdAndDeleteYn(presetId, DeleteYn.N)
                 .orElseThrow(() -> new InvalidUpdate("Preset not found: " + presetId));
 
-        Organization callerOrg = caller.getActiveOrganization();
-        if (callerOrg == null) {
-            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
-        }
-        if (!preset.getOrganization().getOrganizationId()
-                .equals(callerOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You can only delete presets from your own organization");
-        }
+        util.requireOrgMatch(caller, preset.getOrganization().getOrganizationId());
 
         preset.setDeleteYn(DeleteYn.Y);
         electionPresetRepository.save(preset);

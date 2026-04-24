@@ -1,5 +1,7 @@
 package com.brandedhustlers.electionbackend.ops.web;
 
+import com.brandedhustlers.electionbackend.common.flags.Feature;
+import com.brandedhustlers.electionbackend.common.flags.RequiresFeature;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.ops.dto.CreateLaunchCmd;
 import com.brandedhustlers.electionbackend.ops.enums.LaunchStatus;
@@ -21,7 +23,7 @@ import java.util.UUID;
  */
 @RestController
 @RequestMapping("/api/v1/launches")
-public class LaunchController {
+public class  LaunchController {
     private final LaunchService svc;
     private final GetUser getUser;
 
@@ -31,6 +33,7 @@ public class LaunchController {
         this.getUser = getUser;
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PostMapping
     public ResponseEntity<?> create(@Valid @RequestBody CreateLaunchCmd createLaunchCmd) {
         return new ResponseEntity<>(
@@ -51,6 +54,7 @@ public class LaunchController {
                 HttpStatus.OK);
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PostMapping("/{launchId}/attach-elections")
     public ResponseEntity<?> attach(@PathVariable UUID launchId,
             @RequestBody List<UUID> electionIds) {
@@ -58,6 +62,7 @@ public class LaunchController {
         return new ResponseEntity<>("Elections attached successfully", HttpStatus.ACCEPTED);
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @DeleteMapping("/{launchId}/detach-elections")
     public ResponseEntity<?> detach(@PathVariable UUID launchId,
             @RequestBody List<UUID> electionIds) {
@@ -65,6 +70,7 @@ public class LaunchController {
         return new ResponseEntity<>("Election(s) detached successfully", HttpStatus.ACCEPTED);
     }
 
+    @RequiresFeature(Feature.ELECTION_MANAGEMENT)
     @PutMapping("/{launchId}/status")
     public ResponseEntity<?> transition(@PathVariable UUID launchId,
             @RequestParam LaunchStatus status) {

@@ -1,7 +1,7 @@
 package com.brandedhustlers.electionbackend.voter.service;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.enums.UserRole;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
@@ -73,11 +73,7 @@ public class VoterService implements IVoterService {
     public VoterDTO create(UUID orgId, CreateVoterCmd cmd) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
 
-        if (!(util.authorizeUser(actor, UserRole.ADMIN)
-                || util.authorizeUser(actor, UserRole.SUPER_ADMIN)
-                || util.authorizeUser(actor, UserRole.ORG_ADMIN))) {
-            throw new AccessDeniedException("You do not have authority to create a voter");
-        }
+        util.requireAdminOrPermission(actor, PermissionType.CREATE_VOTER);
 
         if (actor.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create a voter");
@@ -157,6 +153,14 @@ public class VoterService implements IVoterService {
     }
 
     @Override
+    public VoterDTO getById(UUID orgId, UUID voterId) {
+        // findVoterByIdAndOrgId enforces org isolation via JPQL — no separate check needed
+        Voter voter = voterRepository.findVoterByIdAndOrgId(voterId, orgId)
+                .orElseThrow(() -> new EntityNotFoundException("Voter not found: " + voterId));
+        return voterMapper.entityToDto(voter);
+    }
+
+    @Override
     public List<VoterDTO> search(UUID orgId, String q, int limit) {
         if (q == null || q.isBlank()) {
             return List.of();
@@ -171,18 +175,12 @@ public class VoterService implements IVoterService {
     @Transactional
     public VoterDTO updateContact(UUID orgId, UUID voterId, UpdateVoterContactCmd cmd) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
-        if (!(util.authorizeUser(actor, UserRole.ADMIN)
-                || util.authorizeUser(actor, UserRole.SUPER_ADMIN)
-                || util.authorizeUser(actor, UserRole.ORG_ADMIN))) {
-            throw new AccessDeniedException("You do not have authority to update voter contact info");
-        }
+        util.requireAdminOrPermission(actor, PermissionType.UPDATE_VOTER);
 
         Voter voter = voterRepository.findById(voterId)
                 .orElseThrow(() -> new EntityNotFoundException("Voter not found: " + voterId));
 
-        if (!voter.getOrganization().getOrganizationId().equals(orgId)) {
-            throw new AccessDeniedException("Voter does not belong to your organization");
-        }
+        util.requireOrgMatch(actor, voter.getOrganization().getOrganizationId());
 
         if (cmd.email() != null && !cmd.email().isBlank()) {
             voterRepository.findByEmailIgnoreCase(cmd.email()).ifPresent(conflict -> {
@@ -224,23 +222,23 @@ public class VoterService implements IVoterService {
     public void assignToElection(UUID orgId, AssignVotersCmd cmd) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
 
-        if (!(util.authorizeUser(actor, UserRole.ADMIN)
-                || util.authorizeUser(actor, UserRole.SUPER_ADMIN)
-                || util.authorizeUser(actor, UserRole.ORG_ADMIN))) {
-            throw new AccessDeniedException("You do not have authority to assign voters");
-        }
+        util.requireAdminOrPermission(actor, PermissionType.ASSIGN_VOTERS);
 
-        UUID actorOrgId = java.util.Optional.ofNullable(actor.getActiveOrganization())
-                .orElseThrow(() -> new AccessDeniedException("You must belong to an organization"))
-                .getOrganizationId();
-
-        if (!actorOrgId.equals(orgId)) {
-            throw new AccessDeniedException("Organization mismatch");
+        // ORG_ADMIN: their active org must match the target orgId
+        // ADMIN/SUPER_ADMIN: bypass, they target any org directly
+        if (!util.isPlatformAdmin(actor)) {
+            UUID actorOrgId = java.util.Optional.ofNullable(actor.getActiveOrganization())
+                    .orElseThrow(() -> new AccessDeniedException("You must belong to an organization"))
+                    .getOrganizationId();
+            if (!actorOrgId.equals(orgId)) {
+                throw new AccessDeniedException("Organization mismatch");
+            }
         }
 
         Election election = electionRepository.findByElectionId(cmd.electionId())
                 .orElseThrow(() -> new EntityNotFoundException("Election not found"));
 
+        // Data integrity: election must belong to the target org regardless of caller role
         if (!election.getOrganization().getOrganizationId().equals(orgId)) {
             throw new AccessDeniedException("Election does not belong to your organization");
         }

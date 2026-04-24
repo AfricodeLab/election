@@ -4,6 +4,8 @@ import com.brandedhustlers.electionbackend.audit.dto.AuditEventDTO;
 import com.brandedhustlers.electionbackend.audit.dto.AuditSearchFilter;
 import com.brandedhustlers.electionbackend.audit.dto.PageResponse;
 import com.brandedhustlers.electionbackend.audit.services.AuditQueryService;
+import com.brandedhustlers.electionbackend.common.flags.Feature;
+import com.brandedhustlers.electionbackend.common.flags.RequiresFeature;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -22,6 +24,7 @@ public class AuditController {
         this.getUser = getUser;
     }
 
+    @RequiresFeature(Feature.AUDIT_TRAIL)
     @GetMapping("/trail")
     public ResponseEntity<PageResponse<AuditEventDTO>>  trail(
             @RequestParam(required = false) String eventType,
@@ -43,6 +46,7 @@ public class AuditController {
         return ResponseEntity.ok(query.search(f));
     }
 
+    @RequiresFeature(Feature.AUDIT_TRAIL)
     @GetMapping("/event/{auditId}")
     public ResponseEntity<AuditEventDTO> get(@RequestParam UUID orgId, @PathVariable UUID auditId) {
         return ResponseEntity.ok(query.get(orgId, auditId));

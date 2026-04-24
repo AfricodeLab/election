@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -137,4 +138,13 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
           )
     """)
     List<Election> findElectionsReadyToClose(@Param("now") Timestamp now);
+
+    /**
+     * Atomically increments the denormalized {@code totalVotes} counter for an election.
+     * Called by {@code VotingService} immediately after a vote is saved, inside the same
+     * transaction, so the counter stays in sync with the {@code votes} table.
+     */
+    @Modifying
+    @Query("UPDATE Election e SET e.totalVotes = COALESCE(e.totalVotes, 0) + 1 WHERE e.electionId = :electionId")
+    void incrementTotalVotes(@Param("electionId") UUID electionId);
 }

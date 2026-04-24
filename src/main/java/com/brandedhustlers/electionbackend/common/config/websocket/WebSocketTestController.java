@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.common.config.websocket;
 
 import com.brandedhustlers.electionbackend.realtime.gateway.RealtimeGateway;
+import org.springframework.context.annotation.Profile;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.SendTo;
@@ -9,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.Map;
 import java.util.UUID;
 
+@Profile("!prod")
 @RestController
 @RequestMapping("/test/ws")
 public class WebSocketTestController {

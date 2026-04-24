@@ -2,8 +2,8 @@ package com.brandedhustlers.electionbackend.voting.util;
 
 import com.brandedhustlers.electionbackend.voting.domain.Vote;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.github.cdimascio.dotenv.Dotenv;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
@@ -13,12 +13,13 @@ import java.security.MessageDigest;
 @Component
 public class Hash {
 
-    private final ObjectMapper objectMapper;
-    private final String salt;
+    Dotenv dotenv = Dotenv.configure().load();
 
-    public Hash(ObjectMapper objectMapper, @Value("${vote.hash.salt}") String salt) {
+    private final ObjectMapper objectMapper;
+    private final String salt = dotenv.get("VOTE_SALT");
+
+    public Hash(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
-        this.salt = salt;
     }
 
     public String hashVote(Vote vote) {

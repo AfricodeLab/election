@@ -8,6 +8,7 @@ import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
 import com.brandedhustlers.electionbackend.election.dto.UpdateCandidateCmd;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
@@ -43,6 +44,8 @@ class CandidateServiceTest {
     AlertService alertService;
     @Mock
     CandidateMapper candidateMapper;
+    @Mock
+    Util util;
     @InjectMocks
     CandidateService service;
 

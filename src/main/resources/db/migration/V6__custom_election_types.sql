@@ -1,102 +1,102 @@
--- -- ============================================================
--- -- V6: Custom Election Types and Presets
--- -- ============================================================
--- -- Introduces:
--- --   election.election_type  – replaces the hardcoded ElectionType enum
--- --   election.election_preset – reusable election configuration templates
--- -- Also updates the election table to FK to election_type and optionally to preset.
--- -- ============================================================
---
--- -- ──────────────────────────────────────────────────────────────
--- -- 1. election_type table
--- -- ──────────────────────────────────────────────────────────────
--- CREATE TABLE IF NOT EXISTS election.election_type (
---     type_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
---     name            VARCHAR(100)    NOT NULL,
---     description     TEXT,
---     is_system       BOOLEAN         NOT NULL DEFAULT FALSE,
---     organization_id UUID            REFERENCES auth.organization(organization_id) ON DELETE CASCADE,
---     created_by      UUID            REFERENCES auth.app_user(app_user_id) ON DELETE SET NULL,
---     delete_yn       VARCHAR(1)      NOT NULL DEFAULT 'N',
---     created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
---     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
---
---     -- Unique name per org (NULLs allowed for system types which share the org=NULL space)
---     CONSTRAINT uq_election_type_name_org UNIQUE NULLS NOT DISTINCT (name, organization_id)
--- );
---
--- CREATE INDEX IF NOT EXISTS idx_election_type_org
---     ON election.election_type (organization_id)
---     WHERE delete_yn = 'N';
---
--- -- ──────────────────────────────────────────────────────────────
--- -- 2. Seed system types from the old ElectionType enum
--- -- ──────────────────────────────────────────────────────────────
--- INSERT INTO election.election_type (type_id, name, description, is_system, organization_id, delete_yn)
--- VALUES
---     (gen_random_uuid(), 'GUBERNATORIAL',       'Gubernatorial election',            TRUE, NULL, 'N'),
---     (gen_random_uuid(), 'PRESIDENTIAL',        'Presidential election',             TRUE, NULL, 'N'),
---     (gen_random_uuid(), 'SENATORIAL',          'Senatorial election',               TRUE, NULL, 'N'),
---     (gen_random_uuid(), 'HOUSE_OF_REPS',       'House of Representatives election', TRUE, NULL, 'N'),
---     (gen_random_uuid(), 'LOCAL_GOVERNMENT',    'Local government election',         TRUE, NULL, 'N'),
---     (gen_random_uuid(), 'STUDENT_UNION',       'Student union election',            TRUE, NULL, 'N'),
---     (gen_random_uuid(), 'OTHER',               'Other / unclassified election',     TRUE, NULL, 'N')
--- ON CONFLICT ON CONSTRAINT uq_election_type_name_org DO NOTHING;
---
--- -- ──────────────────────────────────────────────────────────────
--- -- 3. election_preset table
--- -- ──────────────────────────────────────────────────────────────
--- CREATE TABLE IF NOT EXISTS election.election_preset (
---     preset_id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
---     name                            VARCHAR(150)    NOT NULL,
---     description                     TEXT,
---     type_id                         UUID            NOT NULL REFERENCES election.election_type(type_id) ON DELETE RESTRICT,
---     organization_id                 UUID            NOT NULL REFERENCES auth.organization(organization_id) ON DELETE CASCADE,
---     default_eligibility_policy      JSONB,
---     default_expected_voter_count    BIGINT,
---     default_should_end_automatically BOOLEAN        NOT NULL DEFAULT TRUE,
---     created_by                      UUID            REFERENCES auth.app_user(app_user_id) ON DELETE SET NULL,
---     delete_yn                       VARCHAR(1)      NOT NULL DEFAULT 'N',
---     created_at                      TIMESTAMPTZ     NOT NULL DEFAULT now(),
---     updated_at                      TIMESTAMPTZ     NOT NULL DEFAULT now()
--- );
---
--- CREATE INDEX IF NOT EXISTS idx_election_preset_org
---     ON election.election_preset (organization_id)
---     WHERE delete_yn = 'N';
---
--- CREATE INDEX IF NOT EXISTS idx_election_preset_type
---     ON election.election_preset (type_id);
---
--- -- ──────────────────────────────────────────────────────────────
--- -- 4. Migrate election table
--- -- ──────────────────────────────────────────────────────────────
--- -- Add the new FK columns
--- ALTER TABLE election.election
---     ADD COLUMN IF NOT EXISTS election_type_id UUID REFERENCES election.election_type(type_id) ON DELETE RESTRICT,
---     ADD COLUMN IF NOT EXISTS preset_id        UUID REFERENCES election.election_preset(preset_id) ON DELETE SET NULL;
---
--- -- Back-fill election_type_id from the old election_type enum column by name match.
--- -- Elections with a type that no longer exists in the enum get the 'OTHER' system type.
--- UPDATE election.election e
--- SET election_type_id = (
---     SELECT t.type_id
---     FROM   election.election_type t
---     WHERE  t.name = e.election_type
---       AND  t.is_system = TRUE
---     LIMIT 1
--- );
---
--- -- For any rows that didn't match, fall back to 'OTHER'
--- UPDATE election.election
--- SET election_type_id = (
---     SELECT type_id FROM election.election_type WHERE name = 'OTHER' AND is_system = TRUE LIMIT 1
--- )
--- WHERE election_type_id IS NULL;
---
--- -- Drop the old enum column now that migration is complete
--- ALTER TABLE election.election
---     DROP COLUMN IF EXISTS election_type;
---
--- CREATE INDEX IF NOT EXISTS idx_election_type_id
---     ON election.election (election_type_id);
+-- ============================================================
+-- V6: Custom Election Types and Presets
+-- ============================================================
+-- Introduces:
+--   election.election_type  – replaces the hardcoded ElectionType enum
+--   election.election_preset – reusable election configuration templates
+-- Also updates the election table to FK to election_type and optionally to preset.
+-- ============================================================
+
+-- ──────────────────────────────────────────────────────────────
+-- 1. election_type table
+-- ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS election.election_type (
+    type_id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name            VARCHAR(100)    NOT NULL,
+    description     TEXT,
+    is_system       BOOLEAN         NOT NULL DEFAULT FALSE,
+    organization_id UUID            REFERENCES auth.organization(organization_id) ON DELETE CASCADE,
+    created_by      UUID            REFERENCES auth.app_user(app_user_id) ON DELETE SET NULL,
+    delete_yn       VARCHAR(1)      NOT NULL DEFAULT 'N',
+    created_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    updated_at      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+
+    -- Unique name per org (NULLs allowed for system types which share the org=NULL space)
+    CONSTRAINT uq_election_type_name_org UNIQUE NULLS NOT DISTINCT (name, organization_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_election_type_org
+    ON election.election_type (organization_id)
+    WHERE delete_yn = 'N';
+
+-- ──────────────────────────────────────────────────────────────
+-- 2. Seed system types from the old ElectionType enum
+-- ──────────────────────────────────────────────────────────────
+INSERT INTO election.election_type (type_id, name, description, is_system, organization_id, delete_yn)
+VALUES
+    (gen_random_uuid(), 'GUBERNATORIAL',       'Gubernatorial election',            TRUE, NULL, 'N'),
+    (gen_random_uuid(), 'PRESIDENTIAL',        'Presidential election',             TRUE, NULL, 'N'),
+    (gen_random_uuid(), 'SENATORIAL',          'Senatorial election',               TRUE, NULL, 'N'),
+    (gen_random_uuid(), 'HOUSE_OF_REPS',       'House of Representatives election', TRUE, NULL, 'N'),
+    (gen_random_uuid(), 'LOCAL_GOVERNMENT',    'Local government election',         TRUE, NULL, 'N'),
+    (gen_random_uuid(), 'STUDENT_UNION',       'Student union election',            TRUE, NULL, 'N'),
+    (gen_random_uuid(), 'OTHER',               'Other / unclassified election',     TRUE, NULL, 'N')
+ON CONFLICT ON CONSTRAINT uq_election_type_name_org DO NOTHING;
+
+-- ──────────────────────────────────────────────────────────────
+-- 3. election_preset table
+-- ──────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS election.election_preset (
+    preset_id                       UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name                            VARCHAR(150)    NOT NULL,
+    description                     TEXT,
+    type_id                         UUID            NOT NULL REFERENCES election.election_type(type_id) ON DELETE RESTRICT,
+    organization_id                 UUID            NOT NULL REFERENCES auth.organization(organization_id) ON DELETE CASCADE,
+    default_eligibility_policy      JSONB,
+    default_expected_voter_count    BIGINT,
+    default_should_end_automatically BOOLEAN        NOT NULL DEFAULT TRUE,
+    created_by                      UUID            REFERENCES auth.app_user(app_user_id) ON DELETE SET NULL,
+    delete_yn                       VARCHAR(1)      NOT NULL DEFAULT 'N',
+    created_at                      TIMESTAMPTZ     NOT NULL DEFAULT now(),
+    updated_at                      TIMESTAMPTZ     NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_election_preset_org
+    ON election.election_preset (organization_id)
+    WHERE delete_yn = 'N';
+
+CREATE INDEX IF NOT EXISTS idx_election_preset_type
+    ON election.election_preset (type_id);
+
+-- ──────────────────────────────────────────────────────────────
+-- 4. Migrate election table
+-- ──────────────────────────────────────────────────────────────
+-- Add the new FK columns
+ALTER TABLE election.election
+    ADD COLUMN IF NOT EXISTS election_type_id UUID REFERENCES election.election_type(type_id) ON DELETE RESTRICT,
+    ADD COLUMN IF NOT EXISTS preset_id        UUID REFERENCES election.election_preset(preset_id) ON DELETE SET NULL;
+
+-- Back-fill election_type_id from the old election_type enum column by name match.
+-- Elections with a type that no longer exists in the enum get the 'OTHER' system type.
+UPDATE election.election e
+SET election_type_id = (
+    SELECT t.type_id
+    FROM   election.election_type t
+    WHERE  t.name = e.election_type
+      AND  t.is_system = TRUE
+    LIMIT 1
+);
+
+-- For any rows that didn't match, fall back to 'OTHER'
+UPDATE election.election
+SET election_type_id = (
+    SELECT type_id FROM election.election_type WHERE name = 'OTHER' AND is_system = TRUE LIMIT 1
+)
+WHERE election_type_id IS NULL;
+
+-- Drop the old enum column now that migration is complete
+ALTER TABLE election.election
+    DROP COLUMN IF EXISTS election_type;
+
+CREATE INDEX IF NOT EXISTS idx_election_type_id
+    ON election.election (election_type_id);

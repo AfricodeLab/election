@@ -67,6 +67,11 @@ public class ElectionAutoCloseScheduler {
         for (Election election : toClose) {
             String reason = resolveReason(election, now);
             try {
+                if (!election.isShouldEndAutomatically()) {
+                    log.debug("ElectionAutoCloseScheduler: skipping election [id={}] — shouldEndAutomatically is false",
+                            election.getElectionId());
+                    continue;
+                }
                 electionService.endElectionSystemAuto(election.getElectionId(), reason);
                 closed++;
             } catch (Exception ex) {

@@ -27,6 +27,7 @@ import java.util.function.Function;
 @Service
 public class JWTService {
     Dotenv dotenv = Dotenv.configure().load();
+
     private final String secretKey = dotenv.get("JWT_SECRET");
     private final AppUserRepository appUserRepository;
     private final VoterRepository voterRepository;

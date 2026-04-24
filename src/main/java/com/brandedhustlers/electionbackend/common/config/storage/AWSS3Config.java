@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class AWSS3Config {
     Dotenv dotenv = Dotenv.configure().load();
+
     private final String awsAccessKey = dotenv.get("AWS_ACCESS_KEY");
     private final String awsSecretKey = dotenv.get("AWS_SECRET_KEY");
 

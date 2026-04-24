@@ -47,11 +47,16 @@ public class Candidate {
     @Enumerated(EnumType.STRING)
     private DeleteYn deleteYn;
 
-    @ManyToOne
+    // LAZY: this back-reference is never read during DTO mapping.
+    // Keeping it EAGER caused every Candidate load to reload the parent Election
+    // and then load Election.createdBy / Election.updatedBy AppUser chains.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "election_id")
     private Election election;
 
-    @ManyToOne
+    // LAZY: candidateToDto() doesn't use createdBy, so we don't need the full
+    // AppUser graph (roles × permissions + userOrganizations) loaded per candidate.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 

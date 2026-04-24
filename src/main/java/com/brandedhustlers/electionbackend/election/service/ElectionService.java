@@ -4,7 +4,6 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
 import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
-import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
@@ -33,6 +32,7 @@ import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.transaction.Transactional;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -42,6 +42,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -61,6 +62,8 @@ public class ElectionService implements IElectionService {
     private final ElectionPresetRepository electionPresetRepository;
     private final EligibilityService eligibilityService;
     private final VoterRepository voterRepository;
+    private final EligibilitySnapshotService eligibilitySnapshotService;
+    private final RabbitTemplate rabbitTemplate;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -77,7 +80,9 @@ public class ElectionService implements IElectionService {
                            VoterRepository voterRepository, Util util,
                            ElectionTypeRepository electionTypeRepository,
                            ElectionPresetRepository electionPresetRepository,
-                           EligibilityService eligibilityService) {
+                           EligibilityService eligibilityService,
+                           EligibilitySnapshotService eligibilitySnapshotService,
+                           RabbitTemplate rabbitTemplate) {
         this.electionRepository = electionRepository;
         this.util = util;
         this.electionMapper = electionMapper;
@@ -92,6 +97,8 @@ public class ElectionService implements IElectionService {
         this.electionPresetRepository = electionPresetRepository;
         this.eligibilityService = eligibilityService;
         this.voterRepository = voterRepository;
+        this.eligibilitySnapshotService = eligibilitySnapshotService;
+        this.rabbitTemplate = rabbitTemplate;
     }
 
     @Override
@@ -99,11 +106,7 @@ public class ElectionService implements IElectionService {
     public ElectionDTO createElection(CreateElectionRequest request) {
         AppUser creator = getUser.getCurrentAuthenticatedUser();
 
-        if (!(util.authorizeUser(creator, UserRole.ADMIN)
-                || util.authorizeUser(creator, UserRole.SUPER_ADMIN)
-                || util.authorizeUser(creator, UserRole.ORG_ADMIN))) {
-            throw new AccessDeniedException("You do not have authority to create an election");
-        }
+        util.requireAdminOrPermission(creator, PermissionType.CREATE_ELECTION);
 
         if (creator.getActiveOrganization() == null) {
             throw new AccessDeniedException("You must belong to an organization to create an election");
@@ -222,18 +225,8 @@ public class ElectionService implements IElectionService {
         Election electionToUpdate = electionRepository.findById(electionID)
                 .orElseThrow(() -> new ElectionNotFound("An election with this ID: " + electionID + " does not exist"));
 
-        Organization updaterOrg = updater.getActiveOrganization();
-
-        if (updaterOrg == null) {
-            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
-        }
-
-        if (!electionToUpdate.getOrganization().getOrganizationId()
-                .equals(updaterOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You cannot manage elections outside your organization");
-        }
-
-        util.requireAdminOrPermission(updater, PermissionType.EDIT_ELECTIONS);
+        util.requireOrgMatch(updater, electionToUpdate.getOrganization().getOrganizationId());
+        util.requireAdminOrPermission(updater, PermissionType.UPDATE_ELECTION);
 
         if (!electionToUpdate.getElectionStatus().equals(ElectionStatus.DRAFT)) {
             throw new InvalidUpdate("The selected election is not in draft and can no longer be updated");
@@ -260,7 +253,7 @@ public class ElectionService implements IElectionService {
                 null,
                 "election.election_updated",
                 null,
-                updaterOrg.getOrganizationId(),
+                updated.getOrganization().getOrganizationId(),
                 "Election details updated",
                 actorId,
                 actorName,
@@ -290,17 +283,15 @@ public class ElectionService implements IElectionService {
 
         ElectionStatus currStatus = statusChange.getElectionStatus();
 
-        Organization updaterOrg = updater.getActiveOrganization();
-        if (updaterOrg == null) {
-            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
-        }
+        util.requireOrgMatch(updater, statusChange.getOrganization().getOrganizationId());
 
-        if (!statusChange.getOrganization().getOrganizationId()
-                .equals(updaterOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You cannot manage elections outside your organization");
-        }
-
-        util.requireAdminOrPermission(updater, PermissionType.EDIT_ELECTIONS);
+        PermissionType required = switch (newStatus) {
+            case UPCOMING, LIVE     -> PermissionType.PUBLISH_ELECTION;
+            case ENDED              -> PermissionType.END_ELECTION;
+            case RESULTS_RELEASED   -> PermissionType.RELEASE_RESULTS;
+            default                 -> PermissionType.UPDATE_ELECTION;
+        };
+        util.requireAdminOrPermission(updater, required);
 
         if (statusChange.getElectionStatus() == ElectionStatus.ENDED) {
             throw new InvalidUpdate("This election has already ended and cannot be modified.");
@@ -347,7 +338,7 @@ public class ElectionService implements IElectionService {
                 null,
                 "election.status_change",
                 null,
-                updaterOrg.getOrganizationId(),
+                statChange.getOrganization().getOrganizationId(),
                 "Election status updated from " + currStatus + " to: " + statChange.getElectionStatus(),
                 actorId,
                 actorName,
@@ -485,7 +476,16 @@ public class ElectionService implements IElectionService {
                 addCandidate);
     }
 
+    @Transactional
+    public ElectionDTO getElectionById(UUID electionId) {
+        Election election = electionRepository.findById(electionId)
+                .orElseThrow(() -> new com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound(
+                        "Election not found: " + electionId));
+        return electionMapper.entityToDto(election);
+    }
+
 //    @org.springframework.cache.annotation.Cacheable(value = "elections", key = "#organizationId")
+    @Transactional
     public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable) {
         List<ElectionDTO> elections = electionRepository.findByOrganizationId(organizationId)
                 .stream()
@@ -523,6 +523,12 @@ public class ElectionService implements IElectionService {
     /**
      * Transition election to LIVE status.
      * This is when voting begins.
+     *
+     * Called from two paths:
+     *   1. LaunchService.transitionStatus() — election is part of a Launch.
+     *      The Launch owns the eligibility snapshot + voter notification; skip both here.
+     *   2. ElectionController.bringElectionLive() — standalone election, no Launch.
+     *      Compute the eligibility snapshot and queue voter notifications here.
      */
     @Transactional
     public void transitionToLive(UUID electionId, UUID adminId) {
@@ -533,35 +539,38 @@ public class ElectionService implements IElectionService {
             throw new IllegalStateException("Election already live");
         }
 
-        /**
-         * Step 1: Capture GO_LIVE config snapshot.
-         * This is our baseline for detecting changes later.
-         */
+        // Step 1: Capture GO_LIVE config snapshot (baseline for detecting changes later).
         configSnapshotService.captureSnapshot(
                 electionId,
                 "GO_LIVE",
                 adminId,
                 "Initial config snapshot at go-live");
 
-        /**
-         * Step 2: Anchor config to blockchain.
-         * This creates cryptographic proof of what the config was.
-         * (Implementation in next section)
-         */
+        // Step 2: Anchor config to blockchain.
         configAnchorService.anchorConfig(electionId);
 
-        /**
-         * Step 3: Update election status.
-         */
+        // Step 3: Update election status.
         election.setElectionStatus(ElectionStatus.LIVE);
         electionRepository.save(election);
 
-        // todo emit election live event so participants receive email ~~ I don't have to do this here...because in the launch transition that calls this method
-        // todo the messaging listener picks the launch up, fetches the election and then send to the voters
-        // todo think about which path is better though...
         log.info("Election {} transitioned to LIVE, config anchored", electionId);
 
-        // return electionMapper.entityToDto(election);
+        // Step 4: Voter notification — only for standalone elections.
+        // If this election belongs to a Launch, the Launch transition already computed
+        // the eligibility snapshot and queued the notification for all elections at once.
+        // Sending again here would double-email every eligible voter.
+        if (election.getLaunch() == null) {
+            UUID orgId = election.getOrganization().getOrganizationId();
+            eligibilitySnapshotService.computeForElection(orgId, electionId, election);
+            rabbitTemplate.convertAndSend("notif.email", Map.of(
+                    "electionId", electionId.toString(),
+                    "orgId",      orgId.toString()
+            ));
+            log.info("Election {} — standalone notification queued for eligible voters", electionId);
+        } else {
+            log.debug("Election {} is part of launch {} — notification handled by launch transition",
+                    electionId, election.getLaunch().getId());
+        }
     }
 
     /**
@@ -572,28 +581,17 @@ public class ElectionService implements IElectionService {
      */
     public EligibilityService.EligibilityResult checkEligibility(UUID electionId, UUID voterId) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
-        util.requireAdminOrPermission(actor, PermissionType.EDIT_ELECTIONS);
-
-        Organization actorOrg = actor.getActiveOrganization();
-        if (actorOrg == null) {
-            throw new AccessDeniedException("No active organization. Please join or switch to an organization first.");
-        }
+        util.requireAdminOrPermission(actor, PermissionType.CHECK_ELIGIBILITY);
 
         Election election = electionRepository.findById(electionId)
                 .orElseThrow(() -> new ElectionNotFound("Election not found: " + electionId));
 
-        // Scope check: election must belong to the caller's org
-        if (!election.getOrganization().getOrganizationId().equals(actorOrg.getOrganizationId())) {
-            throw new AccessDeniedException("You cannot check eligibility for elections outside your organization.");
-        }
+        util.requireOrgMatch(actor, election.getOrganization().getOrganizationId());
 
         com.brandedhustlers.electionbackend.voter.domain.Voter voter = voterRepository.findById(voterId)
                 .orElseThrow(() -> new IllegalArgumentException("Voter not found: " + voterId));
 
-        // Scope check: voter must belong to the same org
-        if (!actorOrg.getOrganizationId().equals(voter.getOrganization().getOrganizationId())) {
-            throw new AccessDeniedException("You cannot check eligibility for voters outside your organization.");
-        }
+        util.requireOrgMatch(actor, voter.getOrganization().getOrganizationId());
 
         if (election.getEligibilityPolicy() == null) {
             return EligibilityService.EligibilityResult.allow();

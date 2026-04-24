@@ -1,6 +1,5 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
-import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -17,8 +16,14 @@ public class WebConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
-        String origins = dotenv.get("CORS_ALLOWED_ORIGINS", "http://localhost:5176");
+        String originsEnv = System.getenv("CORS_ALLOWED_ORIGINS");
+
+        // Fall back to a permissive wildcard when the env-var is absent so the
+        // app starts cleanly on Heroku even before CORS_ALLOWED_ORIGINS is set.
+        // In production always set CORS_ALLOWED_ORIGINS to your frontend domains.
+        List<String> allowedOrigins = (originsEnv != null && !originsEnv.isBlank())
+                ? Arrays.asList(originsEnv.split(","))
+                : List.of("*");
 
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
@@ -34,9 +39,16 @@ public class WebConfig {
                 "Authorization",
                 "Content-Type"));
 
-        configuration.setAllowedOrigins(Arrays.asList(origins.split(",")));
+        if (allowedOrigins.contains("*")) {
+            // allowCredentials=true is incompatible with wildcard origin in the
+            // CORS spec — disable credentials when falling back to wildcard.
+            configuration.setAllowedOriginPatterns(List.of("*"));
+            configuration.setAllowCredentials(true);
+        } else {
+            configuration.setAllowedOrigins(allowedOrigins);
+            configuration.setAllowCredentials(true);
+        }
 
-        configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

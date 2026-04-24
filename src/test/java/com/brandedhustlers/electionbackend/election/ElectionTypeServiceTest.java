@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.auth.domain.AppUser;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.domain.UserOrganization;
 import com.brandedhustlers.electionbackend.auth.enums.DeleteYn;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.auth.enums.UserRole;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.InvalidUpdate;
@@ -31,6 +32,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -109,7 +111,7 @@ class ElectionTypeServiceTest {
                 void throwsAccessDeniedForNonAdmin() {
                         when(getUser.getCurrentAuthenticatedUser()).thenReturn(regularUser);
                         doThrow(new AccessDeniedException("Only admins can manage election types"))
-                                        .when(util).requireAdmin(regularUser);
+                                        .when(util).requireAdminOrPermission(eq(regularUser), any(PermissionType.class));
 
                         assertThatThrownBy(() -> service.createCustomType(new CreateElectionTypeRequest("X", null)))
                                         .isInstanceOf(AccessDeniedException.class)
@@ -250,9 +252,12 @@ class ElectionTypeServiceTest {
                         when(electionTypeRepository.findByElectionTypeId(typeId))
                                         .thenReturn(Optional.of(type));
 
+                        doThrow(new AccessDeniedException("You cannot manage resources outside your organization."))
+                                        .when(util).requireOrgMatch(any(), any());
+
                         assertThatThrownBy(() -> service.deleteType(typeId))
                                         .isInstanceOf(AccessDeniedException.class)
-                                        .hasMessageContaining("own organization");
+                                        .hasMessageContaining("organization");
                 }
         }
 }

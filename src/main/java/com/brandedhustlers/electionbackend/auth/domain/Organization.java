@@ -37,7 +37,9 @@ public class Organization {
     @UpdateTimestamp
     private Timestamp updatedAt;
 
-    @OneToOne
+    // LAZY: ElectionMapper no longer calls getCreatedBy() (that was a bug —
+    // it was mapping mfaEnabled to isEnabled). Nothing in the hot path needs this.
+    @OneToOne(fetch = FetchType.LAZY)
     private AppUser createdBy;
 
     @Enumerated(EnumType.STRING)

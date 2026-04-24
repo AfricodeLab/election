@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.results;
 
+import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.realtime.gateway.RealtimeGateway;
 import com.brandedhustlers.electionbackend.results.domain.Tally;
 import com.brandedhustlers.electionbackend.results.domain.TallyId;
@@ -30,6 +31,8 @@ class TallyProjectorTest {
     TallyRepository repo;
     @Mock
     RealtimeGateway realtimeGateway;
+    @Mock
+    ElectionRepository electionRepository;
     // Real ObjectMapper — no external deps
     private final ObjectMapper om = new ObjectMapper();
 
@@ -39,6 +42,8 @@ class TallyProjectorTest {
     private UUID electionId;
     private UUID candidateId;
     private String payload;
+
+    private static final UUID TEST_ORG_ID = UUID.randomUUID();
 
     @BeforeEach
     void setUp() throws Exception {
@@ -51,6 +56,9 @@ class TallyProjectorTest {
         java.lang.reflect.Field omField = TallyProjector.class.getDeclaredField("om");
         omField.setAccessible(true);
         omField.set(projector, om);
+
+        // Stub org lookup so RealtimeGateway gets a valid orgId on every test
+        when(electionRepository.findOrgId(any())).thenReturn(TEST_ORG_ID);
     }
 
     @Test

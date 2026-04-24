@@ -49,7 +49,7 @@ public class Launch {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    @OneToMany(mappedBy = "launch", fetch = FetchType.EAGER)
+    @OneToMany(mappedBy = "launch", fetch = FetchType.LAZY)
     private List<Election> election;
 
     @Enumerated(EnumType.STRING)

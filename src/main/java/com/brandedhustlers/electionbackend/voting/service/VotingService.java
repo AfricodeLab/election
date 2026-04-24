@@ -84,10 +84,10 @@ public class VotingService implements IVotingService {
     @Transactional
     @RateLimiter(name = "critical")
     @Bulkhead(name = "critical")
-    public VoteAckDTO cast(UUID orgId, UUID voterId, CastVoteCmd cmd, HttpServletRequest httpServletRequest) {
+    public VoteAckDTO cast(UUID orgId, UUID voterId, CastVoteCmd cmd, HttpServletRequest httpServletRequest, boolean stepUpVerified) {
 
         try {
-            Voter actor = voterRepository.findById(voterId)
+            Voter actor = voterRepository.findVoterByIdAndOrgId(voterId, orgId)
                     .orElseThrow(() -> new UserNotFound(
                             "Voter with ID: " + voterId + " not found."));
 
@@ -115,6 +115,16 @@ public class VotingService implements IVotingService {
             if (existingEv.isPresent() && existingEv.get().isHasVoted()) {
                 return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED",
                         "You have already cast your vote in this election. Each voter may only vote once.");
+            }
+
+            // Fast-path verification check before taking the row lock.
+            // The authoritative check is repeated after lockByIds below.
+            // When stepUpVerified=true the controller already validated the JWT step-up
+            // claim, so we skip the NOT_VERIFIED rejection.
+            if (existingEv.isPresent() && !existingEv.get().isVerified() && !stepUpVerified) {
+                return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
+                        "Identity verification is required before voting. " +
+                        "Please complete the verification step and try again.");
             }
 
             /**
@@ -147,8 +157,17 @@ public class VotingService implements IVotingService {
             if (existingEv.isEmpty()) {
                 try {
                     ElectionVoterId embeddedId = new ElectionVoterId(cmd.electionId(), actor.getVoterId());
-                    evRepository.save(new ElectionVoter(embeddedId, actor, election, null, null,
-                            Timestamp.from(Instant.now()), false));
+                    evRepository.save(ElectionVoter.builder()
+                            .id(embeddedId)
+                            .voter(actor)
+                            .election(election)
+                            .hasVoted(false)
+                            // If step-up was validated by the controller (identity-only OTP flow),
+                            // treat the voter as verified — they proved their identity via OTP.
+                            .verified(stepUpVerified)
+                            .verificationMode(stepUpVerified ? "REMOTE_OTP" : null)
+                            .verifiedAt(stepUpVerified ? Timestamp.from(Instant.now()) : null)
+                            .build());
                 } catch (DataIntegrityViolationException e) {
                     // Concurrent insert won the race — the row now exists.
                     // The lockByIds call below will acquire the pessimistic lock and proceed normally.
@@ -183,6 +202,21 @@ public class VotingService implements IVotingService {
                         "You have already cast your vote in this election. Each voter may only vote once.");
             }
 
+            // Authoritative verification check (post-lock — this is the one that matters
+            // under concurrency; the fast-path above is just an optimisation).
+            if (!ev.isVerified()) {
+                if (!stepUpVerified) {
+                    return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
+                            "Identity verification is required before voting. " +
+                            "Please complete the verification step and try again.");
+                }
+                // Auto-verify: step-up JWT was valid (controller already checked).
+                ev.setVerified(true);
+                ev.setVerifiedAt(Timestamp.from(Instant.now()));
+                ev.setVerificationMode("REMOTE_OTP");
+                evRepo.save(ev);
+            }
+
             // save the vote and flip hasVoted=true
             Vote vote = Vote.builder()
                     .id(UUID.randomUUID())
@@ -197,6 +231,13 @@ public class VotingService implements IVotingService {
                     .castAt(Instant.now())
                     .build();
             votes.saveAndFlush(vote);
+
+            // Increment the denormalized totalVotes counter on the Election row.
+            // Using a single atomic UPDATE avoids the read-modify-write race that would
+            // occur if we fetched election.getTotalVotes(), incremented, and saved.
+            electionRepository.incrementTotalVotes(cmd.electionId());
+
+            //todo db trigger to prevent updates
 
             ev.setHasVoted(true);
             evRepo.save(ev);

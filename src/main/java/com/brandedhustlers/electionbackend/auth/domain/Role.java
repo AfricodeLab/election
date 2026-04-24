@@ -6,6 +6,7 @@ import lombok.Setter;
 
 import java.util.HashSet;
 import java.util.Set;
+import java.util.UUID;
 
 @Entity
 @Getter
@@ -16,10 +17,19 @@ public class Role {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long roleId;
 
-    @Column(nullable = false, unique = true)
+    // Uniqueness is enforced by partial DB indexes in V14 migration:
+    // system roles unique by name; org-scoped roles unique by (name, org_id).
+    @Column(nullable = false)
     private String roleName;
 
-    @ManyToMany(fetch = FetchType.LAZY)
+    /**
+     * Null = system-level role (seeded by Branded Hustlers, shared across all orgs).
+     * Non-null = custom role created by an ORG_ADMIN, scoped to that organization.
+     */
+    @Column(name = "org_id")
+    private UUID orgId;
+
+    @ManyToMany(fetch = FetchType.EAGER)
     @JoinTable(
             name = "auth_role_permissions",
             joinColumns = @JoinColumn(name = "role_id"),

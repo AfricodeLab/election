@@ -39,8 +39,12 @@ public class AppUser {
     @Column(nullable = false, unique = true)
     private String appUserEmail;
 
+    @Column(name = "organization_name")
+    private String organizationName;
+
     @Column(unique = true)
     private String username;
+
 
     @Column(nullable = false)
     @ToString.Exclude
@@ -70,7 +74,7 @@ public class AppUser {
     @UpdateTimestamp
     private Timestamp updatedAt;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     private AppUser createdBy;
 
@@ -96,6 +100,14 @@ public class AppUser {
     @Column(nullable = false)
     private boolean mfaEnabled = false;
 
+    /**
+     * When true the user was provisioned by an admin and must change their
+     * temporary password before they can do anything else.
+     * Self-registered users always have this set to {@code false}.
+     */
+    @Column(nullable = false)
+    private boolean mustChangePassword = false;
+
     @OneToMany(mappedBy = "appUser", fetch = FetchType.EAGER)
     @Builder.Default
     private Set<UserOrganization> userOrganizations = new HashSet<>();
@@ -108,9 +120,9 @@ public class AppUser {
                 .orElse(null);
     }
 
-    public String getOrganizationName() {
+    public String resolveOrganizationName() {
         Organization active = getActiveOrganization();
-        return active == null ? null : active.getOrganizationName();
+        return active == null ? organizationName : active.getOrganizationName();
     }
 
 }

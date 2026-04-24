@@ -1,51 +1,80 @@
 package com.brandedhustlers.electionbackend.common.config.websocket;
 
-import io.github.cdimascio.dotenv.Dotenv;
-import org.springframework.beans.factory.annotation.Value;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
+/**
+ * WebSocket / STOMP broker configuration.
+ *
+ * <p>By default uses Spring's in-memory simple broker so the app starts cleanly
+ * without any external RabbitMQ connection.  The STOMP relay can be enabled via
+ * the {@code STOMP_RELAY_ENABLED=true} environment variable once a broker with
+ * the STOMP plugin is provisioned (CloudAMQP Tiger plan or higher).
+ *
+ * <p>Required env vars when STOMP_RELAY_ENABLED=true:
+ * <ul>
+ *   <li>{@code RABBITMQ_HOST} — broker hostname
+ *   <li>{@code RABBITMQ_USERNAME} — STOMP login
+ *   <li>{@code RABBITMQ_PASSWORD} — STOMP passcode
+ *   <li>{@code RABBITMQ_STOMP_PORT} — STOMP port (default 61613)
+ * </ul>
+ */
 @Configuration
 @EnableWebSocketMessageBroker
 public class WebsocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final String[] allowedOrigins;
-
-    @Value("${spring.rabbitmq.host}")
-    private String rabbitHost;
-
-    @Value("${rabbitmq.stomp.port:61613}")
-    private int rabbitStompPort;
-
-    @Value("${spring.rabbitmq.username}")
-    private String rabbitUser;
-
-    @Value("${spring.rabbitmq.password}")
-    private String rabbitPassword;
-
-    public WebsocketConfig() {
-        Dotenv dotenv = Dotenv.configure().ignoreIfMissing().load();
-        this.allowedOrigins = dotenv.get("CORS_ALLOWED_ORIGINS", "http://localhost:5173").split(",");
-    }
+    private static final Logger log = LoggerFactory.getLogger(WebsocketConfig.class);
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws").setAllowedOrigins(allowedOrigins).withSockJS();
-        registry.addEndpoint("/ws-raw").setAllowedOrigins(allowedOrigins);
+        String[] origins = resolveAllowedOrigins();
+        registry.addEndpoint("/ws").setAllowedOrigins(origins).withSockJS();
+        registry.addEndpoint("/ws-raw").setAllowedOrigins(origins);
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableStompBrokerRelay("/topic", "/queue")
-                .setRelayHost(rabbitHost)
-                .setRelayPort(rabbitStompPort)
-                .setClientLogin(rabbitUser)
-                .setClientPasscode(rabbitPassword)
-                .setSystemLogin(rabbitUser)
-                .setSystemPasscode(rabbitPassword);
         registry.setApplicationDestinationPrefixes("/app");
+
+        boolean stompRelayEnabled = "true".equalsIgnoreCase(
+                System.getenv().getOrDefault("STOMP_RELAY_ENABLED", "false"));
+
+        if (stompRelayEnabled) {
+            String host     = env("RABBITMQ_HOST",     "localhost");
+            String user     = env("RABBITMQ_USERNAME", "guest");
+            String password = env("RABBITMQ_PASSWORD", "guest");
+            int    port     = Integer.parseInt(env("RABBITMQ_STOMP_PORT", "61613"));
+
+            log.info("WebSocket: STOMP relay → {}:{}", host, port);
+            registry.enableStompBrokerRelay("/topic", "/queue")
+                    .setRelayHost(host)
+                    .setRelayPort(port)
+                    .setClientLogin(user)
+                    .setClientPasscode(password)
+                    .setSystemLogin(user)
+                    .setSystemPasscode(password);
+        } else {
+            log.info("WebSocket: using in-memory simple broker " +
+                     "(set STOMP_RELAY_ENABLED=true to use external RabbitMQ STOMP)");
+            registry.enableSimpleBroker("/topic", "/queue");
+        }
+    }
+
+    private String[] resolveAllowedOrigins() {
+        String raw = System.getenv("CORS_ALLOWED_ORIGINS");
+        if (raw != null && !raw.isBlank()) {
+            return raw.split(",");
+        }
+        return new String[]{"*"};
+    }
+
+    private String env(String key, String defaultValue) {
+        String v = System.getenv(key);
+        return (v != null && !v.isBlank()) ? v : defaultValue;
     }
 }

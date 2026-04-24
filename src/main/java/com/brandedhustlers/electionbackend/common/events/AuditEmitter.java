@@ -3,6 +3,8 @@ package com.brandedhustlers.electionbackend.common.events;
 import com.brandedhustlers.electionbackend.audit.dto.AuditEnvelope;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.time.Instant;
 import java.util.UUID;
@@ -72,8 +74,7 @@ public class AuditEmitter {
 
                 return envelope;
         }
-
-        @org.springframework.transaction.event.TransactionalEventListener(phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT)
+        @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
         public void pushToQueue(AuditEnvelope env) {
                 rabbitTemplate.convertAndSend("audit.events", env);
         }
