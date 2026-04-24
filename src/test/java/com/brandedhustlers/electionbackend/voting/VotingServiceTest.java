@@ -3,13 +3,13 @@ package com.brandedhustlers.electionbackend.voting;
 import com.brandedhustlers.electionbackend.auth.domain.Organization;
 import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
+import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.election.service.EligibilityService;
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoter;
-import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.ElectionVoterRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
@@ -21,7 +21,6 @@ import com.brandedhustlers.electionbackend.voting.repository.VoteArchiveReposito
 import com.brandedhustlers.electionbackend.voting.repository.VoteRepository;
 import com.brandedhustlers.electionbackend.voting.service.VotingService;
 import com.brandedhustlers.electionbackend.voting.util.Hash;
-import com.brandedhustlers.electionbackend.election.domain.Candidate;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.BeforeEach;
@@ -160,7 +159,7 @@ class VotingServiceTest {
                 when(objectMapper.writeValueAsString(any())).thenReturn("{}");
 
                 // Act
-                VoteAckDTO result = votingService.cast(orgId, voterId, cmd, httpServletRequest);
+                VoteAckDTO result = votingService.cast(orgId, voterId, cmd, httpServletRequest, true);
 
                 // Assert
                 assertNotNull(result);
@@ -188,7 +187,7 @@ class VotingServiceTest {
                 when(evRepo.findByVoterIdAndElectionId(voterId, electionId)).thenReturn(Optional.of(existingEv));
 
                 // Act
-                VoteAckDTO result = votingService.cast(orgId, voterId, cmd, httpServletRequest);
+                VoteAckDTO result = votingService.cast(orgId, voterId, cmd, httpServletRequest, true);
 
                 // Assert
                 assertNotNull(result);
@@ -223,7 +222,7 @@ class VotingServiceTest {
                 when(voteRepository.findByDedupeKey(idempotencyKey)).thenReturn(Optional.of(existingVote));
 
                 // Act
-                VoteAckDTO result = votingService.cast(orgId, voterId, cmd, httpServletRequest);
+                VoteAckDTO result = votingService.cast(orgId, voterId, cmd, httpServletRequest, true);
 
                 // Assert
                 assertNotNull(result);
@@ -253,7 +252,7 @@ class VotingServiceTest {
 
                 // Act & Assert
                 RuntimeException exception = assertThrows(RuntimeException.class,
-                                () -> votingService.cast(orgId, voterId, cmd, httpServletRequest));
+                                () -> votingService.cast(orgId, voterId, cmd, httpServletRequest, true));
 
                 assertTrue(exception.getCause().getMessage().contains("not live"));
         }
@@ -268,7 +267,7 @@ class VotingServiceTest {
 
                 // Act & Assert
                 RuntimeException exception = assertThrows(RuntimeException.class,
-                                () -> votingService.cast(orgId, voterId, cmd, httpServletRequest));
+                                () -> votingService.cast(orgId, voterId, cmd, httpServletRequest, true));
 
                 assertTrue(exception.getCause() instanceof UserNotFound);
         }
@@ -295,7 +294,7 @@ class VotingServiceTest {
                 when(evRepo.lockByIds(electionId, voterId)).thenReturn(Optional.of(ev));
 
                 // Act
-                VoteAckDTO result = votingService.cast(orgId, voterId, cmd, httpServletRequest);
+                VoteAckDTO result = votingService.cast(orgId, voterId, cmd, httpServletRequest, true);
 
                 // Assert
                 assertNotNull(result);

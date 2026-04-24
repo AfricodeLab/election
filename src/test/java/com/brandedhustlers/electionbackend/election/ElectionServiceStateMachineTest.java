@@ -23,6 +23,7 @@ import com.brandedhustlers.electionbackend.election.repository.ElectionRepositor
 import com.brandedhustlers.electionbackend.election.repository.ElectionTypeRepository;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.brandedhustlers.electionbackend.election.service.EligibilityService;
+import com.brandedhustlers.electionbackend.election.service.EligibilitySnapshotService;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import com.brandedhustlers.electionbackend.voting.service.ConfigAnchorService;
 import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
@@ -36,6 +37,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -52,23 +54,44 @@ import static org.mockito.Mockito.when;
 @DisplayName("ElectionService — state machine")
 class ElectionServiceStateMachineTest {
 
-    @Mock private ElectionRepository electionRepository;
-    @Mock private ElectionMapper electionMapper;
-    @Mock private CloudinaryService cloudinaryService;
-    @Mock private CandidateRepository candidateRepository;
-    @Mock private AuditEmitter auditEmitter;
-    @Mock private CandidateMapper candidateMapper;
-    @Mock private GetUser getUser;
-    @Mock private ConfigSnapshotService configSnapshotService;
-    @Mock private ConfigAnchorService configAnchorService;
-    @Mock private HttpServletRequest httpServletRequest;
-    @Mock private VoterRepository voterRepository;
-    @Mock private Util util;
-    @Mock private ElectionTypeRepository electionTypeRepository;
-    @Mock private ElectionPresetRepository electionPresetRepository;
-    @Mock private EligibilityService eligibilityService;
-    @Mock private JWTService jwtService;
-    @Mock private AppUserRepository appUserRepository;
+    @Mock
+    private ElectionRepository electionRepository;
+    @Mock
+    private ElectionMapper electionMapper;
+    @Mock
+    private CloudinaryService cloudinaryService;
+    @Mock
+    private CandidateRepository candidateRepository;
+    @Mock
+    private AuditEmitter auditEmitter;
+    @Mock
+    private CandidateMapper candidateMapper;
+    @Mock
+    private GetUser getUser;
+    @Mock
+    private ConfigSnapshotService configSnapshotService;
+    @Mock
+    private ConfigAnchorService configAnchorService;
+    @Mock
+    private HttpServletRequest httpServletRequest;
+    @Mock
+    private VoterRepository voterRepository;
+    @Mock
+    private Util util;
+    @Mock
+    private ElectionTypeRepository electionTypeRepository;
+    @Mock
+    private ElectionPresetRepository electionPresetRepository;
+    @Mock
+    private EligibilityService eligibilityService;
+    @Mock
+    private JWTService jwtService;
+    @Mock
+    private AppUserRepository appUserRepository;
+    @Mock
+    private RabbitTemplate rabbitTemplate;
+    @Mock
+    private EligibilitySnapshotService eligibilitySnapshotService;
 
     private ElectionService electionService;
 
@@ -86,7 +109,8 @@ class ElectionServiceStateMachineTest {
                 auditEmitter, candidateMapper, getUser,
                 configSnapshotService, configAnchorService,
                 httpServletRequest, voterRepository, util,
-                electionTypeRepository, electionPresetRepository, eligibilityService);
+                electionTypeRepository, electionPresetRepository,
+                eligibilityService, eligibilitySnapshotService, rabbitTemplate);
 
         orgId = UUID.randomUUID();
         electionId = UUID.randomUUID();

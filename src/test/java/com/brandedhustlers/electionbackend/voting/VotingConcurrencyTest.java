@@ -10,13 +10,10 @@ import com.brandedhustlers.electionbackend.election.repository.CandidateReposito
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.election.service.EligibilityService;
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoter;
-import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.ElectionVoterRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
-import com.brandedhustlers.electionbackend.voting.domain.OutBox;
 import com.brandedhustlers.electionbackend.voting.domain.Vote;
-import com.brandedhustlers.electionbackend.voting.domain.VoteArchive;
 import com.brandedhustlers.electionbackend.voting.dto.CastVoteCmd;
 import com.brandedhustlers.electionbackend.voting.dto.VoteAckDTO;
 import com.brandedhustlers.electionbackend.voting.repository.OutBoxRepository;
@@ -26,16 +23,16 @@ import com.brandedhustlers.electionbackend.voting.service.VotingService;
 import com.brandedhustlers.electionbackend.voting.util.Hash;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
-import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -163,7 +160,7 @@ class VotingConcurrencyTest {
         when(voterRepository.findById(voterId)).thenReturn(Optional.of(voter));
 
         CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null, null);
-        VoteAckDTO ack = service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+        VoteAckDTO ack = service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
 
         assertThat(ack.status()).isEqualTo("REJECTED");
         assertThat(ack.reason()).isEqualTo("ORG_MISMATCH");
@@ -186,7 +183,7 @@ class VotingConcurrencyTest {
         when(evRepository.findByVoterIdAndElectionId(voterId, ELECTION_ID)).thenReturn(Optional.of(ev));
 
         CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null, null);
-        VoteAckDTO ack = service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+        VoteAckDTO ack = service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
 
         assertThat(ack.status()).isEqualTo("REJECTED");
         assertThat(ack.reason()).isEqualTo("ALREADY_VOTED");
@@ -217,7 +214,7 @@ class VotingConcurrencyTest {
         when(eligibilityService.evaluate(any(), any())).thenReturn(denied);
 
         CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null, null);
-        VoteAckDTO ack = service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+        VoteAckDTO ack = service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
 
         assertThat(ack.status()).isEqualTo("REJECTED");
         assertThat(ack.reason()).contains("INELIGIBLE");
@@ -241,7 +238,7 @@ class VotingConcurrencyTest {
 
         CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null, null);
         Assertions.assertThrows(RuntimeException.class,
-                () -> service.cast(ORG_ID, voterId, cmd, httpServletRequest));
+                () -> service.cast(ORG_ID, voterId, cmd, httpServletRequest, true));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -261,7 +258,7 @@ class VotingConcurrencyTest {
 
         CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null, null);
         Assertions.assertThrows(RuntimeException.class,
-                () -> service.cast(ORG_ID, voterId, cmd, httpServletRequest));
+                () -> service.cast(ORG_ID, voterId, cmd, httpServletRequest, true));
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -286,11 +283,11 @@ class VotingConcurrencyTest {
         CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null, null);
 
         // First call → NEW_VOTE
-        VoteAckDTO first = service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+        VoteAckDTO first = service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
         assertThat(first.reason()).isEqualTo("NEW_VOTE");
 
         // Second call → ALREADY_VOTED (double-check under lock)
-        VoteAckDTO second = service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+        VoteAckDTO second = service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
         assertThat(second.reason()).isEqualTo("ALREADY_VOTED");
     }
 
@@ -312,12 +309,12 @@ class VotingConcurrencyTest {
         // First call: no existing vote
         when(voteRepository.findByDedupeKey(sharedKey)).thenReturn(Optional.empty());
         CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null, sharedKey);
-        VoteAckDTO first = service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+        VoteAckDTO first = service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
         assertThat(first.reason()).isEqualTo("NEW_VOTE");
 
         // Second call: now dedupe key is present
         when(voteRepository.findByDedupeKey(sharedKey)).thenReturn(Optional.of(existingVote));
-        VoteAckDTO second = service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+        VoteAckDTO second = service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
         assertThat(second.reason()).isEqualTo("IDEMPOTENT");
         assertThat(second.status()).isEqualTo("ACCEPTED");
     }
@@ -347,7 +344,7 @@ class VotingConcurrencyTest {
                 barrier.await(); // all threads start simultaneously
                 CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null,
                         "key-" + voterId);
-                return service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+                return service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
             }));
         }
 
@@ -408,7 +405,7 @@ class VotingConcurrencyTest {
                 barrier.await();
                 CastVoteCmd cmd = new CastVoteCmd(ELECTION_ID, CANDIDATE_ID, null, null,
                         "race-" + UUID.randomUUID());
-                return service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+                return service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
             }));
         }
 
@@ -445,7 +442,7 @@ class VotingConcurrencyTest {
                     "perf-" + i);
 
             long t0 = System.nanoTime();
-            VoteAckDTO ack = service.cast(ORG_ID, voterId, cmd, httpServletRequest);
+            VoteAckDTO ack = service.cast(ORG_ID, voterId, cmd, httpServletRequest, true);
             latencies[i] = System.nanoTime() - t0;
 
             assertThat(ack.reason()).isEqualTo("NEW_VOTE");
