@@ -551,7 +551,14 @@ public class ElectionService implements IElectionService {
 
         // Step 3: Update election status.
         election.setElectionStatus(ElectionStatus.LIVE);
-        electionRepository.save(election);
+        Election savedLive = electionRepository.save(election);
+
+        auditEmitter.emit(null, "election.went_live", null,
+                savedLive.getOrganization().getOrganizationId(),
+                "Election transitioned to LIVE — voting has begun",
+                adminId, "ADMIN", "ADMIN", "USER",
+                "Election", savedLive.getElectionId(), savedLive.getElectionTitle(),
+                "WEB", null, null, null, "INFO", 1);
 
         log.info("Election {} transitioned to LIVE, config anchored", electionId);
 

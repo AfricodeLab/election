@@ -97,6 +97,10 @@ public class VotingService implements IVotingService {
                 log.warn("Voter {} org mismatch: token orgId={}, voter orgId={}",
                         voterId, orgId,
                         actor.getOrganization() == null ? "null" : actor.getOrganization().getOrganizationId());
+                emitter.emit(null, "voting.vote.rejected", null, orgId,
+                        "Vote rejected: voter org mismatch — possible token tampering",
+                        voterId, actor.getName(), "VOTER", "VOTER",
+                        "Voting", cmd.electionId(), null, "Vote", null, null, null, "CRITICAL", 1);
                 return new VoteAckDTO(null, "REJECTED", "ORG_MISMATCH");
             }
 
@@ -113,6 +117,10 @@ public class VotingService implements IVotingService {
             // If a record exists and hasVoted=true, the voter already cast their ballot.
             // If hasVoted=false, the voter was pre-assigned but hasn't voted yet — allow them through.
             if (existingEv.isPresent() && existingEv.get().isHasVoted()) {
+                emitter.emit(null, "voting.vote.rejected", null, orgId,
+                        "Double-vote attempt blocked",
+                        actor.getVoterId(), actor.getName(), "VOTER", "VOTER",
+                        "Voting", cmd.electionId(), null, "Vote", null, null, null, "CRITICAL", 1);
                 return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED",
                         "You have already cast your vote in this election. Each voter may only vote once.");
             }
@@ -122,6 +130,10 @@ public class VotingService implements IVotingService {
             // When stepUpVerified=true the controller already validated the JWT step-up
             // claim, so we skip the NOT_VERIFIED rejection.
             if (existingEv.isPresent() && !existingEv.get().isVerified() && !stepUpVerified) {
+                emitter.emit(null, "voting.vote.rejected", null, orgId,
+                        "Vote rejected: voter not verified",
+                        actor.getVoterId(), actor.getName(), "VOTER", "VOTER",
+                        "Voting", cmd.electionId(), null, "Vote", null, null, null, "WARN", 1);
                 return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
                         "Identity verification is required before voting. " +
                         "Please complete the verification step and try again.");
@@ -138,7 +150,10 @@ public class VotingService implements IVotingService {
                 if (!eligibilityResult.isAllowed()) {
                     log.warn("Voter {} ineligible for election {}: {}",
                             voterId, cmd.electionId(), eligibilityResult.getReason());
-
+                    emitter.emit(null, "voting.vote.rejected", null, orgId,
+                            "Vote rejected: ineligible — " + eligibilityResult.getReason(),
+                            actor.getVoterId(), actor.getName(), "VOTER", "VOTER",
+                            "Voting", cmd.electionId(), null, "Vote", null, null, null, "WARN", 1);
                     return new VoteAckDTO(
                             null,
                             "REJECTED",
@@ -198,6 +213,10 @@ public class VotingService implements IVotingService {
                             "Voter not assigned to this election"));
 
             if (ev.isHasVoted()) {
+                emitter.emit(null, "voting.vote.rejected", null, orgId,
+                        "Double-vote attempt blocked (post-lock)",
+                        actor.getVoterId(), actor.getName(), "VOTER", "VOTER",
+                        "Voting", cmd.electionId(), null, "Vote", null, null, null, "CRITICAL", 1);
                 return new VoteAckDTO(null, "REJECTED", "ALREADY_VOTED",
                         "You have already cast your vote in this election. Each voter may only vote once.");
             }
@@ -206,6 +225,10 @@ public class VotingService implements IVotingService {
             // under concurrency; the fast-path above is just an optimisation).
             if (!ev.isVerified()) {
                 if (!stepUpVerified) {
+                    emitter.emit(null, "voting.vote.rejected", null, orgId,
+                            "Vote rejected: voter not verified (post-lock)",
+                            actor.getVoterId(), actor.getName(), "VOTER", "VOTER",
+                            "Voting", cmd.electionId(), null, "Vote", null, null, null, "WARN", 1);
                     return new VoteAckDTO(null, "REJECTED", "NOT_VERIFIED",
                             "Identity verification is required before voting. " +
                             "Please complete the verification step and try again.");

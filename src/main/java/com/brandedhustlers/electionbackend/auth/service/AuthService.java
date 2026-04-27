@@ -17,6 +17,7 @@ import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepos
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
+import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.RefreshTokenException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
@@ -61,6 +62,7 @@ public class AuthService implements IAuthService {
     private final UserOrganizationRepository userOrganizationRepository;
     private final MessagingService messagingService;
     private final MfaService mfaService;
+    private final AuditEmitter auditEmitter;
 
     @Value("${app.base-url}")
     private String appBaseUrl;
@@ -77,7 +79,8 @@ public class AuthService implements IAuthService {
             OrganizationRepository organizationRepository, RefreshTokenService refreshTokenService,
             UserOrganizationRepository userOrganizationRepository,
             MessagingService messagingService,
-            MfaService mfaService) {
+            MfaService mfaService,
+            AuditEmitter auditEmitter) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
@@ -94,10 +97,11 @@ public class AuthService implements IAuthService {
         this.userOrganizationRepository = userOrganizationRepository;
         this.messagingService = messagingService;
         this.mfaService = mfaService;
+        this.auditEmitter = auditEmitter;
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = UserAlreadyExists.class)
     public RegistrationResponse register(RegistrationRequest registrationRequest) {
         // Validate input
         if (registrationRequest == null || registrationRequest.email() == null) {
@@ -109,6 +113,15 @@ public class AuthService implements IAuthService {
                 .findByAppUserEmail(registrationRequest.email());
 
         if (potentialConflict.isPresent()) {
+            AppUser conflict = potentialConflict.get();
+            UUID conflictOrg = conflict.getActiveOrganization() != null
+                    ? conflict.getActiveOrganization().getOrganizationId() : null;
+            if (conflictOrg != null) {
+                auditEmitter.emit(null, "auth.register.duplicate", null, conflictOrg,
+                        "Registration blocked: email already in use",
+                        conflict.getAppUserId(), conflict.getAppUserEmail(), "SYSTEM", "SYSTEM",
+                        "Auth", conflict.getAppUserId(), null, "Auth", null, null, null, "WARN", 1);
+            }
             throw new UserAlreadyExists("An account with this email already exists");
         }
 
@@ -171,19 +184,35 @@ public class AuthService implements IAuthService {
     }
 
     @Override
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public void verifyEmail(String token) {
         AppUser user = appUserRepository.findByEmailVerificationToken(token)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "This verification link is invalid or has already been used."));
 
+        UUID orgId = user.getActiveOrganization() != null
+                ? user.getActiveOrganization().getOrganizationId() : null;
+
         // Idempotent: if already verified (e.g. duplicate request), succeed silently.
         if (user.isEmailVerified()) {
             log.info("Email already verified for user {} — duplicate request ignored", user.getAppUserId());
+            if (orgId != null) {
+                auditEmitter.emit(null, "auth.email.verify.duplicate", null, orgId,
+                        "Email verification link reused (already verified)",
+                        user.getAppUserId(), user.getAppUserEmail(), "SYSTEM", "USER",
+                        "Auth", user.getAppUserId(), null, "Auth", null, null, null, "INFO", 1);
+            }
             return;
         }
 
         if (user.getEmailVerificationExpiry() == null
                 || Instant.now().isAfter(user.getEmailVerificationExpiry())) {
+            if (orgId != null) {
+                auditEmitter.emit(null, "auth.email.verify.expired", null, orgId,
+                        "Email verification failed: link expired",
+                        user.getAppUserId(), user.getAppUserEmail(), "SYSTEM", "USER",
+                        "Auth", user.getAppUserId(), null, "Auth", null, null, null, "WARN", 1);
+            }
             throw new IllegalArgumentException("TOKEN_EXPIRED: This verification link has expired. Please request a new one.");
         }
 
@@ -191,6 +220,13 @@ public class AuthService implements IAuthService {
         user.setEmailVerificationToken(null);
         user.setEmailVerificationExpiry(null);
         appUserRepository.save(user);
+
+        if (orgId != null) {
+            auditEmitter.emit(null, "auth.email.verified", null, orgId,
+                    "Email address verified",
+                    user.getAppUserId(), user.getAppUserEmail(), "SYSTEM", "USER",
+                    "Auth", user.getAppUserId(), null, "Auth", null, null, null, "INFO", 1);
+        }
         log.info("Email verified for user {}", user.getAppUserId());
     }
 
@@ -239,15 +275,31 @@ public class AuthService implements IAuthService {
     }
 
     @Override
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public void resetPassword(String token, String newPassword) {
         AppUser user = appUserRepository.findByPasswordResetToken(token)
                 .orElseThrow(() -> new IllegalArgumentException("Invalid or expired reset token"));
 
+        UUID orgId = user.getActiveOrganization() != null
+                ? user.getActiveOrganization().getOrganizationId() : null;
+
         if (user.getPasswordResetExpiry() == null || Instant.now().isAfter(user.getPasswordResetExpiry())) {
+            if (orgId != null) {
+                auditEmitter.emit(null, "auth.password.reset.expired", null, orgId,
+                        "Password reset failed: token expired",
+                        user.getAppUserId(), user.getAppUserEmail(), "SYSTEM", "USER",
+                        "Auth", user.getAppUserId(), null, "Auth", null, null, null, "WARN", 1);
+            }
             throw new IllegalArgumentException("Reset token has expired. Please request a new one.");
         }
 
         if (passwordEncoder.matches(newPassword, user.getPassword())) {
+            if (orgId != null) {
+                auditEmitter.emit(null, "auth.password.reset.reused", null, orgId,
+                        "Password reset rejected: new password same as current",
+                        user.getAppUserId(), user.getAppUserEmail(), "SYSTEM", "USER",
+                        "Auth", user.getAppUserId(), null, "Auth", null, null, null, "WARN", 1);
+            }
             throw new IllegalArgumentException("New password must differ from the current password.");
         }
 
@@ -255,6 +307,13 @@ public class AuthService implements IAuthService {
         user.setPasswordResetToken(null);
         user.setPasswordResetExpiry(null);
         appUserRepository.save(user);
+
+        if (orgId != null) {
+            auditEmitter.emit(null, "auth.password.reset.success", null, orgId,
+                    "Password reset completed",
+                    user.getAppUserId(), user.getAppUserEmail(), "SYSTEM", "USER",
+                    "Auth", user.getAppUserId(), null, "Auth", null, null, null, "INFO", 1);
+        }
         log.info("Password reset completed for user {}", user.getAppUserId());
     }
 
@@ -275,17 +334,35 @@ public class AuthService implements IAuthService {
     }
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = BadCredentialsException.class)
     public LoginResponse login(LoginRequest loginRequest, HttpServletResponse response) {
 
-        Authentication authentication = authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(getIdentity(loginRequest), loginRequest.password()));
+        Authentication authentication;
+        try {
+            authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(getIdentity(loginRequest), loginRequest.password()));
+        } catch (BadCredentialsException e) {
+            appUserRepository.findByAppUserEmail(getIdentity(loginRequest)).ifPresent(u -> {
+                UUID orgId = u.getActiveOrganization() != null
+                        ? u.getActiveOrganization().getOrganizationId() : null;
+                if (orgId != null) {
+                    auditEmitter.emit(null, "auth.login.failed", null, orgId,
+                            "Login failed: invalid credentials",
+                            u.getAppUserId(), u.getAppUserEmail(), "SYSTEM", "USER",
+                            "Auth", u.getAppUserId(), null, "Auth", null, null, null, "WARN", 1);
+                }
+            });
+            throw e;
+        }
+
         UserPrincipal authenticationPrincipal = (UserPrincipal) authentication.getPrincipal();
 
         // Use the AppUser already loaded (and lazy-collections initialized) by
         // loadUserByUsername — avoids a redundant DB round-trip and ensures
         // userOrganizations / roles are in memory for the rest of this method.
         AppUser authenticatedUser = authenticationPrincipal.getAppUser();
+        UUID loginOrgId = authenticatedUser.getActiveOrganization() != null
+                ? authenticatedUser.getActiveOrganization().getOrganizationId() : null;
 
         // If MFA is enabled, issue a short-lived pending token and ask for OTP
         if (authenticatedUser.isMfaEnabled()) {
@@ -310,6 +387,13 @@ public class AuthService implements IAuthService {
                 .build();
         response.setHeader("Set-Cookie", jwtCookie.toString());
 
+        if (loginOrgId != null) {
+            auditEmitter.emit(null, "auth.login.success", null, loginOrgId,
+                    "User login successful",
+                    authenticatedUser.getAppUserId(), authenticatedUser.getAppUserEmail(), "SYSTEM", "USER",
+                    "Auth", authenticatedUser.getAppUserId(), null, "Auth", null, null, null, "INFO", 1);
+        }
+
         if (authenticatedUser.isMustChangePassword()) {
             return LoginResponse.mustChangePassword(
                     true,
@@ -328,9 +412,12 @@ public class AuthService implements IAuthService {
     }
 
     @Override
+    @Transactional(noRollbackFor = {AccessDeniedException.class, InvalidRole.class})
     public CreateUserResponse createUser(CreateUserRequest createUserRequest) {
         AppUser creator = getUser.getCurrentAuthenticatedUser();
         UserRole callerRole = creator.getUserRole();
+        UUID creatorOrgId = creator.getActiveOrganization() != null
+                ? creator.getActiveOrganization().getOrganizationId() : null;
 
         // Parse role early so we can validate before any DB work
         UserRole requestedRole;
@@ -346,12 +433,24 @@ public class AuthService implements IAuthService {
             // but cannot create platform-level accounts (ADMIN / SUPER_ADMIN).
             if (requestedRole == UserRole.ADMIN
                     || requestedRole == UserRole.SUPER_ADMIN) {
+                if (creatorOrgId != null) {
+                    auditEmitter.emit(null, "auth.user.create.escalation", null, creatorOrgId,
+                            "Privilege escalation blocked: ORG_ADMIN attempted to create " + requestedRole,
+                            creator.getAppUserId(), creator.getAppUserEmail(), callerRole.name(), "USER",
+                            "Auth", creator.getAppUserId(), null, "Auth", null, null, null, "CRITICAL", 1);
+                }
                 throw new AccessDeniedException(
                         "ORG_ADMIN cannot create platform-level accounts. " +
                         "Allowed roles: CONTRIBUTOR, AUDITOR, OBSERVER, VOTER, ORG_ADMIN.");
             }
         } else if (callerRole == UserRole.ADMIN) {
             if (requestedRole == UserRole.SUPER_ADMIN) {
+                if (creatorOrgId != null) {
+                    auditEmitter.emit(null, "auth.user.create.escalation", null, creatorOrgId,
+                            "Privilege escalation blocked: ADMIN attempted to create SUPER_ADMIN",
+                            creator.getAppUserId(), creator.getAppUserEmail(), callerRole.name(), "USER",
+                            "Auth", creator.getAppUserId(), null, "Auth", null, null, null, "CRITICAL", 1);
+                }
                 throw new AccessDeniedException(
                         "ADMIN cannot create SUPER_ADMIN accounts. Contact a SUPER_ADMIN.");
             }
@@ -408,6 +507,13 @@ public class AuthService implements IAuthService {
                 appBaseUrl + "/login"
         );
 
+        if (creatorOrgId != null) {
+            auditEmitter.emit(null, "auth.user.created", null, creatorOrgId,
+                    "User account created: " + createUserRequest.companyEmail() + " (" + createUserRequest.userRole() + ")",
+                    creator.getAppUserId(), creator.getAppUserEmail(), callerRole.name(), "USER",
+                    "Auth", newUser.getAppUserId(), null, "Auth", null, null, null, "INFO", 1);
+        }
+
         return new CreateUserResponse(
                 true,
                 newUser.getUserRole().name());
@@ -433,16 +539,24 @@ public class AuthService implements IAuthService {
      *   <li>Nobody can demote a SUPER_ADMIN except another SUPER_ADMIN.</li>
      * </ul>
      */
-    @Transactional
+    @Transactional(noRollbackFor = {com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException.class, UserNotFound.class})
     public void updateUserRole(UUID targetUserId, UserRole newRole) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         AppUser target = appUserRepository.findById(targetUserId)
                 .orElseThrow(() -> new UserNotFound("User not found: " + targetUserId));
 
         UserRole callerRole = caller.getUserRole();
+        UUID callerOrgId = caller.getActiveOrganization() != null
+                ? caller.getActiveOrganization().getOrganizationId() : null;
 
         // Nobody can demote a SUPER_ADMIN unless they are also SUPER_ADMIN
         if (target.getUserRole() == UserRole.SUPER_ADMIN && callerRole != UserRole.SUPER_ADMIN) {
+            if (callerOrgId != null) {
+                auditEmitter.emit(null, "auth.role.update.blocked", null, callerOrgId,
+                        "Privilege escalation blocked: attempted to modify SUPER_ADMIN role",
+                        caller.getAppUserId(), caller.getAppUserEmail(), callerRole.name(), "USER",
+                        "Auth", targetUserId, null, "Auth", null, null, null, "CRITICAL", 1);
+            }
             throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
                     "Only a SUPER_ADMIN can modify another SUPER_ADMIN's role");
         }
@@ -450,6 +564,12 @@ public class AuthService implements IAuthService {
         // ADMIN cannot assign ADMIN or SUPER_ADMIN (prevents privilege escalation)
         if (callerRole == UserRole.ADMIN
                 && (newRole == UserRole.ADMIN || newRole == UserRole.SUPER_ADMIN)) {
+            if (callerOrgId != null) {
+                auditEmitter.emit(null, "auth.role.update.escalation", null, callerOrgId,
+                        "Privilege escalation blocked: ADMIN attempted to assign " + newRole,
+                        caller.getAppUserId(), caller.getAppUserEmail(), callerRole.name(), "USER",
+                        "Auth", targetUserId, null, "Auth", null, null, null, "CRITICAL", 1);
+            }
             throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
                     "ADMIN cannot assign platform-level roles. Contact a SUPER_ADMIN.");
         }
@@ -458,6 +578,12 @@ public class AuthService implements IAuthService {
         // but cannot assign platform-level roles (ADMIN / SUPER_ADMIN).
         if (callerRole == UserRole.ORG_ADMIN) {
             if (newRole == UserRole.ADMIN || newRole == UserRole.SUPER_ADMIN) {
+                if (callerOrgId != null) {
+                    auditEmitter.emit(null, "auth.role.update.escalation", null, callerOrgId,
+                            "Privilege escalation blocked: ORG_ADMIN attempted to assign " + newRole,
+                            caller.getAppUserId(), caller.getAppUserEmail(), callerRole.name(), "USER",
+                            "Auth", targetUserId, null, "Auth", null, null, null, "CRITICAL", 1);
+                }
                 throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
                         "ORG_ADMIN cannot assign platform-level roles (ADMIN / SUPER_ADMIN)");
             }
@@ -466,6 +592,12 @@ public class AuthService implements IAuthService {
             Organization targetOrg = target.getActiveOrganization();
             if (callerOrg == null || targetOrg == null
                     || !callerOrg.getOrganizationId().equals(targetOrg.getOrganizationId())) {
+                if (callerOrgId != null) {
+                    auditEmitter.emit(null, "auth.role.update.cross-org", null, callerOrgId,
+                            "Cross-org role update blocked: target user not in caller's organization",
+                            caller.getAppUserId(), caller.getAppUserEmail(), callerRole.name(), "USER",
+                            "Auth", targetUserId, null, "Auth", null, null, null, "WARN", 1);
+                }
                 throw new com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException(
                         "You can only update roles for users in your organization");
             }
@@ -482,39 +614,91 @@ public class AuthService implements IAuthService {
         });
 
         appUserRepository.save(target);
+
+        if (callerOrgId != null) {
+            auditEmitter.emit(null, "auth.role.updated", null, callerOrgId,
+                    "User role updated to " + newRole,
+                    caller.getAppUserId(), caller.getAppUserEmail(), callerRole.name(), "USER",
+                    "Auth", targetUserId, null, "Auth", null, null, null, "INFO", 1);
+        }
         log.info("User {} role updated to {} by {}", targetUserId, newRole, caller.getAppUserId());
     }
 
+    @Transactional
     public void deactivateUser(UUID userId) {
+        AppUser caller = getUser.getCurrentAuthenticatedUser();
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
         user.setDeleteYn(DeleteYn.Y);
         appUserRepository.save(user);
+
+        UUID orgId = caller.getActiveOrganization() != null
+                ? caller.getActiveOrganization().getOrganizationId() : null;
+        if (orgId != null) {
+            auditEmitter.emit(null, "auth.user.deactivated", null, orgId,
+                    "User account deactivated",
+                    caller.getAppUserId(), caller.getAppUserEmail(), caller.getUserRole().name(), "USER",
+                    "Auth", userId, null, "Auth", null, null, null, "WARN", 1);
+        }
         log.info("User {} deactivated", userId);
     }
 
+    @Transactional
     public void activateUser(UUID userId) {
+        AppUser caller = getUser.getCurrentAuthenticatedUser();
         AppUser user = appUserRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
         user.setDeleteYn(DeleteYn.N);
         appUserRepository.save(user);
+
+        UUID orgId = caller.getActiveOrganization() != null
+                ? caller.getActiveOrganization().getOrganizationId() : null;
+        if (orgId != null) {
+            auditEmitter.emit(null, "auth.user.activated", null, orgId,
+                    "User account activated",
+                    caller.getAppUserId(), caller.getAppUserEmail(), caller.getUserRole().name(), "USER",
+                    "Auth", userId, null, "Auth", null, null, null, "INFO", 1);
+        }
         log.info("User {} activated", userId);
     }
 
+    @Transactional(noRollbackFor = BadCredentialsException.class)
     public void changePassword(AuthController.ChangePasswordCmd changePasswordCmd) {
         var currUser = getUser.getCurrentAuthenticatedUser();
+        UUID orgId = currUser.getActiveOrganization() != null
+                ? currUser.getActiveOrganization().getOrganizationId() : null;
 
         if (!passwordEncoder.matches(changePasswordCmd.oldPassword(), currUser.getPassword())) {
+            if (orgId != null) {
+                auditEmitter.emit(null, "auth.password.change.failed", null, orgId,
+                        "Password change failed: incorrect current password",
+                        currUser.getAppUserId(), currUser.getAppUserEmail(), currUser.getUserRole().name(), "USER",
+                        "Auth", currUser.getAppUserId(), null, "Auth", null, null, null, "WARN", 1);
+            }
             throw new BadCredentialsException("User provided the wrong password");
         }
 
         if (passwordEncoder.matches(changePasswordCmd.newPassword(), currUser.getPassword())) {
+            if (orgId != null) {
+                auditEmitter.emit(null, "auth.password.change.reused", null, orgId,
+                        "Password change rejected: new password same as current",
+                        currUser.getAppUserId(), currUser.getAppUserEmail(), currUser.getUserRole().name(), "USER",
+                        "Auth", currUser.getAppUserId(), null, "Auth", null, null, null, "WARN", 1);
+            }
             throw new BadCredentialsException("User provided the same password");
         }
+
         currUser.setPassword(passwordEncoder.encode(changePasswordCmd.newPassword()));
         // If this was an admin-provisioned account, the forced change is now satisfied
         currUser.setMustChangePassword(false);
         appUserRepository.save(currUser);
+
+        if (orgId != null) {
+            auditEmitter.emit(null, "auth.password.changed", null, orgId,
+                    "Password changed successfully",
+                    currUser.getAppUserId(), currUser.getAppUserEmail(), currUser.getUserRole().name(), "USER",
+                    "Auth", currUser.getAppUserId(), null, "Auth", null, null, null, "INFO", 1);
+        }
     }
 
     @Transactional

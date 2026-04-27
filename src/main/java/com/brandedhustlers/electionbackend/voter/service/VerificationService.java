@@ -70,7 +70,7 @@ public class VerificationService implements IVerificationService {
     // ── Remote OTP flow ───────────────────────────────────────────────────────
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = {IllegalArgumentException.class, IllegalStateException.class})
     public OtpSendResponse sendOtp(OtpSendRequest req) throws MessagingException {
 
         // 1. Look up voter by email
@@ -80,8 +80,11 @@ public class VerificationService implements IVerificationService {
         // 2. Validate national ID — identity pre-check before dispatching anything
         if (voter.getNationalId() == null
                 || !voter.getNationalId().trim().equalsIgnoreCase(req.nationalId().trim())) {
-            // Same generic message for both "no national ID on file" and "mismatch" —
-            // avoid leaking which field is wrong to a potential attacker.
+            emitter.emit(null, "voter.otp.id-mismatch", null,
+                    voter.getOrganization().getOrganizationId(),
+                    "OTP send rejected: national ID mismatch",
+                    voter.getVoterId(), voter.getName(), "VOTER", "VOTER",
+                    "Voting", voter.getVoterId(), null, "Vote", null, null, null, "WARN", 1);
             throw new IllegalArgumentException("Email and National ID do not match our records");
         }
 
@@ -98,6 +101,11 @@ public class VerificationService implements IVerificationService {
                 : tokens.findValidTokenForVoter(voter.getVoterId(), now);
         lastToken.ifPresent(last -> {
             if (Duration.between(last.getCreatedAt(), now).compareTo(RESEND_COOLDOWN) < 0) {
+                emitter.emit(null, "voter.otp.resend-spam", null,
+                        voter.getOrganization().getOrganizationId(),
+                        "OTP resend blocked: cooldown not elapsed",
+                        voter.getVoterId(), voter.getName(), "VOTER", "VOTER",
+                        "Voting", voter.getVoterId(), null, "Vote", null, null, null, "WARN", 1);
                 throw new IllegalStateException("Please wait before requesting a new code");
             }
         });
@@ -179,6 +187,11 @@ public class VerificationService implements IVerificationService {
 
         // 3. Brute-force guard
         if (tok.getAttempts() >= MAX_ATTEMPTS) {
+            emitter.emit(null, "voter.otp.brute-force", null,
+                    voter.getOrganization().getOrganizationId(),
+                    "OTP brute-force lockout: max attempts exceeded",
+                    voter.getVoterId(), voter.getName(), "VOTER", "VOTER",
+                    "Voting", voter.getVoterId(), null, "Vote", null, null, null, "CRITICAL", 1);
             throw new IllegalStateException("Too many failed attempts — please request a new code");
         }
 
@@ -188,6 +201,11 @@ public class VerificationService implements IVerificationService {
             tok.setAttempts(tok.getAttempts() + 1);
             tokens.save(tok);
             int remaining = MAX_ATTEMPTS - tok.getAttempts();
+            emitter.emit(null, "voter.otp.failed", null,
+                    voter.getOrganization().getOrganizationId(),
+                    "OTP verification failed: incorrect code (" + remaining + " attempt(s) remaining)",
+                    voter.getVoterId(), voter.getName(), "VOTER", "VOTER",
+                    "Voting", voter.getVoterId(), null, "Vote", null, null, null, "WARN", 1);
             return new OtpConfirmResponse(false,
                     "Incorrect code. " + remaining + " attempt(s) remaining.", null);
         }

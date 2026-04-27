@@ -74,7 +74,7 @@ public class AuditEmitter {
 
                 return envelope;
         }
-        @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+        @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
         public void pushToQueue(AuditEnvelope env) {
                 rabbitTemplate.convertAndSend("audit.events", env);
         }

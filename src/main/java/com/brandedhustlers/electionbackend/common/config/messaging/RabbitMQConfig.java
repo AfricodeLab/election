@@ -69,14 +69,14 @@ public class RabbitMQConfig {
 
     @Bean
     public Binding votingBinding() {
-        return BindingBuilder.bind(voteQueue())
+        return BindingBuilder.bind(votingQueue())
                 .to(exchange())
                 .with(ROUTING_KEY_VOTING_VOTE_CAST);
     }
 
     @Bean
     public Binding auditQueueBinding() {
-        return BindingBuilder.bind(voteQueue())
+        return BindingBuilder.bind(auditQueue())
                 .to(exchange())
                 .with(ROUTING_KEY_AUDIT);
     }
@@ -98,7 +98,7 @@ public class RabbitMQConfig {
 
     @Bean
     public Binding voteBinding() {
-        return BindingBuilder.bind(authQueue())
+        return BindingBuilder.bind(voteQueue())
                 .to(exchange())
                 .with(ROUTING_KEY_VOTER_IMPORT);
     }
