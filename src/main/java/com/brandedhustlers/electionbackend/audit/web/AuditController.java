@@ -38,9 +38,8 @@ public class AuditController {
             @RequestParam(defaultValue = "occurred_at,DESC") String sort
     ) {
         UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
-        UUID actorId = getUser.getCurrentAuthenticatedUserId();
         AuditSearchFilter f = AuditSearchFilter.builder()
-                .orgId(orgId).eventType(eventType).actorId(actorId).targetType(targetType).targetId(targetId)
+                .orgId(orgId).eventType(eventType).targetType(targetType).targetId(targetId)
                 .severity(severity).page(page).size(size).sort(sort)
                 .build();
         return ResponseEntity.ok(query.search(f));

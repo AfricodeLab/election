@@ -2,6 +2,7 @@ package com.brandedhustlers.electionbackend.voting.web;
 
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.VoterAuthToken;
+import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.voter.service.VerificationService;
 import com.brandedhustlers.electionbackend.voting.dto.CastVoteCmd;
 import com.brandedhustlers.electionbackend.voting.dto.VoteAckDTO;
@@ -26,13 +27,16 @@ public class VoteController {
     private final VotingService votingService;
     private final HttpServletRequest httpServletRequest;
     private final JWTService jwtService;
+    private final AuditEmitter auditEmitter;
 
     public VoteController(VotingService votingService,
             HttpServletRequest httpServletRequest,
-            JWTService jwtService) {
+            JWTService jwtService,
+            AuditEmitter auditEmitter) {
         this.votingService = votingService;
         this.httpServletRequest = httpServletRequest;
         this.jwtService = jwtService;
+        this.auditEmitter = auditEmitter;
     }
 
     private static final Duration STEP_UP_WINDOW = Duration.ofMinutes(15);
@@ -73,6 +77,11 @@ public class VoteController {
 
         Long stepUp = auth.getStepUpVerifiedAt();
         if (stepUp == null || (System.currentTimeMillis() - stepUp) > STEP_UP_WINDOW.toMillis()) {
+            auditEmitter.emit(null, "voting.step-up.expired", null,
+                    auth.getVoterOrganizationId(),
+                    stepUp == null ? "Vote rejected: no step-up claim in token" : "Vote rejected: step-up verification expired",
+                    auth.getVoterId(), null, "VOTER", "VOTER",
+                    "Voting", body.electionId(), null, "Vote", null, null, null, "WARN", 1);
             return ResponseEntity.status(401)
                     .body(new VoteAckDTO(null, "REJECTED", "Step up required, please verify again to vote."));
         }

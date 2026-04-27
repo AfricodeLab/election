@@ -172,7 +172,7 @@ public class VoterService implements IVoterService {
                 .toList();
     }
 
-    @Transactional
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public VoterDTO updateContact(UUID orgId, UUID voterId, UpdateVoterContactCmd cmd) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(actor, PermissionType.UPDATE_VOTER);
@@ -185,6 +185,10 @@ public class VoterService implements IVoterService {
         if (cmd.email() != null && !cmd.email().isBlank()) {
             voterRepository.findByEmailIgnoreCase(cmd.email()).ifPresent(conflict -> {
                 if (!conflict.getVoterId().equals(voterId)) {
+                    auditEmitter.emit(null, "voter.contact.update.duplicate-email", null, orgId,
+                            "Voter contact update rejected: email already in use by another voter",
+                            actor.getAppUserId(), actor.getFirstName(), actor.getUserRole().name(), "USER",
+                            "Voter", voterId, null, "WEB", null, null, null, "WARN", 1);
                     throw new IllegalArgumentException("Email address is already in use by another voter");
                 }
             });
@@ -194,6 +198,10 @@ public class VoterService implements IVoterService {
         if (cmd.phone() != null && !cmd.phone().isBlank()) {
             voterRepository.findByPhone(cmd.phone().trim()).ifPresent(conflict -> {
                 if (!conflict.getVoterId().equals(voterId)) {
+                    auditEmitter.emit(null, "voter.contact.update.duplicate-phone", null, orgId,
+                            "Voter contact update rejected: phone already in use by another voter",
+                            actor.getAppUserId(), actor.getFirstName(), actor.getUserRole().name(), "USER",
+                            "Voter", voterId, null, "WEB", null, null, null, "WARN", 1);
                     throw new IllegalArgumentException("Phone number is already in use by another voter");
                 }
             });
@@ -201,6 +209,11 @@ public class VoterService implements IVoterService {
         }
 
         voterRepository.save(voter);
+
+        auditEmitter.emit(null, "voter.contact.updated", null, orgId,
+                "Voter contact information updated",
+                actor.getAppUserId(), actor.getFirstName(), actor.getUserRole().name(), "USER",
+                "Voter", voterId, null, "WEB", null, null, null, "INFO", 1);
         log.info("Contact info updated for voter {} by admin {}", voterId, actor.getAppUserId());
         return voterMapper.entityToDto(voter);
     }

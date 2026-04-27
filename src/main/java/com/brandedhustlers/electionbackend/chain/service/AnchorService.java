@@ -8,6 +8,7 @@ import com.brandedhustlers.electionbackend.common.flags.FeatureFlagService;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.domain.OutBox;
 import com.brandedhustlers.electionbackend.voting.repository.OutBoxRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -189,7 +190,7 @@ public class AnchorService {
      */
     private UUID extractElectionId(OutBox outboxEntry) {
         try {
-            com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            ObjectMapper mapper = new ObjectMapper();
             Map<String, String> payload = mapper.readValue(
                     outboxEntry.getPayload(),
                     Map.class);

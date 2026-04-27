@@ -89,7 +89,7 @@ public class AuditIngestServiceImpl implements AuditIngestService {
         try {
             repo.save(row);
         } catch (DataIntegrityViolationException dup) {
-            // Duplicate eventId: idempotent ignore
+            log.debug("Duplicate audit event ignored: eventId={}", env.getEventId());
         }
     }
 }
