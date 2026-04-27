@@ -20,6 +20,7 @@ import com.brandedhustlers.electionbackend.auth.service.RefreshTokenService;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
+import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.RefreshTokenException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
 import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
@@ -87,6 +88,8 @@ class AuthServiceExtendedTest {
     private MfaService mfaService;
     @Mock
     private AppUserMapper appUserMapper;
+    @Mock
+    private AuditEmitter auditEmitter;
 
     private AuthService authService;
     private UUID userId;
@@ -99,7 +102,7 @@ class AuthServiceExtendedTest {
                 cloudinaryService, httpServletRequest, roleRepository, getUser,
                 organizationService, organizationMapper, organizationMapper,
                 appUserMapper, organizationRepository, refreshTokenService,
-                userOrganizationRepository, messagingService, mfaService);
+                userOrganizationRepository, messagingService, mfaService, auditEmitter);
 
         ReflectionTestUtils.setField(authService, "appBaseUrl", "https://app.test");
 
