@@ -1,7 +1,6 @@
 package com.brandedhustlers.electionbackend;
 
-import com.brandedhustlers.electionbackend.utility.configuration.DotenvInitializer;
-import io.github.cdimascio.dotenv.Dotenv;
+import com.brandedhustlers.electionbackend.common.utility.configuration.DotenvInitializer;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.cache.annotation.EnableCaching;
@@ -13,6 +12,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 public class ElectionbackendApplication {
 
     public static void main(String[] args) {
+
+        SpringApplication application = new SpringApplication(ElectionbackendApplication.class);
+        application.addInitializers(new DotenvInitializer());
 
 //        Dotenv dotenv = Dotenv.configure().load();
 //
@@ -42,8 +44,7 @@ public class ElectionbackendApplication {
 //        System.setProperty("RESEND_API_KEY", dotenv.get("RESEND_API_KEY"));
 
 
-        SpringApplication application = new SpringApplication(ElectionbackendApplication.class);
-        application.addInitializers(new DotenvInitializer());
+
         application.run(args);
     }
 

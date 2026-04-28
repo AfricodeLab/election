@@ -1,4 +1,4 @@
-package com.brandedhustlers.electionbackend.utility.configuration;
+package com.brandedhustlers.electionbackend.common.utility.configuration;
 
 import io.github.cdimascio.dotenv.Dotenv;
 import org.springframework.context.ApplicationContextInitializer;

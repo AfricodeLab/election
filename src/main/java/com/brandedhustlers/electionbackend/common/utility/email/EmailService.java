@@ -1,4 +1,4 @@
-package com.brandedhustlers.electionbackend.utility.email;
+package com.brandedhustlers.electionbackend.common.utility.email;
 
 import com.resend.Resend;
 import com.resend.services.emails.model.CreateEmailOptions;
