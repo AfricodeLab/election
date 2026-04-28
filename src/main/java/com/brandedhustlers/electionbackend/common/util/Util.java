@@ -87,7 +87,9 @@ public class Util {
      */
     public void requireAdminOrPermission(AppUser user, PermissionType... permissions) {
         // Platform staff and org owners always pass
-        if (isPlatformAdmin(user) || authorizeUser(user, UserRole.ORG_ADMIN)) return;
+        if (isPlatformAdmin(user) || authorizeUser(user, UserRole.ORG_ADMIN)) {
+            return;
+        }
 
         boolean hasAnyPermission = Arrays.stream(permissions)
                 .anyMatch(p -> authorityCheck(user.getAppUserId(), p));

@@ -112,21 +112,31 @@ public class SecurityConfig {
                         // ── SUPER_ADMIN-only ────────────────────────────────────
                         .requestMatchers("/api/v1/organization/all").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/v1/organization/deactivate/**").hasRole("SUPER_ADMIN")
-                        .requestMatchers("/api/v1/elections/*/release").hasRole("SUPER_ADMIN")
                         .requestMatchers("/api/v1/chain/validate").hasAnyRole("SUPER_ADMIN", "AUDITOR")
                         .requestMatchers("/api/debug/**").hasRole("SUPER_ADMIN")
 
-                        // ── SUPER_ADMIN + AUDITOR (audit / integrity) ───────────
-                        // Also accepts PERM_VIEW_AUDIT_LOG so ORG_ADMINs can delegate
-                        // audit access to a custom role (e.g. "Compliance Auditor").
+                        // ── Release results — ADMINS or PERM_RELEASE_RESULTS ────
+                        // Note: the old rule ".requestMatchers("/api/v1/elections/*/release")
+                        // .hasRole("SUPER_ADMIN")" was too narrow (blocked ORG_ADMIN).
+                        // The subsequent "/**" rule was dead — it required a sub-path
+                        // that the actual endpoint never has.  Both are replaced here.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/elections/*/release")
+                        .hasAnyAuthority(roleOrPerm(ADMINS, "RELEASE_RESULTS"))
+
+                        // ── SUPER_ADMIN + AUDITOR + ADMINS (audit / integrity) ──
+                        // Validate is part of the release flow — ORG_ADMIN must be
+                        // able to run it before releasing their own election.
+                        // Also accepts PERM_VIEW_AUDIT_LOG for delegated auditor roles.
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/validate")
-                        .hasAnyAuthority(roleOrPerm(new String[]{"SUPER_ADMIN", "AUDITOR"}, "VIEW_AUDIT_LOG"))
+                        .hasAnyAuthority(roleOrPerm(ADMINS_AUDIT, "VIEW_AUDIT_LOG"))
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/validate-stream")
-                        .hasAnyAuthority(roleOrPerm(new String[]{"SUPER_ADMIN", "AUDITOR"}, "VIEW_AUDIT_LOG"))
+                        .hasAnyAuthority(roleOrPerm(ADMINS_AUDIT, "VIEW_AUDIT_LOG"))
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/audit")
                         .hasAnyAuthority(roleOrPerm(new String[]{"SUPER_ADMIN", "AUDITOR"}, "VIEW_AUDIT_LOG"))
+                        // integrity-summary is shown on the Results tab to any admin
+                        // managing the election — ORG_ADMIN must be able to see it.
                         .requestMatchers(HttpMethod.GET, "/api/v1/elections/*/integrity-summary")
-                        .hasAnyAuthority(roleOrPerm(new String[]{"SUPER_ADMIN", "AUDITOR"}, "VIEW_AUDIT_LOG"))
+                        .hasAnyAuthority(roleOrPerm(ADMINS_AUDIT, "VIEW_AUDIT_LOG"))
                         .requestMatchers("/api/v1/audit/**")
                         .hasAnyAuthority(roleOrPerm(ADMINS_AUDIT, "VIEW_AUDIT_LOG"))
 

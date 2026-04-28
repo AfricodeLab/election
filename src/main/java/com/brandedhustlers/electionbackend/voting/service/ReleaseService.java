@@ -1,6 +1,8 @@
 package com.brandedhustlers.electionbackend.voting.service;
 
+import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.chain.service.BlockchainProvider;
+import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.election.enums.ElectionStatus;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.domain.ElectionResultsAnchor;
@@ -36,6 +38,8 @@ public class ReleaseService {
     private final ReleaseValidationService validationService;
     private final BlockchainProvider chain;
     private final ObjectMapper objectMapper;
+    private final AuditEmitter emitter;
+    private final AppUserRepository appUserRepository;
 
     public ReleaseService(
             ElectionRepository electionRepo,
@@ -44,7 +48,7 @@ public class ReleaseService {
             ElectionResultsAnchorRepository resultsAnchorRepo,
             ReleaseValidationService validationService,
             BlockchainProvider chain,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, AuditEmitter emitter, AppUserRepository appUserRepository) {
         this.electionRepo = electionRepo;
         this.voteRepo = voteRepo;
         this.tamperingLog = tamperingLog;
@@ -52,6 +56,8 @@ public class ReleaseService {
         this.validationService = validationService;
         this.chain = chain;
         this.objectMapper = objectMapper;
+        this.emitter = emitter;
+        this.appUserRepository = appUserRepository;
     }
 
     /**
@@ -147,10 +153,16 @@ public class ReleaseService {
          * Step 7: Update election status.
          */
         var election = electionRepo.findById(electionId).orElseThrow();
+        var adminUser = appUserRepository.findById(adminUserId);
         election.setElectionStatus(ElectionStatus.RESULTS_RELEASED);
         electionRepo.save(election);
 
         log.info("Results released for election {}, txId={}", electionId, txId);
+
+        emitter.emit(UUID.randomUUID(), "auth.register.duplicate", null, adminUser.get().getActiveOrganization().getOrganizationId(),
+                forceRelease ? "Results force released for election." : "Results released for election.",
+                adminUserId,adminUser.get().getFirstName(),adminUser.get().getUserRole().name(), "USER",
+                "Auth", adminUserId, null, "Auth", null, null, null, "INFO", 1);
 
         return new ReleaseResult(results, validation, txId);
     }

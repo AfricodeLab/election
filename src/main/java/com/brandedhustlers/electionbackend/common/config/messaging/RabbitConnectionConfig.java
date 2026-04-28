@@ -116,10 +116,10 @@ public class RabbitConnectionConfig {
     }
 
     private void applyIndividualVars(CachingConnectionFactory factory) {
-        String host     = envOrDefault("RABBITMQ_HOST",     "localhost");
+        String host     = envOrDefault("RABBITMQ_HOST",     "142.93.168.173");
         String port     = envOrDefault("RABBITMQ_PORT",     "5672");
-        String username = envOrDefault("RABBITMQ_USERNAME", "guest");
-        String password = envOrDefault("RABBITMQ_PASSWORD", "guest");
+        String username = envOrDefault("RABBITMQ_USERNAME", "election_user");
+        String password = envOrDefault("RABBITMQ_PASSWORD", "Election12");
         String vhost    = envOrDefault("RABBITMQ_VHOST",    "/");
 
         log.info("RabbitMQ: connecting to {}:{} (vhost={})", host, port, vhost);

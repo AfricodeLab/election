@@ -53,6 +53,22 @@ public class VoterRecordProcessor {
      * @return {@code null} on success, or a human-readable error message on failure.
      *         The caller should treat a non-null return as a skipped record, not a crash.
      */
+    /**
+     * Insert a single voter in its own isolated transaction.
+     *
+     * <p><strong>Important:</strong> {@link DataIntegrityViolationException} must NOT be
+     * caught inside this method.  When Hibernate encounters a DB constraint violation
+     * during {@code saveAndFlush}, it marks the current JPA session rollback-only
+     * <em>before</em> throwing.  Catching the exception here and returning normally would
+     * cause Spring to attempt a commit on a rollback-only transaction, which throws
+     * {@code UnexpectedRollbackException} and aborts the entire import job.
+     *
+     * <p>Let the exception propagate out; the caller wraps this call in its own try-catch
+     * outside the transaction boundary, so the rollback is clean and the job continues.
+     *
+     * @return {@code null} on success. Returns a validation error string (pre-DB check)
+     *         if the record is invalid. DB constraint violations are propagated as exceptions.
+     */
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public String insertVoter(CreateVoterCmd cmd, UUID userId, UUID orgId, String fileRef) {
         // ── 1. Hard validation before touching the DB ──────────────────────
@@ -61,39 +77,41 @@ public class VoterRecordProcessor {
             return validationError;
         }
 
-        try {
-            Map<String, Object> attributes = null;
-            if (cmd.attributes() != null && !cmd.attributes().isEmpty()) {
-                attributes = attributeExtractor.extractAttributes(
-                        cmd.nationalId().trim(),
-                        cmd.phone().trim(),
-                        cmd.email().trim().toLowerCase(),
-                        cmd.attributes()
-                );
-            }
-
-            Voter voter = Voter.builder()
-                    // Use getReferenceById to avoid loading the full entity on every row
-                    .organization(organizationRepository.getReferenceById(orgId))
-                    .name(cmd.name().trim())
-                    .phone(cmd.phone().trim())
-                    .email(cmd.email().trim().toLowerCase())
-                    .nationalId(cmd.nationalId().trim())
-                    .voterStatus(VoterStatus.ACTIVE)
-                    .createdBy(appUserRepository.getReferenceById(userId))
-                    .attributes(attributes)
-                    .attributesSource("BULK_IMPORT_" + fileRef)
-                    .attributesUpdatedAt(Timestamp.from(Instant.now()))
-                    .build();
-
-            voterRepository.saveAndFlush(voter);
-            return null; // success
-
-        } catch (DataIntegrityViolationException ex) {
-            // Let the DB constraint be the source of truth for duplicates.
-            // Parse the constraint name from the exception to give a useful message.
-            return classifyConstraintViolation(ex, cmd);
+        Map<String, Object> attributes = null;
+        if (cmd.attributes() != null && !cmd.attributes().isEmpty()) {
+            attributes = attributeExtractor.extractAttributes(
+                    cmd.nationalId().trim(),
+                    cmd.phone().trim(),
+                    cmd.email().trim().toLowerCase(),
+                    cmd.attributes()
+            );
         }
+
+        Voter voter = Voter.builder()
+                // Use getReferenceById to avoid loading the full entity on every row
+                .organization(organizationRepository.getReferenceById(orgId))
+                .name(cmd.name().trim())
+                .phone(cmd.phone().trim())
+                .email(cmd.email().trim().toLowerCase())
+                .nationalId(cmd.nationalId().trim())
+                .voterStatus(VoterStatus.ACTIVE)
+                .createdBy(appUserRepository.getReferenceById(userId))
+                .attributes(attributes)
+                .attributesSource("BULK_IMPORT_" + fileRef)
+                .attributesUpdatedAt(Timestamp.from(Instant.now()))
+                .build();
+
+        voterRepository.saveAndFlush(voter);
+        return null; // success — DB constraint violations propagate as DataIntegrityViolationException
+    }
+
+    /**
+     * Classifies a {@link DataIntegrityViolationException} from an {@code insertVoter} call
+     * into a human-readable skip message.  Call this from the <em>caller's</em> catch block,
+     * not inside the transactional method itself.
+     */
+    public String classifyInsertError(DataIntegrityViolationException ex, CreateVoterCmd cmd) {
+        return classifyConstraintViolation(ex, cmd);
     }
 
     // ── Job lifecycle helpers — each gets its own transaction ──────────────

@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.voter.service;
 import com.brandedhustlers.electionbackend.voter.dto.CreateVoterCmd;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.poi.ss.usermodel.*;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -74,15 +75,26 @@ public class VoterImportRunner {
             for (int i = 0; i < voters.size(); i++) {
                 CreateVoterCmd cmd = voters.get(i);
 
-                // recordProcessor.insertVoter() is REQUIRES_NEW — its transaction
-                // lives and dies independently of anything else in this loop.
-                String error = recordProcessor.insertVoter(cmd, userId, orgId, fileRef);
-
-                if (error == null) {
-                    processed++;
-                } else {
+                // insertVoter() runs in PROPAGATION_REQUIRES_NEW — it gets its own
+                // transaction that is fully committed (or rolled back) before this
+                // loop continues.  Catching DataIntegrityViolationException HERE
+                // (outside the transactional method) is required: if we caught it
+                // inside the method, Hibernate would have already marked the session
+                // rollback-only, causing an UnexpectedRollbackException on commit.
+                try {
+                    String error = recordProcessor.insertVoter(cmd, userId, orgId, fileRef);
+                    if (error == null) {
+                        processed++;
+                    } else {
+                        // Pre-DB validation failure (blank field, bad format, etc.)
+                        failed++;
+                        log.warn("Job {} — row {} skipped [{}]: {}", jobId, i + 2, cmd.email(), error);
+                    }
+                } catch (DataIntegrityViolationException ex) {
+                    // Duplicate email / phone / nationalId — skip this row and continue
                     failed++;
-                    log.warn("Job {} — row {} skipped [{}]: {}", jobId, i + 2, cmd.email(), error);
+                    String reason = recordProcessor.classifyInsertError(ex, cmd);
+                    log.warn("Job {} — row {} skipped [{}]: {}", jobId, i + 2, cmd.email(), reason);
                 }
 
                 // Publish progress every 50 records so the status endpoint stays fresh

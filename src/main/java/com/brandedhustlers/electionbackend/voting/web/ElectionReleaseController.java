@@ -1,11 +1,11 @@
-/*
 package com.brandedhustlers.electionbackend.voting.web;
 
 import com.brandedhustlers.electionbackend.auth.domain.AppUser;
-import com.brandedhustlers.electionbackend.auth.domain.Organization;
-import com.brandedhustlers.electionbackend.auth.enums.UserRole;
+import com.brandedhustlers.electionbackend.auth.enums.PermissionType;
 import com.brandedhustlers.electionbackend.chain.repository.ChainBatchRepository;
+import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
+import com.brandedhustlers.electionbackend.common.util.Util;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.domain.TamperingLog;
 import com.brandedhustlers.electionbackend.voting.repository.*;
@@ -24,7 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 @RestController
-@RequestMapping("/api/v1/elections")  // Added base path for consistency
+@RequestMapping("/api/v1/elections")
 @Slf4j
 public class ElectionReleaseController {
 
@@ -38,6 +38,7 @@ public class ElectionReleaseController {
     private final TamperingLogRepository tamperingLogRepo;
     private final ElectionResultsAnchorRepository resultsAnchorRepo;
     private final GetUser getUser;
+    private final Util util;
     private final VoteRepository voteRepo;
     private final OutBoxRepository outboxRepo;
 
@@ -50,7 +51,10 @@ public class ElectionReleaseController {
             ChainBatchRepository batchRepo,
             TamperingLogRepository tamperingLogRepo,
             ElectionResultsAnchorRepository resultsAnchorRepo,
-            GetUser getUser, VoteRepository voteRepo, OutBoxRepository outboxRepo
+            GetUser getUser,
+            Util util,
+            VoteRepository voteRepo,
+            OutBoxRepository outboxRepo
     ) {
         this.electionRepository = electionRepository;
         this.validationService = validationService;
@@ -61,20 +65,20 @@ public class ElectionReleaseController {
         this.tamperingLogRepo = tamperingLogRepo;
         this.resultsAnchorRepo = resultsAnchorRepo;
         this.getUser = getUser;
+        this.util = util;
         this.voteRepo = voteRepo;
         this.outboxRepo = outboxRepo;
     }
 
-    */
-/**
-     * NEW: Validate release readiness (without streaming).
-     * Quick check for UI to show status before starting full validation.
-     *//*
-
+    /**
+     * Quick validation check — no streaming, returns full report at once.
+     * Used by the UI to show pre-release integrity status.
+     */
     @GetMapping("/{electionId}/validate")
     public ResponseEntity<?> quickValidate(@PathVariable UUID electionId) {
         try {
-            verifyAdminAccess(electionId);
+            AppUser actor = verifyReleaseAccess(electionId);
+            log.info("Validation requested for election {} by {}", electionId, actor.getAppUserId());
 
             ReleaseValidationService.ReleaseValidationReport report =
                     validationService.validate(electionId, null);
@@ -83,58 +87,43 @@ public class ElectionReleaseController {
                     "status", "success",
                     "report", report
             ));
-
+        } catch (com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException e) {
+            return ResponseEntity.status(403).body(Map.of("status", "forbidden", "message", e.getMessage()));
         } catch (Exception e) {
             log.error("Validation failed for election {}", electionId, e);
-            return ResponseEntity.status(500).body(Map.of(
-                    "status", "error",
-                    "message", e.getMessage()
-            ));
+            return ResponseEntity.status(500).body(Map.of("status", "error", "message", e.getMessage()));
         }
     }
 
-    */
-/**
-     * Stream validation progress (Server-Sent Events).
-     * Real-time updates as each check completes.
-     *//*
-
+    /**
+     * Stream validation progress via Server-Sent Events.
+     * Each check fires an event as it completes.
+     */
     @GetMapping(value = "/{electionId}/validate-stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamValidation(@PathVariable UUID electionId) {
-        SseEmitter emitter = new SseEmitter(60000L);
+        SseEmitter emitter = new SseEmitter(60_000L);
 
         executor.execute(() -> {
             try {
-                // Verify access before streaming
-                verifyAdminAccess(electionId);
+                verifyReleaseAccess(electionId);
 
-                // Run validation with progress callbacks
                 ReleaseValidationService.ReleaseValidationReport report =
                         validationService.validate(electionId, check -> {
                             try {
-                                emitter.send(SseEmitter.event()
-                                        .name("validation-progress")
-                                        .data(check));
+                                emitter.send(SseEmitter.event().name("validation-progress").data(check));
                             } catch (Exception e) {
-                                log.error("Failed to send SSE event", e);
+                                log.warn("Failed to send SSE progress event", e);
                             }
                         });
 
-                // Send completion event
-                emitter.send(SseEmitter.event()
-                        .name("validation-complete")
-                        .data(report));
-
+                emitter.send(SseEmitter.event().name("validation-complete").data(report));
                 emitter.complete();
-
             } catch (Exception e) {
                 log.error("Validation streaming failed for election {}", electionId, e);
                 try {
-                    emitter.send(SseEmitter.event()
-                            .name("error")
-                            .data(Map.of("message", e.getMessage())));
+                    emitter.send(SseEmitter.event().name("error").data(Map.of("message", e.getMessage())));
                 } catch (Exception ex) {
-                    log.error("Failed to send error event", ex);
+                    log.warn("Failed to send SSE error event", ex);
                 }
                 emitter.completeWithError(e);
             }
@@ -143,20 +132,20 @@ public class ElectionReleaseController {
         return emitter;
     }
 
-    */
-/**
-     * Release election results.
-     * Anchors final results to blockchain.
-     *//*
-
+    /**
+     * Release election results — anchors final tally to blockchain and
+     * transitions the election to RESULTS_RELEASED.
+     *
+     * @param forceRelease When true, overrides validation warnings (WARN-level issues).
+     *                     The UI should prompt for confirmation before setting this.
+     */
     @PostMapping("/{electionId}/release")
     public ResponseEntity<?> releaseResults(
             @PathVariable UUID electionId,
             @RequestParam(defaultValue = "false") boolean forceRelease
     ) {
         try {
-            AppUser admin = verifyAdminAccess(electionId);
-
+            AppUser admin = verifyReleaseAccess(electionId);
             log.info("Releasing results for election {}, admin={}, force={}",
                     electionId, admin.getAppUserId(), forceRelease);
 
@@ -169,9 +158,10 @@ public class ElectionReleaseController {
             return ResponseEntity.ok(Map.of(
                     "status", "success",
                     "message", "Results released and anchored to blockchain",
-                    "results", result.results(),
-                    "validation", result.validation(),
-                    "chainTxId", result.chainTxId()
+                    "chainTxId", result.chainTxId() != null ? result.chainTxId() : "",
+                    "validVotes", result.results().getValidVotes(),
+                    "excludedVotes", result.results().getExcludedVoteCount(),
+                    "forceReleased", result.results().isForceReleased()
             ));
 
         } catch (ReleaseService.ReleaseBlockedException e) {
@@ -181,94 +171,35 @@ public class ElectionReleaseController {
                     "message", e.getMessage(),
                     "validation", e.getValidationReport()
             ));
-
-        } catch (IllegalArgumentException e) {
-            log.warn("Access denied for release: {}", e.getMessage());
-            return ResponseEntity.status(403).body(Map.of(
-                    "status", "forbidden",
-                    "message", e.getMessage()
-            ));
-
+        } catch (AccessDeniedException e) {
+            return ResponseEntity.status(403).body(Map.of("status", "forbidden", "message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(Map.of("status", "conflict", "message", e.getMessage()));
         } catch (Exception e) {
             log.error("Failed to release results for election {}", electionId, e);
-            return ResponseEntity.status(500).body(Map.of(
-                    "status", "error",
-                    "message", "Internal server error: " + e.getMessage()
-            ));
+            return ResponseEntity.status(500).body(Map.of("status", "error", "message", e.getMessage()));
         }
     }
 
-    */
-/**
-     * Get audit trail for an election.
-     * Shows complete history: config, batches, tampering, results.
-     *//*
-
-    @GetMapping("/{electionId}/audit")
-    public ResponseEntity<?> getAuditTrail(@PathVariable UUID electionId) {
-        try {
-            verifyAdminAccess(electionId);
-
-            // Fetch all audit data
-            var configAnchor = configAnchorRepo.findById(electionId).orElse(null);
-            var snapshots = snapshotRepo.findByElectionIdOrderByCreatedAtAsc(electionId);
-            var batches = batchRepo.findByElectionId(electionId);
-            var tampering = tamperingLogRepo.findByElectionId(electionId);
-            var resultsAnchor = resultsAnchorRepo.findById(electionId).orElse(null);
-
-            return ResponseEntity.ok(Map.of(
-                    "electionId", electionId,
-                    "configAnchor", configAnchor != null ? configAnchor : Map.of(),
-                    "configSnapshots", snapshots,
-                    "batchAnchors", batches,
-                    "tamperingIncidents", tampering.stream()
-                            .map(this::sanitizeTamperingLog)
-                            .toList(),
-                    "resultsAnchor", resultsAnchor != null ? resultsAnchor : Map.of()
-            ));
-
-        } catch (IllegalArgumentException e) {
-            log.warn("Access denied for audit trail: {}", e.getMessage());
-            return ResponseEntity.status(403).body(Map.of(
-                    "status", "forbidden",
-                    "message", e.getMessage()
-            ));
-
-        } catch (Exception e) {
-            log.error("Failed to get audit trail for election {}", electionId, e);
-            return ResponseEntity.status(500).body(Map.of(
-                    "status", "error",
-                    "message", e.getMessage()
-            ));
-        }
-    }
-
-    */
-/**
-     * NEW: Get summary statistics for an election's integrity.
-     * Useful for dashboard display.
-     *//*
-
+    /**
+     * Integrity summary — quick health stats for the election.
+     * Used by the Results tab to show chain anchor status.
+     */
     @GetMapping("/{electionId}/integrity-summary")
     public ResponseEntity<?> getIntegritySummary(@PathVariable UUID electionId) {
         try {
-            verifyAdminAccess(electionId);
+            verifyReleaseAccess(electionId);
 
             long totalVotes = voteRepo.countByElectionId(electionId);
             long anchoredVotes = outboxRepo.countByElectionIdAndAnchoredTrue(electionId);
             long pendingAnchor = outboxRepo.countByElectionIdAndAnchorPendingTrue(electionId);
 
             var tamperingIncidents = tamperingLogRepo.findByElectionId(electionId);
-            long restoredVotes = tamperingIncidents.stream()
-                    .filter(t -> "RESTORED".equals(t.getIncidentType()))
-                    .count();
-            long unrestorableVotes = tamperingIncidents.stream()
-                    .filter(t -> "ARCHIVE_TAMPERED".equals(t.getIncidentType()))
-                    .count();
+            long restoredVotes = tamperingIncidents.stream().filter(t -> "RESTORED".equals(t.getIncidentType())).count();
+            long unrestorableVotes = tamperingIncidents.stream().filter(t -> "ARCHIVE_TAMPERED".equals(t.getIncidentType())).count();
 
             boolean configAnchored = configAnchorRepo.existsById(electionId);
             boolean resultsReleased = resultsAnchorRepo.existsById(electionId);
-
             long batchCount = batchRepo.countByElectionId(electionId);
 
             return ResponseEntity.ok(Map.of(
@@ -294,65 +225,41 @@ public class ElectionReleaseController {
                             "needsReview", unrestorableVotes > 0 || pendingAnchor > 0
                     )
             ));
-
+        } catch (com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException e) {
+            return ResponseEntity.status(403).body(Map.of("status", "forbidden", "message", e.getMessage()));
         } catch (Exception e) {
             log.error("Failed to get integrity summary for election {}", electionId, e);
-            return ResponseEntity.status(500).body(Map.of(
-                    "status", "error",
-                    "message", e.getMessage()
-            ));
+            return ResponseEntity.status(500).body(Map.of("status", "error", "message", e.getMessage()));
         }
     }
 
-    */
-/**
-     * Helper: Verify admin has access to this election.
-     *
-     * @return The authenticated admin user
-     * @throws IllegalArgumentException if not authorized
-     *//*
+    // ── helpers ──────────────────────────────────────────────────────────────
 
-    private AppUser verifyAdminAccess(UUID electionId) {
-        Organization electionOrg = electionRepository.getElectionOrganization(electionId);
-        AppUser admin = getUser.getCurrentAuthenticatedUser();
-
-        if (!admin.getUserRole().equals(UserRole.SUPER_ADMIN)) {
-            throw new IllegalArgumentException("You do not have the authority to access this resource.");
-        }
-
-       */
-/* if (!admin.getAppUserOrganization().equals(electionOrg)) {
-            throw new IllegalArgumentException("You do not belong to this organization and cannot access this election.");
-        }*//*
- //todo change this to org admin access
-
-        return admin;
+    /**
+     * Verifies the caller has RELEASE_RESULTS permission and belongs to the
+     * same organisation as the election (platform admins bypass the org check).
+     */
+    private AppUser verifyReleaseAccess(UUID electionId) {
+        AppUser actor = getUser.getCurrentAuthenticatedUser();
+        util.requireAdminOrPermission(actor, PermissionType.RELEASE_RESULTS);
+        var election = electionRepository.findById(electionId)
+                .orElseThrow(() -> new IllegalArgumentException("Election not found: " + electionId));
+        util.requireOrgMatch(actor, election.getOrganization().getOrganizationId());
+        return actor;
     }
 
-    */
-/**
-     * Sanitize tampering log for public audit trail.
-     * Removes voter PII.
-     *//*
-
-    private Map<String, Object> sanitizeTamperingLog(TamperingLog log) {
+    private Map<String, Object> sanitizeTamperingLog(TamperingLog t) {
         return Map.of(
-                "voteId", log.getVoteId().toString(),
-                "incidentType", log.getIncidentType(),
-                "detectedAt", log.getDetectedAt().toString(),
-                "resolved", log.getResolved()
-                // DO NOT include voterId or other PII
+                "voteId", t.getVoteId().toString(),
+                "incidentType", t.getIncidentType(),
+                "detectedAt", t.getDetectedAt().toString(),
+                "resolved", t.getResolved()
         );
     }
-
-    */
-/**
-     * Cleanup executor on shutdown.
-     *//*
 
     @PreDestroy
     public void shutdown() {
         executor.shutdown();
-        log.info("Executor service shut down");
+        log.info("ElectionReleaseController executor shut down");
     }
-}*/
+}
