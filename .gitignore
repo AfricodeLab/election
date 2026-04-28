@@ -46,3 +46,6 @@ build/
 /.claude/
 /SYSTEM_DOCS.md
 /stitch_electchain_management_platform/
+
+.env
+env

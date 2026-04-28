@@ -6,6 +6,7 @@ import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFacto
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -41,6 +42,15 @@ import java.net.URISyntaxException;
 public class RabbitConnectionConfig {
 
     private static final Logger log = LoggerFactory.getLogger(RabbitConnectionConfig.class);
+
+    @Value("${app.rabbitmq.host}")
+    private String hostName ;
+    @Value("${app.rabbitmq.port}")
+    private String portName;
+    @Value("${app.rabbitmq.username}")
+    private String userName;
+    @Value("${app.rabbitmq.password}")
+    private String passWord;
 
     // ── Connection factory ────────────────────────────────────────────────────
 
@@ -116,10 +126,10 @@ public class RabbitConnectionConfig {
     }
 
     private void applyIndividualVars(CachingConnectionFactory factory) {
-        String host     = envOrDefault("RABBITMQ_HOST",     "142.93.168.173");
-        String port     = envOrDefault("RABBITMQ_PORT",     "5672");
-        String username = envOrDefault("RABBITMQ_USERNAME", "election_user");
-        String password = envOrDefault("RABBITMQ_PASSWORD", "Election12");
+        String host     = envOrDefault("RABBITMQ_HOST",     hostName);
+        String port     = envOrDefault("RABBITMQ_PORT",     portName);
+        String username = envOrDefault("RABBITMQ_USERNAME", userName);
+        String password = envOrDefault("RABBITMQ_PASSWORD", passWord);
         String vhost    = envOrDefault("RABBITMQ_VHOST",    "/");
 
         log.info("RabbitMQ: connecting to {}:{} (vhost={})", host, port, vhost);
