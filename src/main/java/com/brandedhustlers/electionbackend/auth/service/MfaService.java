@@ -69,10 +69,10 @@ public class MfaService {
         storeOtp(userId, new OtpEntry(sha256(otp), 0));
 
         try {
-            if(environment.equalsIgnoreCase("development")){
+            if (environment.equalsIgnoreCase("development")) {
                 messagingService.sendOtpEmail(user.getAppUserEmail(),
                         user.getFirstName(), otp);
-            }else{
+            } else {
                 messagingService.sendOtpEmailWithResend(user.getAppUserEmail(),
                         user.getFirstName(), otp);
             }

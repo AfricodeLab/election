@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.common.config.security;
 
+import jakarta.servlet.DispatcherType;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -74,6 +75,15 @@ public class SecurityConfig {
                         .cacheControl(Customizer.withDefaults())
                 )
                 .authorizeHttpRequests(auth -> auth
+
+                        // ── Async dispatches (SseEmitter, DeferredResult, etc.) ─
+                        // Tomcat re-runs the filter chain on the async thread after
+                        // the initial request has already been authorized. The JWT
+                        // filter is OncePerRequestFilter so it skips re-auth, leaving
+                        // the SecurityContext anonymous — which would 403 every SSE
+                        // stream. Permitting ASYNC dispatches here is safe: the
+                        // original FORWARD/REQUEST dispatch was already fully checked.
+                        .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
 
                         // ── Public (no token required) ──────────────────────────
                         .requestMatchers(

@@ -78,20 +78,20 @@ public class MessagingService {
 
     /**
      * Central voter notification listener on the notif.email queue.
-     *
+     * <p>
      * Two payload shapes are accepted:
-     *
-     *   Launch path (multiple elections at once):
-     *     { "launchId": "<uuid>", "orgId": "<uuid>" }
-     *     Sent by LaunchService when a Launch transitions PLANNED → ACTIVE.
-     *     Snapshot already computed by EligibilitySnapshotService.computeForLaunch().
-     *
-     *   Standalone path (single election):
-     *     { "electionId": "<uuid>", "orgId": "<uuid>" }
-     *     Sent by ElectionService.transitionToLive() when a standalone election
-     *     (not part of any Launch) is brought live directly.
-     *     Snapshot already computed by EligibilitySnapshotService.computeForElection().
-     *
+     * <p>
+     * Launch path (multiple elections at once):
+     * { "launchId": "<uuid>", "orgId": "<uuid>" }
+     * Sent by LaunchService when a Launch transitions PLANNED → ACTIVE.
+     * Snapshot already computed by EligibilitySnapshotService.computeForLaunch().
+     * <p>
+     * Standalone path (single election):
+     * { "electionId": "<uuid>", "orgId": "<uuid>" }
+     * Sent by ElectionService.transitionToLive() when a standalone election
+     * (not part of any Launch) is brought live directly.
+     * Snapshot already computed by EligibilitySnapshotService.computeForElection().
+     * <p>
      * The guard in ElectionService.transitionToLive() ensures elections that belong
      * to a Launch never emit a standalone notification, preventing double-emails.
      */
@@ -126,7 +126,7 @@ public class MessagingService {
         }
 
         UUID launchId = UUID.fromString(payload.get("launchId").toString());
-        UUID orgId    = UUID.fromString(payload.get("orgId").toString());
+        UUID orgId = UUID.fromString(payload.get("orgId").toString());
 
         log.info("Processing launch notification: launchId={}, orgId={}", launchId, orgId);
 
@@ -180,7 +180,7 @@ public class MessagingService {
         }
 
         UUID electionId = UUID.fromString(payload.get("electionId").toString());
-        UUID orgId      = UUID.fromString(payload.get("orgId").toString());
+        UUID orgId = UUID.fromString(payload.get("orgId").toString());
 
         log.info("Processing standalone election notification: electionId={}, orgId={}", electionId, orgId);
 
@@ -242,9 +242,10 @@ public class MessagingService {
                     .orElse(null);
 
             try {
-                if(environment.equalsIgnoreCase("development")){
+                log.debug("App environment: {}", environment);
+                if (environment.equalsIgnoreCase("development")) {
                     sendSingleEmail(voter, voterElections, earliestStart, latestEnd);
-                }else{
+                } else {
                     sendSingleEmailWithResend(voter, voterElections, earliestStart, latestEnd);
                 }
                 successCount++;
@@ -260,10 +261,10 @@ public class MessagingService {
     /**
      * Compose and send a single election-live notification email to one voter.
      *
-     * @param voter          the recipient
-     * @param elections      elections this voter is eligible to vote in
-     * @param startTime      earliest election start across the batch
-     * @param endTime        latest election end across the batch
+     * @param voter     the recipient
+     * @param elections elections this voter is eligible to vote in
+     * @param startTime earliest election start across the batch
+     * @param endTime   latest election end across the batch
      */
     @Async
     public void sendSingleEmail(Voter voter, List<Election> elections,
@@ -502,8 +503,8 @@ public class MessagingService {
      */
     @Async
     public void sendWelcomeEmailWithResend(String recipientEmail, String firstName,
-                                 String createdByName, String organizationName,
-                                 String role, String tempPassword, String loginUrl) {
+                                           String createdByName, String organizationName,
+                                           String role, String tempPassword, String loginUrl) {
         try {
             MimeMessage mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
@@ -537,7 +538,7 @@ public class MessagingService {
 
     @Async
     public void sendTamperingAlertWithResend(String recipientEmail, String recipientName,
-                                   String severity, String summary) {
+                                             String severity, String summary) {
         try {
             MimeMessage mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
@@ -625,14 +626,14 @@ public class MessagingService {
     /**
      * Compose and send a single election-live notification email to one voter(using resend).
      *
-     * @param voter          the recipient
-     * @param elections      elections this voter is eligible to vote in
-     * @param startTime      earliest election start across the batch
-     * @param endTime        latest election end across the batch
+     * @param voter     the recipient
+     * @param elections elections this voter is eligible to vote in
+     * @param startTime earliest election start across the batch
+     * @param endTime   latest election end across the batch
      */
     @Async
     public void sendSingleEmailWithResend(Voter voter, List<Election> elections,
-                                Timestamp startTime, Timestamp endTime)
+                                          Timestamp startTime, Timestamp endTime)
             throws MessagingException {
 
         List<String> electionTitles = elections.stream()
@@ -665,6 +666,8 @@ public class MessagingService {
         helper.setText(htmlContent, true);
 
         log.debug("Sending email to {} for {} election(s)", voter.getEmail(), electionTitles.size());
-        mailSender.send(mime);
+        emailService.sendEmail(
+                voter.getEmail(), subject, htmlContent
+        );
     }
 }
