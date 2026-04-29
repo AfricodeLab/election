@@ -64,23 +64,27 @@ public class AuthService implements IAuthService {
     private final MfaService mfaService;
     private final AuditEmitter auditEmitter;
 
+
+    @Value("${app.email.environment}")
+    private String environment;
+
     @Value("${app.base-url}")
     private String appBaseUrl;
 
     public AuthService(JWTService jwtService,
-            AppUserRepository appUserRepository,
-            PasswordEncoder passwordEncoder,
-            AuthenticationManager authenticationManager,
-            CloudinaryService cloudinaryService,
-            HttpServletRequest request,
-            RoleRepository roleRepository,
-            GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper,
-            OrganizationMapper organizationMapper1, AppUserMapper appUserMapper,
-            OrganizationRepository organizationRepository, RefreshTokenService refreshTokenService,
-            UserOrganizationRepository userOrganizationRepository,
-            MessagingService messagingService,
-            MfaService mfaService,
-            AuditEmitter auditEmitter) {
+                       AppUserRepository appUserRepository,
+                       PasswordEncoder passwordEncoder,
+                       AuthenticationManager authenticationManager,
+                       CloudinaryService cloudinaryService,
+                       HttpServletRequest request,
+                       RoleRepository roleRepository,
+                       GetUser getUser, OrganizationService organizationService, OrganizationMapper organizationMapper,
+                       OrganizationMapper organizationMapper1, AppUserMapper appUserMapper,
+                       OrganizationRepository organizationRepository, RefreshTokenService refreshTokenService,
+                       UserOrganizationRepository userOrganizationRepository,
+                       MessagingService messagingService,
+                       MfaService mfaService,
+                       AuditEmitter auditEmitter) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
@@ -170,10 +174,17 @@ public class AuthService implements IAuthService {
         // Send verification email asynchronously (fire-and-forget; log on failure)
         String verificationUrl = appBaseUrl + "/verify-email?token=" + verificationToken;
         try {
-            messagingService.sendVerificationEmail(
-                    newUser.getAppUserEmail(),
-                    newUser.getFirstName(),
-                    verificationUrl);
+            if(environment.equalsIgnoreCase("development")){
+                messagingService.sendVerificationEmail(
+                        newUser.getAppUserEmail(),
+                        newUser.getFirstName(),
+                        verificationUrl);
+            }else{
+                messagingService.sendVerificationEmailWithResend(
+                        newUser.getAppUserEmail(),
+                        newUser.getFirstName(),
+                        verificationUrl);
+            }
         } catch (MessagingException e) {
             log.error("Failed to send verification email to {}: {}", newUser.getAppUserEmail(), e.getMessage());
         }
@@ -246,10 +257,17 @@ public class AuthService implements IAuthService {
 
         String verificationUrl = appBaseUrl + "/verify-email?token=" + verificationToken;
         try {
-            messagingService.sendVerificationEmail(
-                    user.getAppUserEmail(),
-                    user.getFirstName(),
-                    verificationUrl);
+            if (environment.equalsIgnoreCase("development")) {
+                messagingService.sendVerificationEmail(
+                        user.getAppUserEmail(),
+                        user.getFirstName(),
+                        verificationUrl);
+            }else{
+                messagingService.sendVerificationEmailWithResend(
+                        user.getAppUserEmail(),
+                        user.getFirstName(),
+                        verificationUrl);
+            }
         } catch (MessagingException e) {
             log.error("Failed to resend verification email to {}: {}", user.getAppUserEmail(), e.getMessage());
             throw new RuntimeException("Could not send verification email. Please try again later.");
@@ -267,9 +285,17 @@ public class AuthService implements IAuthService {
             appUserRepository.save(user);
 
             // Point at the frontend reset page, not the API endpoint.
-        // The frontend collects the new password and POSTs to /api/v1/auth/reset-password.
-        String resetUrl = appBaseUrl + "/reset-password?token=" + token;
-            messagingService.sendPasswordResetEmail(user.getAppUserEmail(), user.getFirstName(), resetUrl);
+            // The frontend collects the new password and POSTs to /api/v1/auth/reset-password.
+            String resetUrl = appBaseUrl + "/reset-password?token=" + token;
+            if(environment.equalsIgnoreCase("development")){
+                messagingService.sendPasswordResetEmail(user.getAppUserEmail(),
+                        user.getFirstName(),
+                        resetUrl);
+            }else{
+                messagingService.sendPasswordResetEmailWithResend(user.getAppUserEmail(),
+                        user.getFirstName(),
+                        resetUrl);
+            }
             log.info("Password reset email queued for user {}", user.getAppUserId());
         });
     }
@@ -441,7 +467,7 @@ public class AuthService implements IAuthService {
                 }
                 throw new AccessDeniedException(
                         "ORG_ADMIN cannot create platform-level accounts. " +
-                        "Allowed roles: CONTRIBUTOR, AUDITOR, OBSERVER, VOTER, ORG_ADMIN.");
+                                "Allowed roles: CONTRIBUTOR, AUDITOR, OBSERVER, VOTER, ORG_ADMIN.");
             }
         } else if (callerRole == UserRole.ADMIN) {
             if (requestedRole == UserRole.SUPER_ADMIN) {
@@ -497,15 +523,27 @@ public class AuthService implements IAuthService {
         // Send welcome email with temporary credentials (async — never blocks the response)
         String creatorFullName = creator.getFirstName() + " " + creator.getLastName();
         String orgName = creatorOrg != null ? creatorOrg.getOrganizationName() : creatorOrgName;
-        messagingService.sendWelcomeEmail(
-                newUser.getAppUserEmail(),
-                newUser.getFirstName(),
-                creatorFullName,
-                orgName,
-                newUser.getUserRole().name(),
-                createUserRequest.defaultPassword(),   // plain-text — user must change it immediately
-                appBaseUrl + "/login"
-        );
+        if (environment.equalsIgnoreCase("development")) {
+            messagingService.sendWelcomeEmail(
+                    newUser.getAppUserEmail(),
+                    newUser.getFirstName(),
+                    creatorFullName,
+                    orgName,
+                    newUser.getUserRole().name(),
+                    createUserRequest.defaultPassword(),   // plain-text — user must change it immediately
+                    appBaseUrl + "/login"
+            );
+        }else{
+            messagingService.sendWelcomeEmailWithResend(
+                    newUser.getAppUserEmail(),
+                    newUser.getFirstName(),
+                    creatorFullName,
+                    orgName,
+                    newUser.getUserRole().name(),
+                    createUserRequest.defaultPassword(),   // plain-text — user must change it immediately
+                    appBaseUrl + "/login"
+            );
+        }
 
         if (creatorOrgId != null) {
             auditEmitter.emit(null, "auth.user.created", null, creatorOrgId,

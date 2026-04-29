@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.notifications.service;
 
+import com.brandedhustlers.electionbackend.common.utility.email.EmailService;
 import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
@@ -42,6 +43,10 @@ public class MessagingService {
     private final LaunchElectionRepository launchElectionRepository;
     private final ElectionRepository electionRepository;
     private final EligibleVoterElectionRepository eligibleVoterElectionRepository;
+    private final EmailService emailService;
+
+    @Value("${app.email.environment}")
+    private String environment;
 
     private final String appEmail = dotenv.get("SPRING_MAIL_USERNAME");
 
@@ -59,7 +64,8 @@ public class MessagingService {
                             LaunchRepository launchRepository,
                             LaunchElectionRepository launchElectionRepository,
                             ElectionRepository electionRepository,
-                            EligibleVoterElectionRepository eligibleVoterElectionRepository) {
+                            EligibleVoterElectionRepository eligibleVoterElectionRepository,
+                            EmailService emailService) {
         this.mailSender = mailSender;
         this.voterRepository = voterRepository;
         this.templateEngine = templateEngine;
@@ -67,6 +73,7 @@ public class MessagingService {
         this.launchElectionRepository = launchElectionRepository;
         this.electionRepository = electionRepository;
         this.eligibleVoterElectionRepository = eligibleVoterElectionRepository;
+        this.emailService = emailService;
     }
 
     /**
@@ -235,7 +242,11 @@ public class MessagingService {
                     .orElse(null);
 
             try {
-                sendSingleEmail(voter, voterElections, earliestStart, latestEnd);
+                if(environment.equalsIgnoreCase("development")){
+                    sendSingleEmail(voter, voterElections, earliestStart, latestEnd);
+                }else{
+                    sendSingleEmailWithResend(voter, voterElections, earliestStart, latestEnd);
+                }
                 successCount++;
             } catch (Exception e) {
                 failureCount++;
@@ -448,6 +459,212 @@ public class MessagingService {
         helper.setSubject("Your verification code");
         helper.setText(text, html);
 
+        mailSender.send(mime);
+    }
+
+    //Resend variations
+
+    @Async
+    public void sendOtpEmailWithResend(String recipientEmail, String recipientName, String otp) throws MessagingException {
+        MimeMessage mime = mailSender.createMimeMessage();
+        MimeMessageHelper helper =
+                new MimeMessageHelper(mime, true, "UTF-8");
+
+        Context ctx = new Context();
+        ctx.setVariable("recipient_name", recipientName);
+        ctx.setVariable("otp", otp);
+
+
+        String html = templateEngine.process("OtpEmail", ctx);
+
+        String text = html
+                .replaceAll("(?i)<br\\s*/?>", "\n")
+                .replaceAll("(?i)</p>", "\n\n")
+                .replaceAll("<[^>]+>", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+
+        helper.setFrom(appEmail);
+        helper.setTo(recipientEmail);
+        helper.setSubject("Your verification code");
+        helper.setText(text, html);
+
+        emailService.sendEmail(
+                recipientEmail,
+                "Your verification code",
+                html
+        );
+    }
+
+    /**
+     * Sends an admin-provisioned account welcome email containing the user's
+     * temporary credentials and a prompt to change their password on first login (using the resend API instead of google SMTP.
+     */
+    @Async
+    public void sendWelcomeEmailWithResend(String recipientEmail, String firstName,
+                                 String createdByName, String organizationName,
+                                 String role, String tempPassword, String loginUrl) {
+        try {
+            MimeMessage mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+
+            Context ctx = new Context();
+            ctx.setVariable("firstName", firstName);
+            ctx.setVariable("email", recipientEmail);
+            ctx.setVariable("createdByName", createdByName);
+            ctx.setVariable("organizationName", organizationName);
+            ctx.setVariable("role", role);
+            ctx.setVariable("tempPassword", tempPassword);
+            ctx.setVariable("loginUrl", loginUrl);
+
+            String html = templateEngine.process("UserWelcome", ctx);
+
+            helper.setFrom(appEmail);
+            helper.setTo(recipientEmail);
+            helper.setSubject("Your account has been created — " + organizationName);
+            helper.setText(html, true);
+
+            emailService.sendEmail(
+                    recipientEmail,
+                    helper.getMimeMessage().getSubject(),
+                    html
+            );
+            log.info("Welcome email sent to {} (provisioned by {})", recipientEmail, createdByName);
+        } catch (Exception e) {
+            log.error("Failed to send welcome email to {}: {}", recipientEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendTamperingAlertWithResend(String recipientEmail, String recipientName,
+                                   String severity, String summary) {
+        try {
+            MimeMessage mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+            helper.setFrom(appEmail);
+            helper.setTo(recipientEmail);
+            helper.setSubject("[" + severity + "] Vote Tampering Detected");
+
+            // HTML-escape dynamic values to prevent HTML injection in outbound email.
+            // summary is plain text (newline-delimited); convert \n to <br/> after escaping.
+            String safeName = org.springframework.web.util.HtmlUtils.htmlEscape(recipientName);
+            String safeSummary = org.springframework.web.util.HtmlUtils.htmlEscape(summary)
+                    .replace("\n", "<br/>");
+            String headerColor = "CRITICAL".equals(severity) ? "#c0392b" : "#e67e22";
+
+            String body = "<html><body style='font-family:sans-serif'>"
+                    + "<h2 style='color:" + headerColor + "'>"
+                    + severity + ": Vote Tampering Detected</h2>"
+                    + "<p>Hi " + safeName + ",</p>"
+                    + "<p>" + safeSummary + "</p>"
+                    + "<p>Log in to the admin panel immediately to review the audit trail.</p>"
+                    + "<hr/><small>This is an automated security alert from the Election Platform.</small>"
+                    + "</body></html>";
+
+            helper.setText(body, true);
+            mailSender.send(mime);
+            log.warn("Tampering alert sent to {} [{}]", recipientEmail, severity);
+        } catch (Exception e) {
+            log.error("Failed to send tampering alert to {}: {}", recipientEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendPasswordResetEmailWithResend(String recipientEmail, String firstName, String resetUrl) {
+        try {
+            MimeMessage mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+
+            Context ctx = new Context();
+            ctx.setVariable("firstName", firstName);
+            ctx.setVariable("resetUrl", resetUrl);
+
+            String html = templateEngine.process("PasswordReset", ctx);
+
+            helper.setFrom(appEmail);
+            helper.setTo(recipientEmail);
+            helper.setSubject("Reset your password");
+            helper.setText(html, true);
+
+            emailService.sendEmail(
+                    recipientEmail,
+                    "Reset your password",
+                    html);
+
+            log.info("Password reset email sent to {}", recipientEmail);
+        } catch (Exception e) {
+            log.error("Failed to send password reset email to {}: {}", recipientEmail, e.getMessage());
+        }
+    }
+
+    @Async
+    public void sendVerificationEmailWithResend(String recipientEmail, String firstName, String verificationUrl)
+            throws MessagingException {
+        MimeMessage mime = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+
+        Context ctx = new Context();
+        ctx.setVariable("firstName", firstName);
+        ctx.setVariable("verificationUrl", verificationUrl);
+
+        String html = templateEngine.process("EmailVerification", ctx);
+
+        helper.setFrom(appEmail);
+        helper.setTo(recipientEmail);
+        helper.setSubject("Verify your email address");
+        helper.setText(html, true);
+
+        emailService.sendEmail(
+                recipientEmail,
+                "Verify your email address",
+                html
+        );
+        log.info("Verification email sent to {}", recipientEmail);
+    }
+
+    /**
+     * Compose and send a single election-live notification email to one voter(using resend).
+     *
+     * @param voter          the recipient
+     * @param elections      elections this voter is eligible to vote in
+     * @param startTime      earliest election start across the batch
+     * @param endTime        latest election end across the batch
+     */
+    @Async
+    public void sendSingleEmailWithResend(Voter voter, List<Election> elections,
+                                Timestamp startTime, Timestamp endTime)
+            throws MessagingException {
+
+        List<String> electionTitles = elections.stream()
+                .map(Election::getElectionTitle)
+                .toList();
+
+        // Single portal link — voters authenticate once and see all eligible elections.
+        String portalUrl = appBaseUrl + "/portal";
+
+        MimeMessage mime = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mime, true, "UTF-8");
+
+        Context context = new Context();
+        context.setVariable("voterName", voter.getName());
+        context.setVariable("electionTitles", electionTitles);
+        context.setVariable("portalUrl", portalUrl);
+        context.setVariable("startTime", startTime);
+        context.setVariable("endTime", endTime);
+
+        String htmlContent = templateEngine.process("ElectionLive", context);
+
+        helper.setFrom(appEmail);
+        helper.setTo(voter.getEmail());
+
+        String subject = electionTitles.size() == 1
+                ? "Election Now Live: " + electionTitles.getFirst()
+                : "Elections Now Live: " + electionTitles.size() + " Elections";
+
+        helper.setSubject(subject);
+        helper.setText(htmlContent, true);
+
+        log.debug("Sending email to {} for {} election(s)", voter.getEmail(), electionTitles.size());
         mailSender.send(mime);
     }
 }

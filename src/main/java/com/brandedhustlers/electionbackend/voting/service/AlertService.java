@@ -10,6 +10,7 @@ import com.brandedhustlers.electionbackend.election.domain.Election;
 import com.brandedhustlers.electionbackend.notifications.service.MessagingService;
 import com.brandedhustlers.electionbackend.voting.domain.TamperingLog;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -25,6 +26,9 @@ public class AlertService {
 
     private static final Set<UserRole> ALERT_ROLES =
             Set.of(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.ORG_ADMIN);
+
+    @Value("app.email.environment")
+    private String environment;
 
     public AlertService(MessagingService messagingService,
                         AppUserRepository appUserRepository,
@@ -102,12 +106,21 @@ public class AlertService {
             return;
         }
 
-        admins.forEach(admin ->
-                messagingService.sendTamperingAlert(
-                        admin.getAppUserEmail(),
-                        admin.getFirstName(),
-                        severity,
-                        summary));
+        if (environment.equalsIgnoreCase("development")) {
+            admins.forEach(admin ->
+                    messagingService.sendTamperingAlert(
+                            admin.getAppUserEmail(),
+                            admin.getFirstName(),
+                            severity,
+                            summary));
+        }else{
+            admins.forEach(admin ->
+                    messagingService.sendTamperingAlertWithResend(
+                            admin.getAppUserEmail(),
+                            admin.getFirstName(),
+                            severity,
+                            summary));
+        }
     }
 
     private String buildTamperingSummary(UUID orgId, long critical, long restored) {

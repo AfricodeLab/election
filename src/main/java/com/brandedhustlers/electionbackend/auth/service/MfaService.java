@@ -10,6 +10,7 @@ import com.brandedhustlers.electionbackend.notifications.service.MessagingServic
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.mail.MessagingException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -39,6 +40,9 @@ public class MfaService {
     private final ObjectMapper objectMapper;
     private final SecureRandom rng = new SecureRandom();
 
+    @Value("${app.email.environment}")
+    private String environment;
+
     public MfaService(AppUserRepository appUserRepository,
                       MessagingService messagingService,
                       JWTService jwtService,
@@ -65,7 +69,13 @@ public class MfaService {
         storeOtp(userId, new OtpEntry(sha256(otp), 0));
 
         try {
-            messagingService.sendOtpEmail(user.getAppUserEmail(), user.getFirstName(), otp);
+            if(environment.equalsIgnoreCase("development")){
+                messagingService.sendOtpEmail(user.getAppUserEmail(),
+                        user.getFirstName(), otp);
+            }else{
+                messagingService.sendOtpEmailWithResend(user.getAppUserEmail(),
+                        user.getFirstName(), otp);
+            }
         } catch (MessagingException e) {
             log.error("Failed to send MFA OTP to {}: {}", user.getAppUserEmail(), e.getMessage());
         }
