@@ -24,7 +24,10 @@ import com.brandedhustlers.electionbackend.ops.exception.OrgMismatch;
 import com.brandedhustlers.electionbackend.ops.mappers.LaunchMapper;
 import com.brandedhustlers.electionbackend.ops.repository.LaunchElectionRepository;
 import com.brandedhustlers.electionbackend.ops.repository.LaunchRepository;
+import com.brandedhustlers.electionbackend.common.config.cache.CacheNames;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -55,6 +58,8 @@ public class LaunchService {
     private final ElectionService electionService;
     private final EligibilitySnapshotService eligibilitySnapshotService;
     private final Util util;
+    private final LaunchCacheDelegate launchCacheDelegate;
+    private final CacheManager cacheManager;
 
 
     public LaunchService(LaunchRepository launchRepository,
@@ -64,7 +69,8 @@ public class LaunchService {
                          AuditEmitter auditEmitter,
                          ElectionRepository electionRepository,
                          ElectionMapper electionMapper, GetUser getUser, ElectionService electionService,
-                         EligibilitySnapshotService eligibilitySnapshotService, Util util) {
+                         EligibilitySnapshotService eligibilitySnapshotService, Util util,
+                         LaunchCacheDelegate launchCacheDelegate, CacheManager cacheManager) {
         this.launchRepository = launchRepository;
         this.links = links;
         this.launchMapper = launchMapper;
@@ -76,6 +82,28 @@ public class LaunchService {
         this.electionService = electionService;
         this.eligibilitySnapshotService = eligibilitySnapshotService;
         this.util = util;
+        this.launchCacheDelegate = launchCacheDelegate;
+        this.cacheManager = cacheManager;
+    }
+
+    // ── Cache eviction helpers ────────────────────────────────────────────────
+    private void evictLaunchCaches(UUID orgId, UUID launchId) {
+        Cache listCache = cacheManager.getCache(CacheNames.LAUNCHES);
+        if (listCache != null) listCache.evict(orgId.toString());
+        if (launchId != null) {
+            Cache detailCache = cacheManager.getCache(CacheNames.LAUNCH);
+            if (detailCache != null) detailCache.evict(orgId + "::" + launchId);
+        }
+    }
+
+    // Evicts election caches when a launch operation changes elections (attach/detach/go-live).
+    private void evictElectionCaches(UUID orgId, UUID electionId) {
+        Cache listCache = cacheManager.getCache(CacheNames.ELECTIONS);
+        if (listCache != null) listCache.evict(orgId.toString());
+        if (electionId != null) {
+            Cache detailCache = cacheManager.getCache(CacheNames.ELECTION);
+            if (detailCache != null) detailCache.evict(orgId + "::" + electionId);
+        }
     }
 
 
@@ -142,54 +170,29 @@ public class LaunchService {
                 1
         );
 
+        evictLaunchCaches(orgId, null); // new launch invalidates the list
+
         return launchMapper.entityToDto(saved);
     }
 
 
+    /** Org-scoped read with caching — delegates to {@link LaunchCacheDelegate}. */
     public GetLaunch get(UUID orgId, UUID launchId) {
-        Optional<Launch> launch = launchRepository.findByLaunchId(launchId)
-                .filter(l -> l.getOrgId().equals(orgId));
-        if (launch.isEmpty()) {
-            throw new LaunchNotfound("Launch with ID: " + launchId + " for org with ID: " + orgId + " not found.");
-        }
-
-        Launch validLaunch = launch.get();
-        List<ElectionDTO> electionsAssociatedWithLaunch = links.findByIdLaunchId(launchId)
-                .stream()
-                .map(LaunchElection::getId)
-                .map(LaunchElectionId ::getElectionId)
-                .map(electionRepository::findById)
-                .flatMap(Optional::stream)
-                .map(electionMapper::entityToDto)
-                .toList();
-
-
-
-        return new GetLaunch(
-                validLaunch.getId(),
-                validLaunch.getOrgId(),
-                validLaunch.getName(),
-                validLaunch.getDescription(),
-                validLaunch.getStatus(),
-                validLaunch.getStartAt(),
-                validLaunch.getEndAt(),
-                validLaunch.getCreatedAt(),
-                electionsAssociatedWithLaunch
-        );
+        return launchCacheDelegate.getLaunchById(orgId, launchId);
     }
 
-
+    /**
+     * Returns a paginated view of the org's launches, optionally filtered by status.
+     * The full list is fetched (and cached) once via the delegate; status filtering
+     * and pagination are applied in-memory so all variants share one cache entry per org.
+     */
     public Page<LaunchDto> list(UUID orgId, LaunchStatus status, Pageable pageable) {
-
-        List<Launch> base = (status == null) ? launchRepository.findAll() : launchRepository.findByOrgIdAndStatus(orgId, status);
-
-        List<LaunchDto> launchDtos = base.stream()
-                .filter(launch -> launch.getOrgId().equals(orgId))
-                .filter(launch -> launch.getDeleteYn().equals(DeleteYn.N))
-                .map(launchMapper::entityToDto)
-                .toList();
-
-        return new PageImpl<>(launchDtos, pageable, launchDtos.size());
+        List<LaunchDto> all = launchCacheDelegate.getLaunchList(orgId);
+        List<LaunchDto> filtered = (status == null) ? all
+                : all.stream().filter(l -> status.equals(l.status())).toList();
+        int start = (int) pageable.getOffset();
+        int end   = Math.min(start + pageable.getPageSize(), filtered.size());
+        return new PageImpl<>(filtered.subList(start, end), pageable, filtered.size());
     }
 
 
@@ -244,6 +247,11 @@ public class LaunchService {
         String ip = null;
         String ua = null;
 
+        // Evict the launch detail + list (linked elections changed).
+        // Also evict each election's cache since their launch field was updated.
+        evictLaunchCaches(orgId, launchId);
+        electionIds.forEach(eid -> evictElectionCaches(orgId, eid));
+
         auditEmitter.emit(
                 null,
                 "ops.launch.election_attached",
@@ -280,10 +288,17 @@ public class LaunchService {
             throw new DisallowedAction("Cannot detach on COMPLETED");
         }
 
-        for (UUID eid : electionIds) {
-            LaunchElectionId id = new LaunchElectionId(launchId, eid);
-            links.findById(id).ifPresent(links::delete);
-        }
+        // Batch delete — one DELETE ... WHERE id IN (...) instead of N individual
+        // findById + delete pairs (each pair was two round-trips to the DB).
+        List<UUID> idsToDelete = electionIds.stream()
+                .map(eid -> new LaunchElectionId(launchId, eid))
+                .map(LaunchElectionId::getElectionId)
+                .toList();
+        links.deleteByLaunchIdAndElectionIdIn(launchId, idsToDelete);
+
+        // Evict the launch detail + list, and each detached election's cache
+        evictLaunchCaches(orgId, launchId);
+        electionIds.forEach(eid -> evictElectionCaches(orgId, eid));
 
         UUID actorId = actor.getAppUserId();
         String actorName = actor.getFirstName();
@@ -361,6 +376,13 @@ public class LaunchService {
         }
 
         Launch transition = launchRepository.save(l);
+
+        // Launch status changed — always evict launch caches
+        evictLaunchCaches(orgId, launchId);
+        // PLANNED→ACTIVE: each election also transitioned to LIVE, evict their caches
+        if (status == LaunchStatus.ACTIVE) {
+            transition.getElection().forEach(e -> evictElectionCaches(orgId, e.getElectionId()));
+        }
 
         UUID actorId = actor.getAppUserId();
         String actorName = actor.getFirstName() + " " + actor.getLastName();

@@ -19,7 +19,17 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
 
     boolean existsByElectionTitleAndOrganization(String s, Organization appUserOrganization);
 
-    @Query("select e from Election e where e.organization.organizationId = :organizationId")
+    /**
+     * Loads all elections for an org together with their candidates in one SQL join.
+     * DISTINCT prevents duplicate Election rows from the LEFT JOIN.
+     * Without this, the LAZY candidates collection would trigger N+1 queries
+     * (one SELECT per election) whenever the DTO mapper accesses candidates.
+     */
+    @Query("""
+        SELECT DISTINCT e FROM Election e
+        LEFT JOIN FETCH e.candidates
+        WHERE e.organization.organizationId = :organizationId
+        """)
     List<Election> findByOrganizationId(UUID organizationId);
 
     @Query("select e.electionTitle from Election e where e.electionId = :electionId")
@@ -116,6 +126,18 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
 
     @Query("select e from Election e where e.electionId = :electionId and e.deleteYn = 'N'")
     Optional<Election> findByElectionId(UUID electionId);
+
+    /**
+     * Loads a single election together with its candidates in one SQL join.
+     * Used by the detail endpoint so that the LAZY candidates collection is
+     * initialised without triggering a secondary SELECT after the transaction closes.
+     */
+    @Query("""
+        SELECT DISTINCT e FROM Election e
+        LEFT JOIN FETCH e.candidates
+        WHERE e.electionId = :electionId
+        """)
+    Optional<Election> findByElectionIdWithCandidates(@Param("electionId") UUID electionId);
 
     @Query("select e.organization from Election e where e.electionId = :electionId")
     Organization getElectionOrganization(UUID electionId);

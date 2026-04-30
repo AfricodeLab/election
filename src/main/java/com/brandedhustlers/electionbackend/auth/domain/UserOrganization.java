@@ -25,7 +25,9 @@ public class UserOrganization {
     @JoinColumn(name = "app_user_id", nullable = false)
     private AppUser appUser;
 
-    @ManyToOne(fetch = FetchType.EAGER)
+    // LAZY: organization is fetched together with userOrganizations via JOIN FETCH
+    // in the auth load path; everywhere else it is loaded on demand within a transaction.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "organization_id", nullable = false)
     private Organization organization;
 

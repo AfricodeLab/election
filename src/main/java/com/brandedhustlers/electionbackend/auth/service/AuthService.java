@@ -27,6 +27,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import com.brandedhustlers.electionbackend.common.config.cache.CacheNames;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
@@ -63,6 +66,8 @@ public class AuthService implements IAuthService {
     private final MessagingService messagingService;
     private final MfaService mfaService;
     private final AuditEmitter auditEmitter;
+    private final UserCacheDelegate userCacheDelegate;
+    private final CacheManager cacheManager;
 
 
     @Value("${app.email.environment}")
@@ -84,7 +89,9 @@ public class AuthService implements IAuthService {
                        UserOrganizationRepository userOrganizationRepository,
                        MessagingService messagingService,
                        MfaService mfaService,
-                       AuditEmitter auditEmitter) {
+                       AuditEmitter auditEmitter,
+                       UserCacheDelegate userCacheDelegate,
+                       CacheManager cacheManager) {
         this.jwtService = jwtService;
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
@@ -102,6 +109,8 @@ public class AuthService implements IAuthService {
         this.messagingService = messagingService;
         this.mfaService = mfaService;
         this.auditEmitter = auditEmitter;
+        this.userCacheDelegate = userCacheDelegate;
+        this.cacheManager = cacheManager;
     }
 
     @Override
@@ -552,18 +561,22 @@ public class AuthService implements IAuthService {
                     "Auth", newUser.getAppUserId(), null, "Auth", null, null, null, "INFO", 1);
         }
 
+        // New user added to org — invalidate the org user list cache
+        if (creatorOrgId != null) {
+            Cache orgUsersCache = cacheManager.getCache(CacheNames.ORG_USERS);
+            if (orgUsersCache != null) orgUsersCache.evict(creatorOrgId.toString());
+        }
+
         return new CreateUserResponse(
                 true,
                 newUser.getUserRole().name());
     }
 
     public Page<AppUserDTO> getUsers(UUID orgId, Pageable pageable) {
-        List<AppUserDTO> appUsers = appUserRepository.getUsersInOrg(orgId)
-                .stream()
-                .map(appUserMapper::entityToDTO)
-                .toList();
-
-        return new PageImpl<>(appUsers, pageable, appUsers.size());
+        List<AppUserDTO> all = userCacheDelegate.getUserList(orgId);
+        int start = (int) pageable.getOffset();
+        int end   = Math.min(start + pageable.getPageSize(), all.size());
+        return new PageImpl<>(all.subList(start, end), pageable, all.size());
     }
 
     /**

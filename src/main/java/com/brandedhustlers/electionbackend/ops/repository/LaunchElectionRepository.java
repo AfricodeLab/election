@@ -3,6 +3,7 @@ package com.brandedhustlers.electionbackend.ops.repository;
 import com.brandedhustlers.electionbackend.ops.domain.LaunchElection;
 import com.brandedhustlers.electionbackend.ops.domain.LaunchElectionId;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
@@ -19,4 +20,11 @@ public interface LaunchElectionRepository extends JpaRepository<LaunchElection, 
 
     @Query("select le from LaunchElection le where le.id in :ids")
     List<LaunchElection> findAllById(List<LaunchElectionId> ids);
+
+    @Modifying
+    @Query("""
+            delete from LaunchElection le where le.id.launchId = :launchId
+                        and le.id.electionId in :idsToDelete
+            """)
+    void deleteByLaunchIdAndElectionIdIn(UUID launchId, List<UUID> idsToDelete);
 }

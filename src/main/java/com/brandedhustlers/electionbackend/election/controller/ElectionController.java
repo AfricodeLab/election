@@ -94,7 +94,13 @@ public class ElectionController {
 
     @GetMapping("/{electionId}")
     public ResponseEntity<?> getElection(@PathVariable UUID electionId) {
-        return ResponseEntity.ok(electionService. getElectionById(electionId));
+        UUID orgId = getUser.getCurrentAuthenticatedUserOrgId();
+        if (orgId == null) {
+            return ResponseEntity.status(403).body(Map.of(
+                    "status", "forbidden",
+                    "message", "No active organization. Please join or switch to an organization first."));
+        }
+        return ResponseEntity.ok(electionService.getElectionById(orgId, electionId));
     }
 
     @GetMapping("/get-all")

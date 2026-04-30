@@ -16,7 +16,20 @@ public interface AppUserRepository extends JpaRepository<AppUser, UUID> {
     @Query("select a from AppUser a where a.appUserEmail = :userEmail")
     Optional<AppUser> findByAppUserEmail(String userEmail);
 
-    @Query("select a from AppUser a where a.appUserEmail = :query or a.username = :query")
+    /**
+     * Used by CustomUserDetailsService on every authenticated request.
+     * JOIN FETCH loads roles → permissions and userOrganizations → organization
+     * in a single SQL query (two joins on Set collections — no MultipleBagFetchException).
+     * DISTINCT prevents Hibernate returning duplicate AppUser rows from the Cartesian join.
+     */
+    @Query("""
+        SELECT DISTINCT u FROM AppUser u
+        LEFT JOIN FETCH u.roles r
+        LEFT JOIN FETCH r.rolePermissions
+        LEFT JOIN FETCH u.userOrganizations uo
+        LEFT JOIN FETCH uo.organization
+        WHERE u.appUserEmail = :query OR u.username = :query
+        """)
     Optional<AppUser> findByUsernameOrEmail(String query);
 
     boolean existsByUsername(String username);

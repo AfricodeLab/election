@@ -15,7 +15,10 @@ import com.brandedhustlers.electionbackend.election.repository.CandidateReposito
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.service.AlertService;
 import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
+import com.brandedhustlers.electionbackend.common.config.cache.CacheNames;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,6 +35,7 @@ public class CandidateService {
     private final AlertService alertService;
     private final CandidateMapper candidateMapper;
     private final Util util;
+    private final CacheManager cacheManager;
 
     public CandidateService(
             CandidateRepository candidateRepo,
@@ -39,13 +43,15 @@ public class CandidateService {
             ConfigSnapshotService snapshotService,
             AlertService alertService,
             CandidateMapper candidateMapper,
-            Util util) {
+            Util util,
+            CacheManager cacheManager) {
         this.candidateRepo = candidateRepo;
         this.electionRepo = electionRepo;
         this.snapshotService = snapshotService;
         this.alertService = alertService;
         this.candidateMapper = candidateMapper;
         this.util = util;
+        this.cacheManager = cacheManager;
     }
 
     /**
@@ -144,6 +150,15 @@ public class CandidateService {
 
             log.info("Candidate {} updated (election not live)", candidateId);
         }
+
+        // Candidate changed — invalidate the election detail and org elections list.
+        // We have the election object in scope, so we can evict with the exact key.
+        UUID orgId = election.getOrganization().getOrganizationId();
+        UUID electionId = election.getElectionId();
+        Cache listCache   = cacheManager.getCache(CacheNames.ELECTIONS);
+        Cache detailCache = cacheManager.getCache(CacheNames.ELECTION);
+        if (listCache   != null) listCache.evict(orgId.toString());
+        if (detailCache != null) detailCache.evict(orgId + "::" + electionId);
 
         return candidateMapper.entityToDTO(candidate);
     }

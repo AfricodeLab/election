@@ -57,7 +57,11 @@ public class AppUser {
     @Convert(attributeName = "userPreferences", converter = UserPreferencesConverter.class)
     private Map<String, String> userPreferences;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    // LAZY: roles + permissions are only needed inside CustomUserDetailsService
+    // (which uses a JOIN FETCH query) and Util.authorityCheck (which runs inside
+    // a @Transactional boundary). Loading them EAGER was the single biggest cost
+    // on every JWT filter pass — an extra 2-3 queries per request.
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "app_user_roles",
             joinColumns = @JoinColumn(name = "user_id"),
@@ -108,7 +112,10 @@ public class AppUser {
     @Column(nullable = false)
     private boolean mustChangePassword = false;
 
-    @OneToMany(mappedBy = "appUser", fetch = FetchType.EAGER)
+    // LAZY: the active-org lookup is needed in getActiveOrganization(), which is
+    // called within @Transactional contexts. The JOIN FETCH in findByUsernameOrEmail
+    // pre-loads this collection on the auth path; elsewhere it is loaded on demand.
+    @OneToMany(mappedBy = "appUser", fetch = FetchType.LAZY)
     @Builder.Default
     private Set<UserOrganization> userOrganizations = new HashSet<>();
 

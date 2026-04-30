@@ -30,8 +30,11 @@ public class ElectionMapper {
                     t.getCreatedAt());
         }
 
+        // new ArrayList<>() instead of List.of() — List.of() returns ImmutableCollections$List0
+        // (final class), which Jackson's NON_FINAL typing skips, breaking WRAPPER_ARRAY
+        // serialization when this ElectionDTO is stored in Redis cache.
         List<CandidateDTO> candidateDTOs = election.getCandidates() == null
-                ? List.of()
+                ? new java.util.ArrayList<>()
                 : election.getCandidates().stream()
                         .map(this::candidateToDto)
                         .collect(Collectors.toList());

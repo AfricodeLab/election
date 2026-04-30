@@ -29,7 +29,10 @@ public class Role {
     @Column(name = "org_id")
     private UUID orgId;
 
-    @ManyToMany(fetch = FetchType.EAGER)
+    // LAZY: permissions are only accessed inside CustomUserDetailsService (JOIN FETCH
+    // query) and Util.authorityCheck (@Transactional). Loading them EAGER caused an
+    // extra query per Role per user load — multiplied across every request.
+    @ManyToMany(fetch = FetchType.LAZY)
     @JoinTable(
             name = "auth_role_permissions",
             joinColumns = @JoinColumn(name = "role_id"),

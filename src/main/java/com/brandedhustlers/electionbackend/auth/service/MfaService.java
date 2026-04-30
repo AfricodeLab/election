@@ -57,7 +57,7 @@ public class MfaService {
         this.objectMapper = objectMapper;
     }
 
-    /**
+        /**
      * Generates a 6-digit OTP, stores it (hashed) in Redis with a 10-min TTL,
      * sends it by email, and returns a short-lived MFA-pending JWT.
      */

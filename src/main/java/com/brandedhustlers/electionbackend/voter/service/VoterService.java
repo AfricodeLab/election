@@ -141,6 +141,7 @@ public class VoterService implements IVoterService {
         return voterMapper.entityToDto(newVoter);
     }
 
+    @Transactional(readOnly = true)
     public Page<VoterDTO> getOrgVoters(Pageable pageable) {
         UUID voterOrg = getUser.getCurrentAuthenticatedUserOrgId();
 
@@ -153,6 +154,7 @@ public class VoterService implements IVoterService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public VoterDTO getById(UUID orgId, UUID voterId) {
         // findVoterByIdAndOrgId enforces org isolation via JPQL — no separate check needed
         Voter voter = voterRepository.findVoterByIdAndOrgId(voterId, orgId)
@@ -161,6 +163,7 @@ public class VoterService implements IVoterService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public List<VoterDTO> search(UUID orgId, String q, int limit) {
         if (q == null || q.isBlank()) {
             return List.of();

@@ -22,6 +22,7 @@ import com.brandedhustlers.electionbackend.election.exception.ElectionNotFound;
 import com.brandedhustlers.electionbackend.election.mapper.CandidateMapper;
 import com.brandedhustlers.electionbackend.election.mapper.ElectionMapper;
 import com.brandedhustlers.electionbackend.election.repository.CandidateRepository;
+import com.brandedhustlers.electionbackend.common.config.cache.CacheNames;
 import com.brandedhustlers.electionbackend.election.repository.ElectionPresetRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionTypeRepository;
@@ -30,7 +31,9 @@ import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import com.brandedhustlers.electionbackend.voting.service.ConfigAnchorService;
 import com.brandedhustlers.electionbackend.voting.service.ConfigSnapshotService;
 import jakarta.servlet.http.HttpServletRequest;
-import jakarta.transaction.Transactional;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.data.domain.Page;
@@ -64,6 +67,8 @@ public class ElectionService implements IElectionService {
     private final VoterRepository voterRepository;
     private final EligibilitySnapshotService eligibilitySnapshotService;
     private final RabbitTemplate rabbitTemplate;
+    private final ElectionCacheDelegate electionCacheDelegate;
+    private final CacheManager cacheManager;
 
     public ElectionService(ElectionRepository electionRepository,
                            JWTService jwtService,
@@ -82,7 +87,9 @@ public class ElectionService implements IElectionService {
                            ElectionPresetRepository electionPresetRepository,
                            EligibilityService eligibilityService,
                            EligibilitySnapshotService eligibilitySnapshotService,
-                           RabbitTemplate rabbitTemplate) {
+                           RabbitTemplate rabbitTemplate,
+                           ElectionCacheDelegate electionCacheDelegate,
+                           CacheManager cacheManager) {
         this.electionRepository = electionRepository;
         this.util = util;
         this.electionMapper = electionMapper;
@@ -99,6 +106,20 @@ public class ElectionService implements IElectionService {
         this.voterRepository = voterRepository;
         this.eligibilitySnapshotService = eligibilitySnapshotService;
         this.rabbitTemplate = rabbitTemplate;
+        this.electionCacheDelegate = electionCacheDelegate;
+        this.cacheManager = cacheManager;
+    }
+
+    // ── Cache eviction helper ─────────────────────────────────────────────────
+    // Programmatic eviction lets us use local variables (orgId, electionId) that
+    // are available inside write methods but can't be expressed in @CacheEvict SpEL.
+    private void evictElectionCaches(UUID orgId, UUID electionId) {
+        Cache listCache = cacheManager.getCache(CacheNames.ELECTIONS);
+        if (listCache != null) listCache.evict(orgId.toString());
+        if (electionId != null) {
+            Cache detailCache = cacheManager.getCache(CacheNames.ELECTION);
+            if (detailCache != null) detailCache.evict(orgId + "::" + electionId);
+        }
     }
 
     @Override
@@ -214,6 +235,9 @@ public class ElectionService implements IElectionService {
                 "INFO",
                 1);
 
+        // New election changes the list for this org
+        evictElectionCaches(electionOrg.getOrganizationId(), election.getElectionId());
+
         return electionMapper.entityToDto(
                 election);
     }
@@ -268,6 +292,8 @@ public class ElectionService implements IElectionService {
                 ua,
                 "INFO",
                 1);
+
+        evictElectionCaches(updated.getOrganization().getOrganizationId(), updated.getElectionId());
 
         return electionMapper.entityToDto(
                 updated);
@@ -354,6 +380,8 @@ public class ElectionService implements IElectionService {
                 "INFO",
                 1);
 
+        evictElectionCaches(statChange.getOrganization().getOrganizationId(), statChange.getElectionId());
+
         return electionMapper.entityToDto(statChange);
     }
 
@@ -385,6 +413,8 @@ public class ElectionService implements IElectionService {
 
         log.info("Election auto-closed [id={}, title='{}', reason={}]",
                 saved.getElectionId(), saved.getElectionTitle(), reason);
+
+        evictElectionCaches(saved.getOrganization().getOrganizationId(), saved.getElectionId());
 
         auditEmitter.emit(
                 null,
@@ -472,29 +502,33 @@ public class ElectionService implements IElectionService {
                 "INFO",
                 1);
 
+        // Candidate change invalidates both the detail and the org elections list
+        evictElectionCaches(addCandidate.getOrganization().getOrganizationId(),
+                addCandidate.getElectionId());
+
         return electionMapper.entityToDto(
                 addCandidate);
     }
 
-    @Transactional
-    public ElectionDTO getElectionById(UUID electionId) {
-        Election election = electionRepository.findById(electionId)
-                .orElseThrow(() -> new com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound(
-                        "Election not found: " + electionId));
-        return electionMapper.entityToDto(election);
+    /** Org-scoped read with caching — delegates to {@link ElectionCacheDelegate}. */
+    public ElectionDTO getElectionById(UUID orgId, UUID electionId) {
+        return electionCacheDelegate.getElectionById(orgId, electionId);
     }
 
-//    @org.springframework.cache.annotation.Cacheable(value = "elections", key = "#organizationId")
-    @Transactional
+    /**
+     * Returns a paginated view of the org's elections.
+     * The full list is fetched (and cached) once via the delegate; pagination is
+     * applied in-memory so every page request after the first is served from Redis.
+     */
     public Page<ElectionDTO> getElectionsByOrg(UUID organizationId, Pageable pageable) {
-        List<ElectionDTO> elections = electionRepository.findByOrganizationId(organizationId)
-                .stream()
-                .map(electionMapper::entityToDto)
-                .toList();
-        return new PageImpl<>(elections, pageable, elections.size());
+        List<ElectionDTO> all = electionCacheDelegate.getElectionList(organizationId);
+        int start = (int) pageable.getOffset();
+        int end   = Math.min(start + pageable.getPageSize(), all.size());
+        return new PageImpl<>(all.subList(start, end), pageable, all.size());
     }
 
 //    @org.springframework.cache.annotation.Cacheable(value = "liveElections")
+    @Transactional(readOnly = true)
     public Page<ElectionDTO> getLiveElectionForVoterOrg(Pageable pageable) {
 
         Voter currentVoter = getUser.getCurrentAuthenticatedVoter();
@@ -560,6 +594,8 @@ public class ElectionService implements IElectionService {
                 "Election", savedLive.getElectionId(), savedLive.getElectionTitle(),
                 "WEB", null, null, null, "INFO", 1);
 
+        evictElectionCaches(savedLive.getOrganization().getOrganizationId(), electionId);
+
         log.info("Election {} transitioned to LIVE, config anchored", electionId);
 
         // Step 4: Voter notification — only for standalone elections.
@@ -586,6 +622,7 @@ public class ElectionService implements IElectionService {
      *
      * @return {allowed, reason} — reason is null when allowed=true
      */
+    @Transactional(readOnly = true)
     public EligibilityService.EligibilityResult checkEligibility(UUID electionId, UUID voterId) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(actor, PermissionType.CHECK_ELIGIBILITY);

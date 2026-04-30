@@ -68,7 +68,11 @@ public class Election {
 
     private Long totalVotes;
 
-    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    // LAZY: candidates are only needed for the election detail view and the vote-cast
+    // candidate-validation step. List queries (findByOrganizationId) use a LEFT JOIN
+    // FETCH in the repository to load them in one SQL join rather than N+1 queries.
+    // The vote-cast path (VotingService) should NOT access candidates at all.
+    @OneToMany(mappedBy = "election", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<Candidate> candidates = new ArrayList<>();
 
     private Timestamp createdAt;
