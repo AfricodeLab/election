@@ -51,13 +51,10 @@ public class PermissionSyncer implements CommandLineRunner {
     private Map<PermissionType, Permission> syncPermissions() {
         Set<PermissionType> currentEnumValues = EnumSet.allOf(PermissionType.class);
 
-        // Remove DB rows for enum values that no longer exist
-        permissionRepository.findAll().forEach(p -> {
-            if (!currentEnumValues.contains(p.getPermissionType())) {
-                log.info("PermissionSyncer: removing obsolete permission '{}'", p.getPermissionType());
-                permissionRepository.delete(p);
-            }
-        });
+        // Bulk-delete DB rows for enum values that no longer exist — single DELETE IN (...)
+        // instead of the previous findAll() + per-row delete() loop.
+        permissionRepository.deleteObsoletePermissions(currentEnumValues);
+        log.info("PermissionSyncer: removed any obsolete permissions not in current enum");
 
         // Ensure every current enum value has a DB row
         Map<PermissionType, Permission> out = new EnumMap<>(PermissionType.class);

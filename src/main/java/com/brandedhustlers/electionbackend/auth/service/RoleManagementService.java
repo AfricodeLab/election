@@ -12,6 +12,7 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.PermissionRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
+import com.brandedhustlers.electionbackend.common.events.AuditEmitter;
 import com.brandedhustlers.electionbackend.common.exceptions.AccessDeniedException;
 import com.brandedhustlers.electionbackend.common.exceptions.ConflictAction;
 import com.brandedhustlers.electionbackend.common.util.GetUser;
@@ -21,6 +22,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
@@ -37,27 +39,43 @@ public class RoleManagementService {
     private final AppUserRepository appUserRepository;
     private final GetUser getUser;
     private final Util util;
+    private final AuditEmitter auditEmitter;
 
     // ── Roles ─────────────────────────────────────────────────────────────────
 
     /**
      * Returns all system roles plus any custom roles belonging to the caller's org.
-     * Platform admins see system roles only (they have no single org context).
+     * Platform admins (no active org) see system roles only.
+     *
+     * rolePermissions is LAZY on Role. Both repository methods now use
+     * LEFT JOIN FETCH so all permissions are loaded in a single SQL query
+     * rather than one extra SELECT per role (N+1).
+     *
+     * Collectors.toList() is used instead of Stream.toList() to return a
+     * mutable ArrayList — Stream.toList() returns ImmutableCollections$ListN
+     * which can cause issues with serialization and downstream mutation.
      */
+    @Transactional(readOnly = true)
     public List<RoleDTO> listRoles() {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
 
-        if (util.isPlatformAdmin(caller)) {
-            return roleRepository.findByOrgIdIsNull().stream().map(this::toDTO).toList();
-        }
-
         Organization org = caller.getActiveOrganization();
         if (org == null) {
-            return roleRepository.findByOrgIdIsNull().stream().map(this::toDTO).toList();
+            // Platform admins and users without an active org see system roles only
+            List<RoleDTO> roles = roleRepository.findByOrgIdIsNull().stream()
+                    .map(this::toDTO)
+                    .collect(Collectors.toList());
+            log.debug("listRoles (no org context): {} roles", roles.size());
+            return roles;
         }
 
-        return roleRepository.findSystemAndOrgRoles(org.getOrganizationId())
-                .stream().map(this::toDTO).toList();
+        // Org users see system roles + their org's custom roles
+        List<RoleDTO> roles = roleRepository.findSystemAndOrgRoles(org.getOrganizationId())
+                .stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
+        log.debug("listRoles for org {}: {} roles", org.getOrganizationId(), roles.size());
+        return roles;
     }
 
     /** Returns the fixed set of all available permission types. */
@@ -161,12 +179,15 @@ public class RoleManagementService {
      * Returns all roles currently assigned to a user.
      * Requires VIEW_ROLES permission (or admin).
      */
+    @Transactional(readOnly = true)
     public List<RoleDTO> getUserRoles(UUID userId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(caller, PermissionType.VIEW_ROLES);
 
         AppUser user = findUserOrThrow(userId);
-        return user.getRoles().stream().map(this::toDTO).toList();
+        return user.getRoles().stream()
+                .map(this::toDTO)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -189,6 +210,28 @@ public class RoleManagementService {
 
         user.getRoles().add(role);
         appUserRepository.save(user);
+
+        auditEmitter.emit(
+                UUID.randomUUID(),
+                role.getRoleName() + " assigned to user: " + user.getFirstName(),
+                Instant.from(Instant.now()),
+                caller.getActiveOrganization().getOrganizationId(),
+                user.getFirstName() + " " + user.getLastName() + " assigned role: " + role.getRoleName(),
+                caller.getAppUserId(),
+                caller.getFirstName() + " " + caller.getLastName(),
+                caller.getUserRole().name(),
+                caller.getUserRole().name(),
+                "Role",
+                user.getAppUserId(),
+                "Role Assignment",
+                "WEB",
+                null,
+                null,
+                null,
+                "INFO",
+                1
+        );
+
         log.info("Assigned role '{}' to user {}", role.getRoleName(), userId);
     }
 
@@ -208,6 +251,27 @@ public class RoleManagementService {
             appUserRepository.save(user);
             log.info("Revoked role {} from user {}", roleId, userId);
         }
+
+        auditEmitter.emit(
+                UUID.randomUUID(),
+                "Role revoked from user: " + user.getFirstName(),
+                Instant.from(Instant.now()),
+                caller.getActiveOrganization().getOrganizationId(),
+                "Role revoked from user",
+                caller.getAppUserId(),
+                caller.getFirstName() + " " + caller.getLastName(),
+                caller.getUserRole().name(),
+                caller.getUserRole().name(),
+                "Role",
+                user.getAppUserId(),
+                "Role Revocation",
+                "WEB",
+                null,
+                null,
+                null,
+                "INFO",
+                1
+        );
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

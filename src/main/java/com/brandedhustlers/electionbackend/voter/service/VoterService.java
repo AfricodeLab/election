@@ -23,7 +23,6 @@ import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -144,13 +143,11 @@ public class VoterService implements IVoterService {
     @Transactional(readOnly = true)
     public Page<VoterDTO> getOrgVoters(Pageable pageable) {
         UUID voterOrg = getUser.getCurrentAuthenticatedUserOrgId();
-
-        List<VoterDTO> orgVoters = voterRepository.findByOrgId(voterOrg)
-                .stream()
-                .map(voterMapper::entityToDto)
-                .toList();
-
-        return new PageImpl<>(orgVoters, pageable, orgVoters.size());
+        // DB-level pagination: LIMIT/OFFSET pushed to Postgres.
+        // Replaced the previous pattern of loading all voters into memory
+        // then slicing with subList() — which hit every row on every page request.
+        return voterRepository.findByOrgId(voterOrg, pageable)
+                .map(voterMapper::entityToDto);
     }
 
     @Override
@@ -221,6 +218,7 @@ public class VoterService implements IVoterService {
         return voterMapper.entityToDto(voter);
     }
 
+    @Transactional(readOnly = true)
     public TurnoutDTO getTurnout(UUID orgId, UUID electionId) {
         electionRepository.findByElectionId(electionId)
                 .filter(e -> e.getOrganization().getOrganizationId().equals(orgId))

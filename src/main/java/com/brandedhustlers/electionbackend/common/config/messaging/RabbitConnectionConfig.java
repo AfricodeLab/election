@@ -113,6 +113,10 @@ public class RabbitConnectionConfig {
         // Short connection timeout so a missing broker fails fast instead of blocking startup
         factory.setConnectionTimeout(6_000);
 
+        // Cap the channel cache — default is 25 channels per connection, each holding
+        // memory on both the client and broker side. 5 is ample for this API's traffic.
+        factory.setChannelCacheSize(5);
+
         return factory;
     }
 

@@ -21,6 +21,7 @@ import com.brandedhustlers.electionbackend.election.repository.CandidateReposito
 import com.brandedhustlers.electionbackend.election.repository.ElectionPresetRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.election.repository.ElectionTypeRepository;
+import com.brandedhustlers.electionbackend.election.service.ElectionCacheDelegate;
 import com.brandedhustlers.electionbackend.election.service.ElectionService;
 import com.brandedhustlers.electionbackend.election.service.EligibilityService;
 import com.brandedhustlers.electionbackend.election.service.EligibilitySnapshotService;
@@ -38,6 +39,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.cache.CacheManager;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -94,7 +96,10 @@ class ElectionServiceStateMachineTest {
     private EligibilitySnapshotService eligibilitySnapshotService;
 
     private ElectionService electionService;
-
+    @Mock
+    private ElectionCacheDelegate electionCacheDelegate;
+    @Mock
+    private CacheManager cacheManager;
     private UUID orgId;
     private UUID electionId;
     private Organization organization;
@@ -110,7 +115,7 @@ class ElectionServiceStateMachineTest {
                 configSnapshotService, configAnchorService,
                 httpServletRequest, voterRepository, util,
                 electionTypeRepository, electionPresetRepository,
-                eligibilityService, eligibilitySnapshotService, rabbitTemplate);
+                eligibilityService, eligibilitySnapshotService, rabbitTemplate, electionCacheDelegate, cacheManager);
 
         orgId = UUID.randomUUID();
         electionId = UUID.randomUUID();

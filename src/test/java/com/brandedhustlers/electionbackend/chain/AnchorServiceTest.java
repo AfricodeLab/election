@@ -8,6 +8,7 @@ import com.brandedhustlers.electionbackend.common.flags.FeatureFlagService;
 import com.brandedhustlers.electionbackend.election.repository.ElectionRepository;
 import com.brandedhustlers.electionbackend.voting.domain.OutBox;
 import com.brandedhustlers.electionbackend.voting.repository.OutBoxRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -17,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.data.domain.Pageable;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -43,13 +45,16 @@ class AnchorServiceTest {
     @Mock
     private FeatureFlagService featureFlags;
 
+    private ObjectMapper objectMapper;
+
     private AnchorService anchorService;
     private UUID orgId;
     private UUID electionId;
+    private Pageable pageable;
 
     @BeforeEach
     void setUp() {
-        anchorService = new AnchorService(electionRepo, outBoxRepository, batchRepo, chain, featureFlags);
+        anchorService = new AnchorService(electionRepo, outBoxRepository, batchRepo, chain, featureFlags, objectMapper);
         orgId = UUID.randomUUID();
         electionId = UUID.randomUUID();
     }
@@ -75,7 +80,7 @@ class AnchorServiceTest {
         @Test
         @DisplayName("Does nothing when no pending outbox entries")
         void doesNothingWhenNoPendingEntries() {
-            when(outBoxRepository.findByAnchorPendingTrueAndAnchoredFalse())
+            when(outBoxRepository.findPendingAnchorBatch(pageable))
                     .thenReturn(Collections.emptyList());
 
             anchorService.anchorPendingVotes();
@@ -92,7 +97,7 @@ class AnchorServiceTest {
         @DisplayName("Skips anchoring for orgs with BLOCKCHAIN_ANCHORING disabled")
         void skipsOrgWhenFeatureDisabled() {
             OutBox entry = outboxEntry(electionId);
-            when(outBoxRepository.findByAnchorPendingTrueAndAnchoredFalse())
+            when(outBoxRepository.findPendingAnchorBatch(pageable))
                     .thenReturn(List.of(entry));
             when(electionRepo.findOrgId(electionId)).thenReturn(orgId);
             when(featureFlags.isEnabled(orgId, Feature.BLOCKCHAIN_ANCHORING)).thenReturn(false);
@@ -107,7 +112,7 @@ class AnchorServiceTest {
         @DisplayName("Anchors batch when BLOCKCHAIN_ANCHORING is enabled for org")
         void anchorsWhenFeatureEnabled() {
             OutBox entry = outboxEntry(electionId);
-            when(outBoxRepository.findByAnchorPendingTrueAndAnchoredFalse())
+            when(outBoxRepository.findPendingAnchorBatch(pageable))
                     .thenReturn(List.of(entry));
             when(electionRepo.findOrgId(electionId)).thenReturn(orgId);
             when(featureFlags.isEnabled(orgId, Feature.BLOCKCHAIN_ANCHORING)).thenReturn(true);
@@ -132,7 +137,7 @@ class AnchorServiceTest {
             OutBox enabledEntry = outboxEntry(enabledElectionId);
             OutBox disabledEntry = outboxEntry(disabledElectionId);
 
-            when(outBoxRepository.findByAnchorPendingTrueAndAnchoredFalse())
+            when(outBoxRepository.findPendingAnchorBatch(pageable))
                     .thenReturn(List.of(enabledEntry, disabledEntry));
             when(electionRepo.findOrgId(enabledElectionId)).thenReturn(enabledOrgId);
             when(electionRepo.findOrgId(disabledElectionId)).thenReturn(disabledOrgId);
@@ -152,7 +157,7 @@ class AnchorServiceTest {
         @DisplayName("Marks outbox entries as anchored after successful batch")
         void marksEntriesAsAnchored() {
             OutBox entry = outboxEntry(electionId);
-            when(outBoxRepository.findByAnchorPendingTrueAndAnchoredFalse())
+            when(outBoxRepository.findPendingAnchorBatch(pageable))
                     .thenReturn(List.of(entry));
             when(electionRepo.findOrgId(electionId)).thenReturn(orgId);
             when(featureFlags.isEnabled(orgId, Feature.BLOCKCHAIN_ANCHORING)).thenReturn(true);
@@ -175,7 +180,7 @@ class AnchorServiceTest {
             OutBox failingEntry = outboxEntry(failingElectionId);
             OutBox successEntry = outboxEntry(successElectionId);
 
-            when(outBoxRepository.findByAnchorPendingTrueAndAnchoredFalse())
+            when(outBoxRepository.findPendingAnchorBatch(pageable))
                     .thenReturn(List.of(failingEntry, successEntry));
             when(electionRepo.findOrgId(failingElectionId)).thenReturn(failingOrgId);
             when(electionRepo.findOrgId(successElectionId)).thenReturn(successOrgId);

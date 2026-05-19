@@ -20,14 +20,15 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
     boolean existsByElectionTitleAndOrganization(String s, Organization appUserOrganization);
 
     /**
-     * Loads all elections for an org together with their candidates in one SQL join.
-     * DISTINCT prevents duplicate Election rows from the LEFT JOIN.
-     * Without this, the LAZY candidates collection would trigger N+1 queries
-     * (one SELECT per election) whenever the DTO mapper accesses candidates.
+     * Loads all elections for an org together with their candidates and election type
+     * in one SQL join. DISTINCT prevents duplicate Election rows from the LEFT JOINs.
+     * Both e.candidates and e.electionType are LAZY on the entity; fetching them here
+     * avoids N+1 queries when ElectionMapper.entityToDto() accesses both fields.
      */
     @Query("""
         SELECT DISTINCT e FROM Election e
         LEFT JOIN FETCH e.candidates
+        LEFT JOIN FETCH e.electionType
         WHERE e.organization.organizationId = :organizationId
         """)
     List<Election> findByOrganizationId(UUID organizationId);
@@ -128,13 +129,14 @@ public interface ElectionRepository extends JpaRepository<Election, UUID> {
     Optional<Election> findByElectionId(UUID electionId);
 
     /**
-     * Loads a single election together with its candidates in one SQL join.
-     * Used by the detail endpoint so that the LAZY candidates collection is
-     * initialised without triggering a secondary SELECT after the transaction closes.
+     * Loads a single election together with its candidates and election type in one SQL join.
+     * Used by the detail endpoint so that both LAZY collections (candidates, electionType)
+     * are initialised without triggering secondary SELECTs after the transaction closes.
      */
     @Query("""
         SELECT DISTINCT e FROM Election e
         LEFT JOIN FETCH e.candidates
+        LEFT JOIN FETCH e.electionType
         WHERE e.electionId = :electionId
         """)
     Optional<Election> findByElectionIdWithCandidates(@Param("electionId") UUID electionId);

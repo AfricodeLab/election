@@ -13,6 +13,7 @@ import com.brandedhustlers.electionbackend.voting.repository.VoteRepository;
 import com.brandedhustlers.electionbackend.voting.util.Hash;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,6 +22,10 @@ import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Component
@@ -48,17 +53,46 @@ public class OutBoxService implements OutBoxRelay {
         this.alertService = alertService;
     }
 
+    /** Maximum outbox entries processed per scheduler tick. */
+    private static final int BATCH_SIZE = 200;
+
     @Override
     @Transactional
-    @Scheduled(fixedDelay = 10000) // Every 10 seconds
+    @Scheduled(fixedDelay = 30000) // Every 30 seconds
     public void publishPending() {
-        List<OutBox> batch = outbox.findTopByPublishedAtIsNull();
+        // Limit to BATCH_SIZE per tick — prevents loading thousands of rows
+        // during a high-volume election and keeps each scheduler cycle fast.
+        List<OutBox> batch = outbox.findPendingBatch(PageRequest.of(0, BATCH_SIZE));
+
+        if (batch.isEmpty()) {
+            return; // nothing to do — skip the rest of the method
+        }
+
+        // Batch-fetch all votes in ONE query instead of one findById per entry.
+        // Eliminates the N+1 pattern: 200 outbox entries → 1 SELECT IN (...).
+        List<UUID> voteIds = batch.stream()
+                .map(OutBox::getAggregateId)
+                .collect(Collectors.toList());
+
+        Map<UUID, Vote> voteMap = voteRepository.findAllById(voteIds).stream()
+                .collect(Collectors.toMap(Vote::getId, Function.identity()));
+
+        // Batch-fetch archives in ONE query as well (only needed when tampering is detected,
+        // but fetching up-front avoids a second round-trip inside the loop in the common path).
+        Map<UUID, VoteArchive> archiveMap = voteArchive.findAllById(voteIds).stream()
+                .collect(Collectors.toMap(VoteArchive::getVoteId, Function.identity()));
 
         /**
          * Track which entries were successfully validated.
          * These will be marked as anchor_pending=true at the end.
          */
         List<OutBox> validatedEntries = new ArrayList<>();
+
+        /**
+         * All outbox entries whose state changed this tick — flushed in one saveAll
+         * after the loop instead of one save() per entry.
+         */
+        List<OutBox> modifiedOutboxEntries = new ArrayList<>();
 
         /**
          * Track tampering incidents for alerting.
@@ -69,9 +103,11 @@ public class OutBoxService implements OutBoxRelay {
             try {
                 log.info("Processing outbox entry {} for vote {}", o.getId(), o.getAggregateId());
 
-                // Step 1: Fetch the vote from the working table
-                Vote tableVote = voteRepository.findById(o.getAggregateId())
-                        .orElseThrow(() -> new IllegalArgumentException("vote not found: " + o.getAggregateId()));
+                // Step 1: Look up the vote from the pre-fetched map (no DB round-trip)
+                Vote tableVote = voteMap.get(o.getAggregateId());
+                if (tableVote == null) {
+                    throw new IllegalArgumentException("vote not found: " + o.getAggregateId());
+                }
 
                 // Step 2: Recompute hash from current table data
                 String currentVoteHash = getHash.hashVote(tableVote);
@@ -88,10 +124,11 @@ public class OutBoxService implements OutBoxRelay {
                     log.warn("Expected hash: {}", o.getVoteHash());
                     log.warn("Current hash:  {}", currentVoteHash);
 
-                    // Step 4: Try to restore from archive
-                    VoteArchive archived = voteArchive.findById(o.getAggregateId())
-                            .orElseThrow(() -> new IllegalStateException(
-                                    "Archive missing for vote: " + o.getAggregateId()));
+                    // Step 4: Look up archive from pre-fetched map (no DB round-trip)
+                    VoteArchive archived = archiveMap.get(o.getAggregateId());
+                    if (archived == null) {
+                        throw new IllegalStateException("Archive missing for vote: " + o.getAggregateId());
+                    }
 
                     // Step 5: Verify archive integrity
                     /**
@@ -120,10 +157,10 @@ public class OutBoxService implements OutBoxRelay {
                         log.error("Archive hash:  {}", archivedHash);
                         log.error("Current hash:  {}", currentVoteHash);
 
-                        // Mark outbox as failed
+                        // Mark outbox as failed — collected for batch save below
                         o.setPublishStatus(PublishStatus.FAILED_VALIDATION);
                         o.setFailedValidationAt(Timestamp.from(Instant.now()));
-                        outbox.save(o);
+                        modifiedOutboxEntries.add(o);
 
                         // Log critical incident
                         TamperingLog incident = TamperingLog.builder()
@@ -192,8 +229,7 @@ public class OutBoxService implements OutBoxRelay {
                  * in the next 30-second batch.
                  */
                 o.setAnchorPending(true);
-                outbox.save(o);
-
+                modifiedOutboxEntries.add(o);
                 validatedEntries.add(o);
 
                 log.info("Successfully published vote {} from outbox entry {}",
@@ -203,6 +239,11 @@ public class OutBoxService implements OutBoxRelay {
                 log.error("Failed to publish outbox entry {} for vote {}",
                         o.getId(), o.getAggregateId(), e);
             }
+        }
+
+        // Flush all outbox state changes in one batch round-trip.
+        if (!modifiedOutboxEntries.isEmpty()) {
+            outbox.saveAll(modifiedOutboxEntries);
         }
 
         /**

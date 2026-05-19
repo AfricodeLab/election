@@ -1,3 +1,4 @@
+/*
 
 package com.brandedhustlers.electionbackend.chain;
 
@@ -22,9 +23,11 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 
+*/
 /**
  * Unit tests for BlockchainService - Hyperledger Fabric integration.
- */
+ *//*
+
 
 @Disabled("Chain framework moved to different project")
 @ExtendWith(MockitoExtension.class)
@@ -297,3 +300,4 @@ class FabricBlockchainProviderTest {
         }
 }
 
+*/

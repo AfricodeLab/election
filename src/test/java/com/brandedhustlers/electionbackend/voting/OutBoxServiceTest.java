@@ -24,6 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.data.domain.Pageable;
 
 import java.sql.Timestamp;
 import java.time.Instant;
@@ -57,11 +58,13 @@ class OutBoxServiceTest {
     private AlertService alertService;
 
     private OutBoxService outBoxService;
+    private Pageable pageable;
 
     private UUID voteId;
     private UUID electionId;
     private UUID orgId;
     private static final String STORED_HASH = "abc123hash";
+
 
     @BeforeEach
     void setUp() {
@@ -116,7 +119,7 @@ class OutBoxServiceTest {
             OutBox entry = pendingOutBox();
             Vote vote = tableVote();
 
-            when(outBoxRepository.findTopByPublishedAtIsNull()).thenReturn(List.of(entry));
+            when(outBoxRepository.findPendingBatch(pageable)).thenReturn(List.of(entry));
             when(voteRepository.findById(voteId)).thenReturn(Optional.of(vote));
             when(hashUtil.hashVote(vote)).thenReturn(STORED_HASH);
 
@@ -132,7 +135,7 @@ class OutBoxServiceTest {
         @Test
         @DisplayName("Does nothing when outbox queue is empty")
         void doesNothingForEmptyBatch() {
-            when(outBoxRepository.findTopByPublishedAtIsNull()).thenReturn(Collections.emptyList());
+            when(outBoxRepository.findPendingBatch(pageable)).thenReturn(Collections.emptyList());
 
             outBoxService.publishPending();
 
@@ -151,7 +154,7 @@ class OutBoxServiceTest {
             Vote vote = tableVote();
             VoteArchive arc = archive(vote);
 
-            when(outBoxRepository.findTopByPublishedAtIsNull()).thenReturn(List.of(entry));
+            when(outBoxRepository.findPendingBatch(pageable)).thenReturn(List.of(entry));
             when(voteRepository.findById(voteId)).thenReturn(Optional.of(vote));
             // First hash: tampered (mismatch). After restore, the vote is clean but we
             // just proceed to publish regardless (restore + proceed in same iteration).
@@ -193,7 +196,7 @@ class OutBoxServiceTest {
             VoteArchive arc = archive(vote);
             arc.setVoteHash("also-tampered-hash"); // archive hash also bad
 
-            when(outBoxRepository.findTopByPublishedAtIsNull()).thenReturn(List.of(entry));
+            when(outBoxRepository.findPendingBatch(pageable)).thenReturn(List.of(entry));
             when(voteRepository.findById(voteId)).thenReturn(Optional.of(vote));
             when(hashUtil.hashVote(any(Vote.class)))
                     .thenReturn("tampered-hash")      // table vote (mismatch)
@@ -255,7 +258,7 @@ class OutBoxServiceTest {
                     .electionId(electionId).orgId(orgId)
                     .candidateId(UUID.randomUUID()).castAt(Instant.now()).build();
 
-            when(outBoxRepository.findTopByPublishedAtIsNull()).thenReturn(List.of(failing, succeeding));
+            when(outBoxRepository.findPendingBatch(pageable)).thenReturn(List.of(failing, succeeding));
             // First entry: vote not found -> exception caught per-entry
             when(voteRepository.findById(failingVoteId))
                     .thenReturn(Optional.empty()); // orElseThrow fires, caught in loop

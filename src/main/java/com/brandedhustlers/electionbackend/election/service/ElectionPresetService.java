@@ -19,6 +19,7 @@ import com.brandedhustlers.electionbackend.election.repository.ElectionTypeRepos
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -36,6 +37,7 @@ public class ElectionPresetService {
     /**
      * Create a new preset for the caller's organization.
      */
+    @Transactional
     public ElectionPresetDTO createPreset(CreateElectionPresetRequest request) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(caller, PermissionType.CREATE_ELECTION);
@@ -68,6 +70,7 @@ public class ElectionPresetService {
     /**
      * Get all presets for the caller's organization, optionally filtered by typeId.
      */
+    @Transactional(readOnly = true)
     public List<ElectionPresetDTO> getPresetsForOrg(UUID typeId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         if (caller.getActiveOrganization() == null)
@@ -85,6 +88,7 @@ public class ElectionPresetService {
     /**
      * Update an existing preset. Only non-null fields in the request are applied.
      */
+    @Transactional
     public ElectionPresetDTO updatePreset(UUID presetId, UpdateElectionPresetRequest request) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(caller, PermissionType.UPDATE_ELECTION);
@@ -123,6 +127,7 @@ public class ElectionPresetService {
     /**
      * Soft-delete a preset.
      */
+    @Transactional
     public void deletePreset(UUID presetId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(caller, PermissionType.CREATE_ELECTION);

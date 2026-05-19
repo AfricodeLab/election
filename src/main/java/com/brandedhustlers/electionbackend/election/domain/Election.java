@@ -40,8 +40,14 @@ public class Election {
     /**
      * Dynamic election type (replaces old ElectionType enum).
      * Admins can create custom types; system built-in types are also stored here.
+     *
+     * LAZY: electionType is always projected by ElectionMapper.entityToDto() via a
+     * dedicated ElectionTypeDTO, so it WILL be accessed — but ElectionCacheDelegate
+     * and ElectionRepository.findByOrganizationId both use JOIN FETCH to load it
+     * in the same SQL, making LAZY safe here (no extra SELECT on access).
+     * Changed from EAGER to avoid the extra JOIN on any path that doesn't need the type.
      */
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "election_type_id")
     private ElectionTypeEntity electionType;
 

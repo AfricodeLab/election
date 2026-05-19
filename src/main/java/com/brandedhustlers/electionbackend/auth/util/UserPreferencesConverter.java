@@ -12,7 +12,10 @@ import java.util.Map;
 
 @Converter
 public class UserPreferencesConverter implements AttributeConverter<Map<String, String>, Object> {
-    private final ObjectMapper mapper = new ObjectMapper();
+    // Static shared instance — ObjectMapper is thread-safe for read/write operations
+    // once configured. A new instance per converter was wasteful (ObjectMapper holds
+    // internal serializer/deserializer caches that take ~500 KB to build).
+    private static final ObjectMapper mapper = new ObjectMapper();
 
     @Override
     public Object convertToDatabaseColumn(Map<String, String> attribute) {

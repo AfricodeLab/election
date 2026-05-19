@@ -4,6 +4,7 @@ import com.brandedhustlers.electionbackend.ops.domain.Launch;
 import com.brandedhustlers.electionbackend.ops.enums.LaunchStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -18,7 +19,13 @@ public interface LaunchRepository extends JpaRepository<Launch, UUID> {
     @Query("select l from Launch l where l.id = :launchId and l.deleteYn = 'N'")
     Optional<Launch> findByLaunchId(UUID launchId);
 
-    @Query("select l from Launch  l where l.orgId = :orgId")
+    @Query("select l from Launch l where l.orgId = :orgId")
     List<Launch> findByOrgId(UUID orgId);
 
+    /**
+     * Existence check for duplicate launch names — single COUNT query instead of
+     * loading all org launches into memory just to call List.contains().
+     */
+    @Query("SELECT COUNT(l) > 0 FROM Launch l WHERE l.orgId = :orgId AND l.name = :name")
+    boolean existsByOrgIdAndName(@Param("orgId") UUID orgId, @Param("name") String name);
 }

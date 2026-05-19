@@ -1,5 +1,6 @@
 package com.brandedhustlers.electionbackend.common.config.cache;
 
+import com.brandedhustlers.electionbackend.auth.domain.Role;
 import com.brandedhustlers.electionbackend.auth.dto.AppUserDTO;
 import com.brandedhustlers.electionbackend.auth.dto.OrganizationDTO;
 import com.brandedhustlers.electionbackend.election.dto.CandidateDTO;
@@ -7,6 +8,7 @@ import com.brandedhustlers.electionbackend.election.dto.ElectionDTO;
 import com.brandedhustlers.electionbackend.election.dto.ElectionTypeDTO;
 import com.brandedhustlers.electionbackend.ops.dto.GetLaunch;
 import com.brandedhustlers.electionbackend.ops.dto.LaunchDto;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -36,6 +38,24 @@ public class RedisConfig {
      */
     @JsonTypeInfo(use = JsonTypeInfo.Id.CLASS, include = JsonTypeInfo.As.PROPERTY, property = "@class")
     abstract static class RedisTypeMixin {}
+
+    /**
+     * Role entity mixin: suppresses the lazy-loaded rolePermissions collection.
+     *
+     * AppUserDTO carries Set<Role> (raw JPA entity) because MapStruct auto-maps it.
+     * Role.rolePermissions is @ManyToMany(fetch=LAZY).  Spring's AOP ordering means
+     * the @Cacheable write fires AFTER @Transactional commits (cache interceptor is
+     * outer, transaction interceptor is inner), so the Hibernate session is already
+     * closed when Jackson tries to iterate rolePermissions → LazyInitializationException.
+     *
+     * Ignoring rolePermissions here is correct: permission checks use the JPA path
+     * (CustomUserDetailsService), never the Redis-cached user list.
+     *
+     * Long-term fix: change AppUserDTO.roles from Set<Role> to Set<String> (role names),
+     * keeping JPA entities out of the cache entirely.
+     */
+    @JsonIgnoreProperties("rolePermissions")
+    abstract static class RoleMixin {}
 
     /**
      * Dedicated Redis ObjectMapper built from scratch — NOT via ObjectMapper.copy().
@@ -83,6 +103,8 @@ public class RedisConfig {
         redisMapper.addMixIn(LaunchDto.class,       RedisTypeMixin.class);
         redisMapper.addMixIn(GetLaunch.class,       RedisTypeMixin.class);
         redisMapper.addMixIn(AppUserDTO.class,      RedisTypeMixin.class);
+        // Suppress Role.rolePermissions (LAZY) — see RoleMixin javadoc above
+        redisMapper.addMixIn(Role.class,            RoleMixin.class);
 
         return new GenericJackson2JsonRedisSerializer(redisMapper);
     }

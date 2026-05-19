@@ -13,10 +13,7 @@ import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.auth.repository.OrganizationRepository;
 import com.brandedhustlers.electionbackend.auth.repository.RoleRepository;
 import com.brandedhustlers.electionbackend.auth.repository.UserOrganizationRepository;
-import com.brandedhustlers.electionbackend.auth.service.AuthService;
-import com.brandedhustlers.electionbackend.auth.service.MfaService;
-import com.brandedhustlers.electionbackend.auth.service.OrganizationService;
-import com.brandedhustlers.electionbackend.auth.service.RefreshTokenService;
+import com.brandedhustlers.electionbackend.auth.service.*;
 import com.brandedhustlers.electionbackend.common.config.security.JWTService;
 import com.brandedhustlers.electionbackend.common.config.security.UserPrincipal;
 import com.brandedhustlers.electionbackend.common.config.storage.service.CloudinaryService;
@@ -35,6 +32,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.springframework.cache.CacheManager;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -91,6 +89,11 @@ class AuthServiceExtendedTest {
     @Mock
     private AuditEmitter auditEmitter;
 
+    @Mock
+    private CacheManager cacheManager;
+    @Mock
+    private UserCacheDelegate userCacheDelegate;
+
     private AuthService authService;
     private UUID userId;
     private AppUser testUser;
@@ -102,7 +105,7 @@ class AuthServiceExtendedTest {
                 cloudinaryService, httpServletRequest, roleRepository, getUser,
                 organizationService, organizationMapper, organizationMapper,
                 appUserMapper, organizationRepository, refreshTokenService,
-                userOrganizationRepository, messagingService, mfaService, auditEmitter);
+                userOrganizationRepository, messagingService, mfaService, auditEmitter, userCacheDelegate, cacheManager);
 
         ReflectionTestUtils.setField(authService, "appBaseUrl", "https://app.test");
 

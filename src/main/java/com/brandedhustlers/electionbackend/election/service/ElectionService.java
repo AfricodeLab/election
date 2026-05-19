@@ -300,6 +300,7 @@ public class ElectionService implements IElectionService {
     }
 
     @Override
+    @Transactional
     public ElectionDTO changeElectionStatus(UUID electionId, ElectionStatus newStatus) {
         AppUser updater = getUser.getCurrentAuthenticatedUser();
 

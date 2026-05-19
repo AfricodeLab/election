@@ -7,6 +7,7 @@ import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
 /**
  * WebSocket / STOMP broker configuration.
@@ -63,6 +64,20 @@ public class WebsocketConfig implements WebSocketMessageBrokerConfigurer {
                      "(set STOMP_RELAY_ENABLED=true to use external RabbitMQ STOMP)");
             registry.enableSimpleBroker("/topic", "/queue");
         }
+    }
+
+    /**
+     * Guards against slow/stale WebSocket subscribers accumulating unbounded
+     * pending-message buffers in heap.
+     * - 8 KB max inbound message (sufficient for all current client payloads)
+     * - 256 KB per-session send buffer (Spring default is 512 KB)
+     * - 15 s send timeout — disconnect a subscriber that hasn't drained after 15 s
+     */
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration registration) {
+        registration.setMessageSizeLimit(8 * 1024);
+        registration.setSendBufferSizeLimit(256 * 1024);
+        registration.setSendTimeLimit(15 * 1000);
     }
 
     private String[] resolveAllowedOrigins() {

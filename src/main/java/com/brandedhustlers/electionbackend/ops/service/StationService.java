@@ -10,13 +10,11 @@ import com.brandedhustlers.electionbackend.ops.mappers.StationMapper;
 import com.brandedhustlers.electionbackend.ops.repository.LaunchRepository;
 import com.brandedhustlers.electionbackend.ops.repository.StationRepository;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.UUID;
@@ -64,19 +62,19 @@ public class StationService {
                 .entityToDto(stationRepository.save(station));
     }
 
+    @Transactional(readOnly = true)
     public Optional<Station> getStation(UUID orgId, UUID stationId) {
         return stationRepository.findById(stationId)
                 .filter(s -> s.getOrgId().equals(orgId));
     }
 
+    @Transactional(readOnly = true)
     public Page<StationDto> listStationByLaunch(UUID orgId, UUID launchId, Pageable pageable) {
-        List<StationDto> stations = stationRepository
+        // Repository now returns Page<Station> — Spring Data runs the COUNT query
+        // automatically so pagination metadata (totalElements) is accurate.
+        return stationRepository
                 .findByOrgIdAndLaunchId(orgId, launchId, pageable)
-                .stream()
-                .map(stationMapper::entityToDto)
-                .toList();
-        return new PageImpl<>(stations, pageable, stations.size());
-
+                .map(stationMapper::entityToDto);
     }
 
     @Transactional

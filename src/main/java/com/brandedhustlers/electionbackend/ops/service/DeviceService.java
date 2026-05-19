@@ -15,13 +15,11 @@ import com.brandedhustlers.electionbackend.ops.repository.DeviceRepository;
 import com.brandedhustlers.electionbackend.ops.repository.StationRepository;
 import com.brandedhustlers.electionbackend.realtime.gateway.RealtimeGateway;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -82,23 +80,19 @@ public class DeviceService {
                 .entityToDto(devices.save(device));
     }
 
+    @Transactional(readOnly = true)
     public Optional<DeviceDto> get(UUID orgId, UUID deviceId) {
         return devices.findById(deviceId)
                 .filter(d -> d.getOrgId().equals(orgId))
                 .map(deviceMapper::entityToDto);
     }
 
+    @Transactional(readOnly = true)
     public Page<DeviceDto> listDevices(UUID orgId, UUID stationId, DeviceStatus status, Pageable pageable) {
-        // Minimal filters; can add dedicated repo queries as needed
-        List<DeviceDto> deviceDtos = devices.findAll()
-                .stream()
-                .filter(d -> d.getOrgId().equals(orgId))
-                .filter(d -> stationId == null || stationId.equals(d.getStationId()))
-                .filter(d -> status == null || status == d.getStatus())
-                .map(deviceMapper::entityToDto)
-                .toList();
-
-        return new PageImpl<>(deviceDtos, pageable, deviceDtos.size());
+        // DB-level filtered query — no more findAll() + in-memory stream filters.
+        // The repository handles null stationId/status as "no filter on that column".
+        return devices.findByOrgIdFiltered(orgId, stationId, status, pageable)
+                .map(deviceMapper::entityToDto);
     }
 
     @Transactional

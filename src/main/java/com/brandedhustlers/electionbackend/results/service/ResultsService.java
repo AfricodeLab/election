@@ -12,9 +12,9 @@ import com.brandedhustlers.electionbackend.results.domain.Tally;
 import com.brandedhustlers.electionbackend.results.dto.TallyDto;
 import com.brandedhustlers.electionbackend.results.repository.TallyRepository;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -45,36 +45,33 @@ public class ResultsService {
         this.util = util;
     }
 
+    @Transactional(readOnly = true)
     public Page<TallyDto> get(UUID electionId, Pageable pageable) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
-
         util.requireAdminOrPermission(actor, PermissionType.VIEW_RESULTS);
 
-        List<Tally> tallies = repo.findByIdElectionId(electionId);
+        // DB-level pagination: only the requested page of tallies is fetched.
+        // Previously all tallies were loaded into memory then sliced with subList().
+        Page<Tally> tallyPage = repo.findByIdElectionId(electionId, pageable);
 
-        Set<UUID> candidateIds = tallies.stream()
+        // Batch-load only the candidates referenced by this page's tallies
+        // (one IN query instead of N individual findById calls).
+        Set<UUID> candidateIds = tallyPage.getContent().stream()
                 .map(t -> t.getId().getCandidateId())
                 .collect(Collectors.toSet());
 
+        // Election title and candidates are fetched in the same @Transactional
+        // context as the tally query — one DB connection, three queries total.
         String electionTitle = electionRepository.getElectionTitleById(electionId);
-
-        List<Candidate> candidates = candidateRepository.findAllById(candidateIds);
-
-        Map<UUID, Candidate> candidateMap = candidates.stream()
+        Map<UUID, Candidate> candidateMap = candidateRepository.findAllById(candidateIds).stream()
                 .collect(Collectors.toMap(Candidate::getCandidateId, c -> c));
 
-        List<TallyDto> tallyDtos = tallies.stream()
-                .map(tally -> {
-                    Candidate candidate = candidateMap.get(tally.getId().getCandidateId());
-                    return new TallyDto(
-                            tally.getId().getElectionId(),
-                            electionTitle,
-                            candidateMapper.entityToDTO(candidate),
-                            tally.getCount(),
-                            tally.getUpdatedAt()
-                    );
-                })
-                .toList();
-        return new PageImpl<>(tallyDtos, pageable, tallyDtos.size());
+        return tallyPage.map(tally -> new TallyDto(
+                tally.getId().getElectionId(),
+                electionTitle,
+                candidateMapper.entityToDTO(candidateMap.get(tally.getId().getCandidateId())),
+                tally.getCount(),
+                tally.getUpdatedAt()
+        ));
     }
 }

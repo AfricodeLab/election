@@ -15,6 +15,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import org.springframework.data.domain.PageRequest;
+
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Comparator;
@@ -32,19 +34,25 @@ public class AnchorService {
     private final ChainBatchRepository batchRepo;
     private final BlockchainProvider chain;
     private final FeatureFlagService featureFlags;
+    private final ObjectMapper objectMapper;
 
     public AnchorService(
             ElectionRepository electionRepo,
             OutBoxRepository outbox,
             ChainBatchRepository batchRepo,
             BlockchainProvider chain,
-            FeatureFlagService featureFlags) {
+            FeatureFlagService featureFlags,
+            ObjectMapper objectMapper) {
         this.electionRepo = electionRepo;
         this.outbox = outbox;
         this.batchRepo = batchRepo;
         this.chain = chain;
         this.featureFlags = featureFlags;
+        this.objectMapper = objectMapper;
     }
+
+    /** Cap per-tick anchor batch — prevents loading thousands of rows during a blockchain outage. */
+    private static final int ANCHOR_BATCH_SIZE = 500;
 
     /**
      * Run every 30 seconds (changed from 10s for cost efficiency).
@@ -57,11 +65,13 @@ public class AnchorService {
         Timestamp now = Timestamp.from(Instant.now());
 
         /**
-         * Fetch all outbox entries where:
+         * Fetch outbox entries where:
          * - anchor_pending = true (validated and ready to anchor)
          * - anchored = false (not yet included in a batch)
+         * Capped at ANCHOR_BATCH_SIZE to prevent loading an unbounded backlog
+         * into heap when the blockchain service is temporarily unavailable.
          */
-        List<OutBox> pendingEntries = outbox.findByAnchorPendingTrueAndAnchoredFalse();
+        List<OutBox> pendingEntries = outbox.findPendingAnchorBatch(PageRequest.of(0, ANCHOR_BATCH_SIZE));
 
         if (pendingEntries.isEmpty()) {
             log.debug("No pending votes to anchor");
@@ -170,14 +180,15 @@ public class AnchorService {
 
         /**
          * Mark all outbox entries as anchored.
+         * Use saveAll to batch-flush in one round-trip instead of N individual saves.
          */
         entries.forEach(o -> {
             o.setAnchorPending(false);
             o.setAnchored(true);
             o.setBatchId(batchId);
             o.setAnchoredAt(now);
-            outbox.save(o);
         });
+        outbox.saveAll(entries);
 
         log.info("Anchored batch {} for election {}: {} votes",
                 batchId, electionId, entries.size());
@@ -190,8 +201,7 @@ public class AnchorService {
      */
     private UUID extractElectionId(OutBox outboxEntry) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            Map<String, String> payload = mapper.readValue(
+            Map<String, String> payload = objectMapper.readValue(
                     outboxEntry.getPayload(),
                     Map.class);
             return UUID.fromString(payload.get("electionId"));

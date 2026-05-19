@@ -47,7 +47,7 @@ public class ElectionPreset {
     /**
      * The election type this preset is associated with.
      */
-    @ManyToOne(fetch = FetchType.EAGER)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "type_id", nullable = false)
     private ElectionTypeEntity electionType;
 

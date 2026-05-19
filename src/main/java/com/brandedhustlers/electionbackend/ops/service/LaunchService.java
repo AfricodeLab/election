@@ -119,10 +119,8 @@ public class LaunchService {
             throw new IllegalStateException("OPS-4001 invalid time window");
         }
 
-        List<String> existingOrgLaunches = launchRepository.findByOrgId(orgId).stream()
-                .map(Launch::getName).toList();
-
-        if (existingOrgLaunches.contains(name)){
+        // Single COUNT query — avoids loading all org launches into memory just for a name check.
+        if (launchRepository.existsByOrgIdAndName(orgId, name)) {
             throw new ConflictException("A launch with this name already exists in this organization");
         }
 
@@ -196,6 +194,7 @@ public class LaunchService {
     }
 
 
+    @Transactional
     public void attachElections(UUID orgId, UUID launchId, List<UUID> electionIds) {
 
         AppUser actor = getUser.getCurrentAuthenticatedUser();
@@ -275,6 +274,7 @@ public class LaunchService {
     }
 
 
+    @Transactional
     public void detachElections(UUID orgId, UUID launchId, List<UUID> electionIds) {
         AppUser actor = getUser.getCurrentAuthenticatedUser();
 
@@ -357,9 +357,12 @@ public class LaunchService {
             }
 
             List<Election> launchElections = l.getElection();
-            for(Election election : launchElections){
-                electionService.transitionToLive(election.getElectionId(), actor.getAppUserId());
-            }
+            // Parallel activation: each transitionToLive() runs its own @Transactional boundary,
+            // so parallel execution is safe. Errors in individual elections are logged and do NOT
+            // silently swallow — the stream will propagate the first exception so the overall
+            // launch transition rolls back if any election cannot be activated.
+            launchElections.parallelStream()
+                    .forEach(e -> electionService.transitionToLive(e.getElectionId(), actor.getAppUserId()));
 
             eligibilitySnapshotService.computeForLaunch(orgId, l.getId(), launchElections);
 

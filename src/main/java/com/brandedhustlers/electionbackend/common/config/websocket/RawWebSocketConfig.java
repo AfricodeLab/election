@@ -9,14 +9,22 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 @EnableWebSocket
 public class RawWebSocketConfig implements WebSocketConfigurer {
 
-    private final String[] allowedOrigins;
+    private final MyWebSocketHandler myWebSocketHandler;
 
-    public RawWebSocketConfig() {
-        this.allowedOrigins = new String[]{System.getenv("CORS_ALLOWED_ORIGINS")};
+    /**
+     * Inject the Spring-managed bean instead of using {@code new MyWebSocketHandler()}.
+     * The previous approach bypassed the Spring proxy — @Autowired fields inside
+     * MyWebSocketHandler were never populated and @Component had no effect.
+     */
+    public RawWebSocketConfig(MyWebSocketHandler myWebSocketHandler) {
+        this.myWebSocketHandler = myWebSocketHandler;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
-        registry.addHandler(new MyWebSocketHandler(), "/ws/raw").setAllowedOrigins(allowedOrigins);
+        String rawOrigins = System.getenv("CORS_ALLOWED_ORIGINS");
+        String[] allowedOrigins = (rawOrigins != null && !rawOrigins.isBlank())
+                ? rawOrigins.split(",") : new String[]{"*"};
+        registry.addHandler(myWebSocketHandler, "/ws/raw").setAllowedOrigins(allowedOrigins);
     }
 }

@@ -17,6 +17,7 @@ import com.brandedhustlers.electionbackend.election.repository.ElectionTypeRepos
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -34,6 +35,7 @@ public class ElectionTypeService {
      * Create a new custom election type for the caller's organization.
      * Only ADMIN or SUPER_ADMIN may create types.
      */
+    @Transactional
     public ElectionTypeDTO createCustomType(CreateElectionTypeRequest request) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(caller, PermissionType.CREATE_ELECTION);
@@ -67,6 +69,7 @@ public class ElectionTypeService {
      * Get all election types accessible to the caller's organization
      * (system types + org-owned types).
      */
+    @Transactional(readOnly = true)
     public List<ElectionTypeDTO> getVisibleTypes() {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
 
@@ -89,6 +92,7 @@ public class ElectionTypeService {
     /**
      * Soft-delete a custom election type. System types cannot be deleted.
      */
+    @Transactional
     public void deleteType(UUID typeId) {
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(caller, PermissionType.CREATE_ELECTION);
@@ -110,12 +114,14 @@ public class ElectionTypeService {
                 caller.getAppUserId(), type.getName(), typeId);
     }
 
+    @Transactional(readOnly = true)
     public List<ElectionTypeOptionDto> getElectionTypeOptions(){
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(caller, PermissionType.VIEW_ELECTIONS);
         return electionTypeRepository.getElectionTypeOption();
     }
 
+    @Transactional(readOnly = true)
     public List<ElectionTypeOptionDto> getElectionTypeOptionsByOrg(){
         AppUser caller = getUser.getCurrentAuthenticatedUser();
         util.requireAdminOrPermission(caller, PermissionType.VIEW_ELECTIONS);

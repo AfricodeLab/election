@@ -6,13 +6,13 @@ import com.brandedhustlers.electionbackend.auth.exceptions.UserNotFound;
 import com.brandedhustlers.electionbackend.auth.repository.AppUserRepository;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
-import io.github.cdimascio.dotenv.Dotenv;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Service;
 
@@ -26,9 +26,10 @@ import java.util.function.Function;
 
 @Service
 public class JWTService {
-    Dotenv dotenv = Dotenv.configure().load();
 
-    private final String secretKey = dotenv.get("JWT_SECRET");
+    @Value("${JWT_SECRET}")
+    private String secretKey;
+
     private final AppUserRepository appUserRepository;
     private final VoterRepository voterRepository;
 
@@ -40,6 +41,15 @@ public class JWTService {
     public String generateRefreshToken(String username, UUID userID, String appUserEmail) {
         long refreshTokenExp = 604800000L; // 7 days
         return generateToken(username, refreshTokenExp, userID, appUserEmail);
+    }
+
+    /** No-DB-call overload: pass the already-loaded AppUser. */
+    public String generateRefreshToken(AppUser user) {
+        UUID activeOrgId = user.getActiveOrganization() == null
+                ? null : user.getActiveOrganization().getOrganizationId();
+        String role = user.getUserRole() == null ? null : user.getUserRole().name();
+        return generateToken(user.getUsername(), 604800000L,
+                user.getAppUserId(), user.getAppUserEmail(), activeOrgId, role);
     }
 
     /**
@@ -86,6 +96,15 @@ public class JWTService {
     public String generateAccessToken(String username, UUID userId, String appUserEmail) {
         long accessTokenExpirationTime = 900000L; // 15 minutes
         return generateToken(username, accessTokenExpirationTime, userId, appUserEmail);
+    }
+
+    /** No-DB-call overload: pass the already-loaded AppUser. */
+    public String generateAccessToken(AppUser user) {
+        UUID activeOrgId = user.getActiveOrganization() == null
+                ? null : user.getActiveOrganization().getOrganizationId();
+        String role = user.getUserRole() == null ? null : user.getUserRole().name();
+        return generateToken(user.getUsername(), 900000L,
+                user.getAppUserId(), user.getAppUserEmail(), activeOrgId, role);
     }
 
     public String generateVoterToken(String voterEmail) {
@@ -153,18 +172,20 @@ public class JWTService {
                 .get("voterOrgId", String.class);
     }
 
-    public String generateToken(String username, long expirationTime, UUID userId, String appUserEmail) {
-
-        AppUser user = appUserRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
-
+    /**
+     * Generates a signed JWT. The caller must supply {@code activeOrgId} directly —
+     * this avoids the DB round-trip that the old implementation had
+     * ({@code appUserRepository.findById(userId)}) on every token generation.
+     * The AppUser is already in memory at login time; pass its activeOrganization id.
+     */
+    public String generateToken(String username, long expirationTime, UUID userId,
+                                String appUserEmail, UUID activeOrgId, String userRole) {
         Map<String, Object> claims = new HashMap<>();
         claims.put("userID", userId);
         claims.put("username", username);
         claims.put("userEmail", appUserEmail);
-        claims.put("activeOrgId",
-                user.getActiveOrganization() == null ? null : user.getActiveOrganization().getOrganizationId());
-        claims.put("role", user.getUserRole());
+        claims.put("activeOrgId", activeOrgId);
+        claims.put("role", userRole);
         claims.put("iss", "brandedhustlers_backend");
         claims.put("aud", "election_client");
 
@@ -177,6 +198,21 @@ public class JWTService {
                 .and()
                 .signWith(getKey())
                 .compact();
+    }
+
+    /**
+     * @deprecated Use {@link #generateToken(String, long, UUID, String, UUID, String)} instead.
+     * This overload performs a DB lookup on every call; kept for any callers that
+     * haven't migrated yet but will be removed once all call sites are updated.
+     */
+    @Deprecated
+    public String generateToken(String username, long expirationTime, UUID userId, String appUserEmail) {
+        AppUser user = appUserRepository.findById(userId)
+                .orElseThrow(() -> new UserNotFound("User with ID: " + userId + " not found."));
+        UUID activeOrgId = user.getActiveOrganization() == null
+                ? null : user.getActiveOrganization().getOrganizationId();
+        return generateToken(username, expirationTime, userId, appUserEmail,
+                activeOrgId, user.getUserRole() == null ? null : user.getUserRole().name());
     }
 
     private SecretKey getKey() {

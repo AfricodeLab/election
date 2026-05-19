@@ -1,6 +1,7 @@
 package com.brandedhustlers.electionbackend.voter.repository;
 
 import com.brandedhustlers.electionbackend.voter.domain.ElectionVoter;
+import com.brandedhustlers.electionbackend.voter.domain.ElectionVoterId;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -13,7 +14,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface ElectionVoterRepository extends JpaRepository<ElectionVoter, UUID> {
+// Correct ID type is ElectionVoterId (the @EmbeddedId composite key).
+// The previous UUID parameter caused existsById() and the default findById()
+// to silently fail or throw — all JPQL custom queries were unaffected but
+// any Spring Data magic methods using the ID type were broken.
+public interface ElectionVoterRepository extends JpaRepository<ElectionVoter, ElectionVoterId> {
 //    @Query("SELECT ev.id.voterId FROM ElectionVoter ev WHERE ev.id.electionId = :electionId AND ev.id.voterId IN :voterIds")
 //    List<UUID> findAssignedVoterIds(@Param("electionId") UUID electionId, @Param("voterIds") List<UUID> voterIds);
 //

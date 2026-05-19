@@ -406,10 +406,8 @@ public class AuthService implements IAuthService {
             return LoginResponse.mfaChallenge(mfaToken);
         }
 
-        String token = jwtService.generateAccessToken(
-                authenticatedUser.getAppUserEmail(),
-                authenticatedUser.getAppUserId(),
-                authenticatedUser.getAppUserEmail());
+        // Pass the already-loaded AppUser — avoids a redundant DB lookup inside generateAccessToken.
+        String token = jwtService.generateAccessToken(authenticatedUser);
 
         String refreshToken = refreshTokenService.createRefreshToken(authenticatedUser.getAppUserId()).getToken();
 
@@ -759,10 +757,8 @@ public class AuthService implements IAuthService {
                 .map(refreshTokenService::verifyExpiration)
                 .map(RefreshToken::getUser)
                 .map(user -> {
-                    String accessToken = jwtService.generateAccessToken(
-                            user.getAppUserEmail(),
-                            user.getAppUserId(),
-                            user.getAppUserEmail());
+                    // Pass user directly — avoids DB lookup inside generateAccessToken.
+                    String accessToken = jwtService.generateAccessToken(user);
                     return new TokenRefreshResponse(accessToken, request.refreshToken());
                 })
                 .orElseThrow(() -> new RefreshTokenException("Refresh token is not in database!"));

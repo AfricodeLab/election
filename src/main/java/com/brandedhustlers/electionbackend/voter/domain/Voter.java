@@ -32,7 +32,10 @@ public class Voter {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID voterId;
 
-    @ManyToOne
+    // LAZY: organization is accessed via org_id scalar in most query paths.
+    // EAGER (the JPA default for @ManyToOne) was pulling the full Organization
+    // row on every voter load — OTP lookup, vote-cast check, voter import, etc.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "org_id")
     private Organization organization;
 
@@ -57,7 +60,10 @@ public class Voter {
     @UpdateTimestamp
     private Timestamp updatedAt;
 
-    @ManyToOne
+    // LAZY: createdBy is never projected by VoterMapper.entityToDto().
+    // EAGER was loading the full AppUser graph (roles, permissions,
+    // userOrganizations) on every voter fetch for no benefit.
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by_id")
     private AppUser createdBy;
 

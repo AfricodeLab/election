@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.common.config.storage;
 
 import com.amazonaws.auth.AWSCredentials;
@@ -29,3 +30,4 @@ public class AWSS3Config {
                 .build();
     }
 }
+*/

@@ -11,23 +11,36 @@ public class RedisOtpService {
     private final StringRedisTemplate stringRedisTemplate;
     private static final int EXPIRE_TIME_MINUTES = 5;
 
+    /**
+     * Single key prefix used by ALL methods.
+     *
+     * Previously storeOTP() used "OTP: " + email while getOTP(), deleteOTP(),
+     * and verifyOTP() used plain email — meaning any OTP stored via storeOTP()
+     * could never be retrieved or verified, causing silent login failures.
+     */
+    private static final String KEY_PREFIX = "OTP:";
+
     private static final SecureRandom random = new SecureRandom();
 
     public RedisOtpService(StringRedisTemplate stringRedisTemplate) {
         this.stringRedisTemplate = stringRedisTemplate;
     }
 
+    private String key(String email) {
+        return KEY_PREFIX + email;
+    }
+
     public void storeOTP(String email, String otp) {
-        stringRedisTemplate.opsForValue().set("OTP: " + email, otp, 15, TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(key(email), otp, 15, TimeUnit.MINUTES);
     }
 
     public String getOTP(String email) {
-        return stringRedisTemplate.opsForValue().get(email);
+        return stringRedisTemplate.opsForValue().get(key(email));
     }
 
     public void deleteOTP(String email) {
         if (email != null) {
-            stringRedisTemplate.delete(email);
+            stringRedisTemplate.delete(key(email));
         }
     }
 
@@ -37,16 +50,16 @@ public class RedisOtpService {
         }
 
         String otp = generateOTP();
-        stringRedisTemplate.opsForValue().set(email, otp, EXPIRE_TIME_MINUTES, TimeUnit.MINUTES);
+        stringRedisTemplate.opsForValue().set(key(email), otp, EXPIRE_TIME_MINUTES, TimeUnit.MINUTES);
         return otp;
     }
 
     public boolean verifyOTP(String email, String otp) {
-        String storedOTP = stringRedisTemplate.opsForValue().get(email);
-        if(storedOTP == null || !storedOTP.equals(otp)) {
+        String storedOTP = stringRedisTemplate.opsForValue().get(key(email));
+        if (storedOTP == null || !storedOTP.equals(otp)) {
             return false;
         }
-        stringRedisTemplate.delete(email);
+        stringRedisTemplate.delete(key(email));
         return true;
     }
 

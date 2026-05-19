@@ -77,6 +77,7 @@ public class OrganizationService implements IOrganizationService {
     }
 
     @Override
+    @Transactional
     public OrganizationDTO updateOrganization(UUID orgId, OrganizationDTO organizationDTO) {
         Organization orgToUpdate = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new OrganizationNotFound("Organization with ID: " + orgId + " not found."));
@@ -133,6 +134,7 @@ public class OrganizationService implements IOrganizationService {
     }
 
     @Override
+    @Transactional
     public void deactivateOrganization(UUID orgId) {
         Organization organization = organizationRepository.findById(orgId)
                 .orElseThrow(() -> new OrganizationNotFound("Organization with ID: " + orgId + " not found."));

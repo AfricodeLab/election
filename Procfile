@@ -1,1 +1,1 @@
-web: java -Xms256m -Xmx256m -Xss512k -Dserver.port=$PORT -jar target/*.jar
+web: java -Xms64m -Xmx400m -Xss512k -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:+ExitOnOutOfMemoryError -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -XX:CompressedClassSpaceSize=32m -Dio.netty.allocator.type=unpooled -Dserver.port=${PORT:-8085} -jar target/*.jar

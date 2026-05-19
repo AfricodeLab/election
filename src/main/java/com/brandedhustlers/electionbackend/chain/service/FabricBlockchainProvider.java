@@ -1,3 +1,4 @@
+/*
 package com.brandedhustlers.electionbackend.chain.service;
 
 import lombok.extern.slf4j.Slf4j;
@@ -22,9 +23,11 @@ public class FabricBlockchainProvider implements BlockchainProvider {
         this.contract = contract;
     }
 
-    /**
+    */
+/**
      * Anchor vote batch (existing method - keep as is).
-     */
+     *//*
+
     @Override
     public String anchorBatch(String electionId, String orgId, String merkleRoot, String timestampIso) {
         try {
@@ -37,7 +40,8 @@ public class FabricBlockchainProvider implements BlockchainProvider {
         }
     }
 
-    /**
+    */
+/**
      * Anchor election config.
      * Calls ConfigContract:AnchorConfig on the blockchain.
      *
@@ -46,16 +50,19 @@ public class FabricBlockchainProvider implements BlockchainProvider {
      * @param configHash SHA-256 hash (64 hex chars)
      * @param timestamp  ISO-8601 timestamp
      * @return Transaction ID (electionId is returned by chaincode)
-     */
+     *//*
+
     @Override
     public String anchorConfig(String electionId, String orgId, String configHash, String timestamp) {
         try {
             log.info("Anchoring config: election={}, hash={}", electionId, configHash);
 
-            /**
+            */
+/**
              * Submit to ConfigContract:AnchorConfig.
              * Chaincode returns the electionId as confirmation.
-             */
+             *//*
+
             byte[] result = contract.submitTransaction(
                     "ConfigContract:AnchorConfig",
                     electionId,
@@ -74,7 +81,8 @@ public class FabricBlockchainProvider implements BlockchainProvider {
         }
     }
 
-    /**
+    */
+/**
      * Anchor election results.
      * Calls ReleaseContract:AnchorResults on the blockchain.
      *
@@ -88,7 +96,8 @@ public class FabricBlockchainProvider implements BlockchainProvider {
      * @param releasedBy        Admin user ID who released
      * @param timestamp         ISO-8601 timestamp
      * @return Transaction ID (electionId is returned by chaincode)
-     */
+     *//*
+
     @Override
     public String anchorResults(
             String electionId,
@@ -102,10 +111,12 @@ public class FabricBlockchainProvider implements BlockchainProvider {
             log.info("Anchoring results: election={}, hash={}, excluded={}, forced={}",
                     electionId, resultsHash, excludedVoteCount, forceReleased);
 
-            /**
+            */
+/**
              * Submit to ReleaseContract:AnchorResults.
              * Convert int and boolean to strings for chaincode.
-             */
+             *//*
+
             byte[] result = contract.submitTransaction(
                     "ReleaseContract:AnchorResults",
                     electionId,
@@ -127,9 +138,11 @@ public class FabricBlockchainProvider implements BlockchainProvider {
         }
     }
 
-    /**
+    */
+/**
      * Get latest batch for an election (read-only query).
-     */
+     *//*
+
     @Override
     public String getLatestBatch(String electionId) {
         try {
@@ -148,9 +161,11 @@ public class FabricBlockchainProvider implements BlockchainProvider {
         }
     }
 
-    /**
+    */
+/**
      * Get config anchor for an election (read-only query).
-     */
+     *//*
+
     @Override
     public String getConfig(String electionId) {
         try {
@@ -170,9 +185,11 @@ public class FabricBlockchainProvider implements BlockchainProvider {
         }
     }
 
-    /**
+    */
+/**
      * Get results anchor for an election (read-only query).
-     */
+     *//*
+
     @Override
     public String getResults(String electionId) {
         try {
@@ -192,9 +209,11 @@ public class FabricBlockchainProvider implements BlockchainProvider {
         }
     }
 
-    /**
+    */
+/**
      * List all batches for an election (read-only query).
-     */
+     *//*
+
     @Override
     public String listBatches(String electionId) {
         try {
@@ -213,4 +232,4 @@ public class FabricBlockchainProvider implements BlockchainProvider {
     public boolean ping() {
         return contract != null;
     }
-}
+}*/

@@ -11,7 +11,6 @@ import com.brandedhustlers.electionbackend.voter.domain.EligibleVoterElection;
 import com.brandedhustlers.electionbackend.voter.domain.Voter;
 import com.brandedhustlers.electionbackend.voter.repository.EligibleVoterElectionRepository;
 import com.brandedhustlers.electionbackend.voter.repository.VoterRepository;
-import io.github.cdimascio.dotenv.Dotenv;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
@@ -32,7 +31,6 @@ import java.util.stream.Collectors;
 
 @Service
 public class MessagingService {
-    Dotenv dotenv = Dotenv.configure().load();
 
     private static final Logger log = LoggerFactory.getLogger(MessagingService.class);
 
@@ -48,7 +46,8 @@ public class MessagingService {
     @Value("${app.email.environment}")
     private String environment;
 
-    private final String appEmail = dotenv.get("SPRING_MAIL_USERNAME");
+    @Value("${spring.mail.username}")
+    private String appEmail;
 
     /**
      * Frontend base URL — used to construct the per-election voting deep-link
@@ -158,8 +157,6 @@ public class MessagingService {
             return;
         }
 
-        List<Voter> voters = voterRepository.findAllById(eligibleVoterIds);
-
         Map<UUID, Set<UUID>> voterEligibleElections = eligibleVoterElectionRepository
                 .findByLaunchId(launchId)
                 .stream()
@@ -167,8 +164,15 @@ public class MessagingService {
                         EligibleVoterElection::getVoterId,
                         Collectors.mapping(EligibleVoterElection::getElectionId, Collectors.toSet())));
 
-        log.info("Sending launch emails to {} voters across {} elections", voters.size(), elections.size());
-        dispatchEmails(voters, voterEligibleElections, electionMap);
+        // Process voters in chunks of VOTER_BATCH_SIZE to avoid loading thousands of
+        // Voter objects into heap at once for large elections.
+        log.info("Sending launch emails to {} voters across {} elections", eligibleVoterIds.size(), elections.size());
+        final int VOTER_BATCH_SIZE = 500;
+        for (int i = 0; i < eligibleVoterIds.size(); i += VOTER_BATCH_SIZE) {
+            List<UUID> chunk = eligibleVoterIds.subList(i, Math.min(i + VOTER_BATCH_SIZE, eligibleVoterIds.size()));
+            List<Voter> voterBatch = voterRepository.findAllById(chunk);
+            dispatchEmails(voterBatch, voterEligibleElections, electionMap);
+        }
     }
 
     // ── Standalone election path ──────────────────────────────────────────────
@@ -196,18 +200,19 @@ public class MessagingService {
             return;
         }
 
-        List<Voter> voters = voterRepository.findAllById(eligibleVoterIds);
-
-        // Every eligible voter gets the same single election
-        Map<UUID, Set<UUID>> voterEligibleElections = voters.stream()
-                .collect(Collectors.toMap(
-                        Voter::getVoterId,
-                        v -> Set.of(electionId)));
-
         Map<UUID, Election> electionMap = Map.of(electionId, election);
 
-        log.info("Sending standalone election emails to {} voters", voters.size());
-        dispatchEmails(voters, voterEligibleElections, electionMap);
+        // Process voters in chunks to avoid loading the full roster into heap at once.
+        log.info("Sending standalone election emails to {} voters", eligibleVoterIds.size());
+        final int VOTER_BATCH_SIZE = 500;
+        for (int i = 0; i < eligibleVoterIds.size(); i += VOTER_BATCH_SIZE) {
+            List<UUID> chunk = eligibleVoterIds.subList(i, Math.min(i + VOTER_BATCH_SIZE, eligibleVoterIds.size()));
+            List<Voter> voterBatch = voterRepository.findAllById(chunk);
+            // Every eligible voter in this chunk gets the same single election
+            Map<UUID, Set<UUID>> voterEligibleElections = voterBatch.stream()
+                    .collect(Collectors.toMap(Voter::getVoterId, v -> Set.of(electionId)));
+            dispatchEmails(voterBatch, voterEligibleElections, electionMap);
+        }
     }
 
     // ── Shared dispatch logic ─────────────────────────────────────────────────

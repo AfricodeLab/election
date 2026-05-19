@@ -201,7 +201,7 @@ class StationServiceTest {
         Station s = Station.builder().orgId(orgId).launchId(launchId).name("S1").build();
         StationDto dto = new StationDto(UUID.randomUUID(), orgId, launchId, "S1", null, null, null, null);
 
-        when(stationRepository.findByOrgIdAndLaunchId(orgId, launchId, pageable))
+        when(stationRepository.findByOrgIdAndLaunchId(orgId, launchId, pageable).getContent())
                 .thenReturn(List.of(s));
         when(stationMapper.entityToDto(s)).thenReturn(dto);
 

@@ -24,10 +24,12 @@ public class ChainValidateController {
 
     private final VoteRepository voteRepo;
     private final BlockchainProvider chain;
+    private final ObjectMapper objectMapper;
 
-    public ChainValidateController(VoteRepository voteRepo, BlockchainProvider chain) {
+    public ChainValidateController(VoteRepository voteRepo, BlockchainProvider chain, ObjectMapper objectMapper) {
         this.voteRepo = voteRepo;
         this.chain = chain;
+        this.objectMapper = objectMapper;
     }
 
     @RequiresFeature(Feature.MERKLE_VERIFICATION)
@@ -52,7 +54,7 @@ public class ChainValidateController {
         out.put("localRoot", localRoot);
 
         if (latest != null) {
-            var node = new ObjectMapper().readTree(latest);
+            var node = objectMapper.readTree(latest);
             String anchoredRoot = node.path("merkleRoot").asText();
             out.put("anchoredRoot", anchoredRoot);
             out.put("anchoredAt", node.path("anchoredAt").asText());

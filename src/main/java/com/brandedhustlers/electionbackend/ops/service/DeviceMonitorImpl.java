@@ -15,6 +15,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -40,26 +41,28 @@ public class DeviceMonitorImpl implements DeviceMonitor {
     public void sweepAndMarkOffline() {
 
         Instant cutoff = Instant.now().minusMillis(policy.offlineThresholdMs());
-        // Minimal approach: stream through devices and flip those past cutoff; for large fleets, add a repo query with WHERE last_seen < cutoff AND status <> OFFLINE
-        for (Device d : devices.findAll()) {
 
-            if (d.getLastSeen() == null){
-                continue; // newly enrolled, let first heartbeat decide
-            }
-            if (d.getStatus() != DeviceStatus.OFFLINE && d.getLastSeen().isBefore(cutoff)) {
+        // Targeted query: only non-OFFLINE devices whose lastSeen is before the cutoff.
+        // Replaces findAll() + in-memory filter — avoids a full table scan each hour.
+        List<Device> stale = devices.findStaleDevices(DeviceStatus.OFFLINE, cutoff);
 
-                d.setStatus(DeviceStatus.OFFLINE);
-                devices.save(d);
-                rt.sendDeviceStatus(d.getOrgId(), d.getStationId().toString(), Map.of(
-                        "deviceId", d.getId().toString(),
-                        "status", d.getStatus().name(),
-                        "lastSeen", d.getLastSeen().toString(),
-                        "latencyMs", d.getLastLatencyMs(),
-                        "appVersion", d.getAppVersion()
-                ));
-
-                // TODO: audit.emit("ops.device.status_changed", {from: prior, to: OFFLINE})
-            }
+        if (stale.isEmpty()) {
+            return;
         }
+
+        for (Device d : stale) {
+            d.setStatus(DeviceStatus.OFFLINE);
+            rt.sendDeviceStatus(d.getOrgId(), d.getStationId().toString(), Map.of(
+                    "deviceId", d.getId().toString(),
+                    "status", d.getStatus().name(),
+                    "lastSeen", d.getLastSeen().toString(),
+                    "latencyMs", d.getLastLatencyMs(),
+                    "appVersion", d.getAppVersion()
+            ));
+            // TODO: audit.emit("ops.device.status_changed", {from: prior, to: OFFLINE})
+        }
+
+        // Batch-flush all status changes in one round-trip instead of one save() per device.
+        devices.saveAll(stale);
     }
 }
